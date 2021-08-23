@@ -81,6 +81,7 @@ def yams(nodes):
 
 class DependNode(object):
     def __init__(self, mObject):
+        assert isinstance(mObject, om.MObject)
         self._mObject = mObject
         self._mFnDependencyNode = None
         self._mDagPath = None
