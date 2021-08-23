@@ -3,6 +3,7 @@
 import maya.cmds as mc
 import maya.mel as mel
 import maya.api.OpenMaya as om
+import maya.OpenMaya as om1
 from math import sqrt
 
 import weightsdict as wdt
@@ -46,15 +47,14 @@ def yam(node):
             split = node.split('.')
             node = split.pop(0)
             attr = '.'.join(split)
-        s = om.MSelectionList()
+        mSelectionList = om.MSelectionList()
         try:
-            s.add(node)
+            mSelectionList.add(node)
         except RuntimeError:
             if mc.objExists(node):
                 raise RuntimeError("more than one object called '{}'".format(node))
             raise RuntimeError("No '{}' object found in scene".format(node))
-        dagPath = s.getDagPath(0)
-        mObject = dagPath.node()
+        mObject = mSelectionList.getDependNode(0)
     elif isinstance(node, om.MObject):
         mObject = node
     elif isinstance(node, om.MDagPath):
@@ -79,10 +79,16 @@ def yams(nodes):
     return [yam(node) for node in nodes]
 
 
-class DependNode(object):
+class YamNode(object):
+    # todo
+    pass
+
+
+class DependNode(YamNode):
     def __init__(self, mObject):
         assert isinstance(mObject, om.MObject)
         self._mObject = mObject
+        self._mObject1 = None
         self._mFnDependencyNode = None
         self._mDagPath = None
 
@@ -95,16 +101,35 @@ class DependNode(object):
     def __getattr__(self, attr):
         return self.attr(attr)
 
+    def __add__(self, other):
+        return self.name.__add__(other)
+
     def __radd__(self, other):
-        if isinstance(other, basestring):
-            return other.__add__(self.name)
-        else:
-            raise TypeError("cannot concatenate '{}' and '{}' objects".format(other.__class__.__name,
-                                                                              self.__class__.__name__))
+        return other.__add__(self.name)
+
+    def __apiobject__(self):
+        """
+        This is needed for reasons that I have not explored, so that some cmds functions can take a 'YamNode' directly
+        instead of 'YamNode.name'.
+        exemple : you can do 'cmds.select(yamNode)' instead of having to do 'cmds.select(yamNode.name)'
+
+        Returns: OpenMaya 1.0 MObject
+        """
+        return self.mObject1
 
     @property
     def mObject(self):
         return self._mObject
+
+    @property
+    def mObject1(self):
+        if self._mObject1 is None:
+            mSelectionList = om1.MSelectionList()
+            mSelectionList.add(self.name)
+            mObject = om1.MObject()
+            mSelectionList.getDependNode(0, mObject)
+            self._mObject1 = mObject
+        return self._mObject1
 
     @property
     def mDagPath(self):
@@ -137,7 +162,23 @@ class DependNode(object):
         return self.mFnDependencyNode.typeName
 
 
-class Transform(DependNode):
+class DagNode(DependNode):
+    def __init__(self, mObject):
+        super(DagNode, self).__init__(mObject)
+        self._mFnDagNode = None
+
+    @property
+    def mFnDagNode(self):
+        if self._mFnDagNode is None:
+            self._mFnDagNode = om.MFnDagNode(self.mObject)
+        return self._mFnDagNode
+
+    @property
+    def parent(self):
+        return yam(self.mFnDagNode.parent(0))
+
+
+class Transform(DagNode):
     def __init__(self, mObject):
         super(Transform, self).__init__(mObject)
 
@@ -214,19 +255,24 @@ class Shape(DependNode):
     def __init__(self, mObject):
         super(Shape, self).__init__(mObject)
 
-    def get_components(self):
-        raise NotImplementedError
-
-    def __len__(self):
-        return len(self.get_components())
-
 
 class Mesh(Shape):
     def __init__(self, mObject):
         super(Mesh, self).__init__(mObject)
+        self._mFnMesh = None
+
+    def __len__(self):
+        return self.mFnMesh.numVertices
+
+    @property
+    def mFnMesh(self):
+        if self._mFnMesh is None:
+            self._mFnMesh = om.MFnMesh(self.mObject)
+        return self._mFnMesh
 
     def get_components(self):
-        return mc.ls(self.name + '.vtx[*]', fl=True)
+        name = self.name
+        return [name + '.vtx[' + str(x) + ']' for x in range(len(self))]
 
     def get_component_indexes(self):
         for i in range(len(self)):
@@ -236,12 +282,20 @@ class Mesh(Shape):
 class NurbsCurve(Shape):
     def __init__(self, mObject):
         super(NurbsCurve, self).__init__(mObject)
+        self._mFnNurbsCurve = None
 
     def __len__(self):
-        return self.spans.value + self.degree.value
+        return self.mFnNurbsCurve.numCVs
+
+    @property
+    def mFnNurbsCurve(self):
+        if self._mFnNurbsCurve is None:
+            self._mFnNurbsCurve = om.MFnNurbsCurve(self.mObject)
+        return self._mFnNurbsCurve
 
     def get_components(self):
-        return mc.ls(self.name + '.cv[*]', fl=True)
+        name = self.name
+        return [name + '.cv[' + str(x) + ']' for x in range(len(self))]
 
     def get_component_indexes(self):
         for i in range(len(self)):
@@ -291,18 +345,18 @@ class NurbsCurve(Shape):
         print('Nb of knots: {}'.format(nb_knots))
 
         if self.form.value == 0:
-            knots = list(range(nb_knots-(self.degree.value - 1) * 2))
+            knots = list(range(nb_knots - (self.degree.value - 1) * 2))
             for i in range(self.degree.value - 1):
                 knots = knots[:1] + knots
                 knots += knots[-1:]
         else:
-            knots = list(range(nb_knots-(self.degree.value - 1)))
+            knots = list(range(nb_knots - (self.degree.value - 1)))
             for i in range(self.degree.value - 1):
-                knots.insert(0, knots[0]-1)
+                knots.insert(0, knots[0] - 1)
 
         if self.type == 'bezierCurve':
             knots = []
-            for i in range(nb_knots/3):
+            for i in range(nb_knots / 3):
                 for j in range(3):
                     knots.append(i)
         knots = [float(x) for x in knots]
