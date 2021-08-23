@@ -1,11 +1,5 @@
 # encoding: utf8
 
-import sys
-
-yama_path = '/'.join(__file__.replace('\\', '/').split('/')[:-2])
-if yama_path not in sys.path:
-    sys.path.append(yama_path)
-
 import maya.cmds as mc
 import nodes
 

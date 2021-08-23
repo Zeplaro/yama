@@ -64,15 +64,15 @@ def yam(node):
                         " got {}.".format(node.__class__.__name__))
 
     # checking if node type is a supported class, if not defaults to DependNode
-    node_class = DependNode
+    assigned_class = DependNode
     partialPathName = om.MDagPath.getAPathTo(mObject).partialPathName()
     for node_type in mc.nodeType(partialPathName, i=True)[::-1]:
         if node_type in suported_class:
-            node_class = suported_class[node_type]
+            assigned_class = suported_class[node_type]
             break
     if attr is not None:
-        return node_class(node).attr(attr)
-    return node_class(node)
+        return assigned_class(mObject).attr(attr)
+    return assigned_class(mObject)
 
 
 def yams(nodes):
