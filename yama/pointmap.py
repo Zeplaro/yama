@@ -1,8 +1,10 @@
+# encoding: utf8
+
 import maya.cmds as mc
 
 
-# LOOK INTO MRichSelection.getSymmetry()
-# https://stackoverflow.com/questions/44702826/maya-api-python-symmetry-table-with-mrichselection
+# todo : LOOK INTO MRichSelection.getSymmetry()
+# todo : https://stackoverflow.com/questions/44702826/maya-api-python-symmetry-table-with-mrichselection
 
 
 obj = 'ori'

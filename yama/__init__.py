@@ -1,3 +1,5 @@
+# encoding: utf8
+
 import sys
 
 yama_path = '/'.join(__file__.replace('\\', '/').split('/')[:-2])
