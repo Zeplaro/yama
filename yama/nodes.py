@@ -18,6 +18,7 @@ def yam(node):
     """
     Handles all node class assignment to assign the proper class depending on the node type.
     todo : make it works when an attribute is given.
+    todo : om.MGlobal.getSelectionListByName('null1')
 
     exemples :
     >> yam('skincluster42')
@@ -143,16 +144,20 @@ class DependNode(YamNode):
             self._mFnDependencyNode = om.MFnDependencyNode(self._mObject)
         return self._mFnDependencyNode
 
+    def rename(self, new_name):
+        self.mFnDependencyNode.setName(new_name)
+
     @property
     def name(self):
         return self.mFnDependencyNode.name()
 
     @name.setter
     def name(self, value):
-        self.mFnDependencyNode.setName(value)
+        self.rename(value)
 
     def attr(self, attr):
         import attribute
+        reload(attribute)
         return attribute.Attribute(self, attr)
 
     def listRelatives(self, *args, **kwargs):
