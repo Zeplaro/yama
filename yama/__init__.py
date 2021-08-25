@@ -2,10 +2,12 @@
 
 import maya.cmds as mc
 import nodes
+reload(nodes)
 
 
 yam = nodes.yam
 yams = nodes.yams
+createNode = nodes.createNode
 
 
 def ls(*args, **kwargs):
