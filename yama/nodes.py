@@ -1,5 +1,8 @@
 # encoding: utf8
 
+__author__ = Robin Lavigne
+__spellchecking__ = Pranil Naicker
+
 import maya.cmds as mc
 import maya.mel as mel
 import maya.api.OpenMaya as om
@@ -23,7 +26,7 @@ def yam(node):
     Handles all node class assignment to assign the proper class depending on the node type.
     todo : make it works when an attribute is given.
 
-    exemples :
+    examples :
     >> yam('skincluster42')
     SkinCluster('skincluster42')
 
@@ -60,12 +63,12 @@ def yam(node):
                         " got {}.".format(node.__class__.__name__))
 
     # checking if node type is a supported class, if not defaults to DependNode
-    assigned_class = suported_classes.get(mfn.typeName)
+    assigned_class = supported_classes.get(mfn.typeName)
     if not assigned_class:
         assigned_class = DependNode
         for node_type in mc.nodeType(node, i=True)[::-1]:
-            if node_type in suported_classes:
-                assigned_class = suported_classes[node_type]
+            if node_type in supported_classes:
+                assigned_class = supported_classes[node_type]
                 break
     if attr is not None:
         return assigned_class(mObject, mfn).attr(attr)
@@ -554,16 +557,16 @@ class BlendshapeTarget(object):
 
 # Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from
 # the yam method. Follow this syntax -> 'mayaType': class)
-suported_classes = {'skinCluster': SkinCluster,
-                    'shape': Shape,
-                    'mesh': Mesh,
-                    'nurbsCurve': NurbsCurve,
-                    'nurbsSurface': NurbsSurface,
-                    'locator': Locator,
-                    'lattice': Lattice,
-                    'geometryFilter': GeometryFilter,
-                    'weightGeometryFilter': WeightGeometryFilter,
-                    'blendShape': BlendShape,
-                    'transform': Transform,
-                    'joint': Joint,
-                    }
+supported_classes = {'skinCluster': SkinCluster,
+                     'shape': Shape,
+                     'mesh': Mesh,
+                     'nurbsCurve': NurbsCurve,
+                     'nurbsSurface': NurbsSurface,
+                     'locator': Locator,
+                     'lattice': Lattice,
+                     'geometryFilter': GeometryFilter,
+                     'weightGeometryFilter': WeightGeometryFilter,
+                     'blendShape': BlendShape,
+                     'transform': Transform,
+                     'joint': Joint,
+                     }
