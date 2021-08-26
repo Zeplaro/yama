@@ -1,5 +1,10 @@
 # encoding: utf8
 
+__author__ = 'Robin Lavigne'
+__spellchecking__ = 'Pranil Naicker'
+__emotionalsupport__ = 'Emilie Jolin'
+
+
 import maya.cmds as mc
 import nodes
 reload(nodes)
