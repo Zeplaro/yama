@@ -1,18 +1,21 @@
 # encoding: utf8
 
-__author__ = 'Robin Lavigne'
-__spellchecking__ = 'Pranil Naicker'
-__emotionalsupport__ = 'Emilie Jolin'
+"""
+Contains all the class for maya node types, and all nodes related functions.
+The main functions used would be createNode to create a new node and get it initialized as its proper class type; and
+yam or yams to initialize existing objects into their proper class type.
+"""
 
 
+from math import sqrt
 import maya.cmds as mc
 import maya.mel as mel
 import maya.api.OpenMaya as om
 import maya.OpenMaya as om1
-from math import sqrt
 
 import weightsdict as wdt
 
+# Checking if basestring exists for python 2.7 to 3 compatibility
 try:
     basestring
 except NameError:
@@ -20,6 +23,12 @@ except NameError:
 
 
 def createNode(*args, **kwargs):
+    """
+    Creates a node and returns it as its apropriate class depending on its type.
+    :param args: cmds args for cmds.createNode
+    :param kwargs: cmds kwargs for cmds.createNode
+    :return: a YamNode object
+    """
     return yam(mc.createNode(*args, **kwargs))
 
 
@@ -39,10 +48,12 @@ def yam(node):
 
     attr = None
     if isinstance(node, basestring):
-        if '.' in node:  # checking if an attribute was given with the node
+        if '.' in node:  # checking if an attribute was given with the node and splits it to call it later
             split = node.split('.')
             node = split.pop(0)
             attr = '.'.join(split)
+        # Getting the mObject associated with the given node uses 'try' in case the node does not exists or multiple
+        # objects with the same name exists.
         mSelectionList = om.MSelectionList()
         try:
             mSelectionList.add(node)
@@ -52,32 +63,41 @@ def yam(node):
             raise RuntimeError("No '{}' object found in scene".format(node))
         mObject = mSelectionList.getDependNode(0)
         mfn = om.MFnDependencyNode(mObject)
+
     elif isinstance(node, om.MObject):
         mObject = node
         mfn = om.MFnDependencyNode(mObject)
         node = mfn.name()
+
     elif isinstance(node, om.MDagPath):
         mObject = node.node()
         mfn = om.MFnDependencyNode(mObject)
         node = mfn.name()
+
     else:
         raise TypeError("yam() str or OpenMaya.MObject of OpenMaya.MDagPath expected,"
                         " got {}.".format(node.__class__.__name__))
 
-    # checking if node type is a supported class, if not defaults to DependNode
-    assigned_class = supported_classes.get(mfn.typeName)
+    # checking if node type has a supported class, if not defaults to DependNode
+    assigned_class = supported_classes.get(mfn.typeName)  # skips the mc.nodeType if exact type is in supported_class
     if not assigned_class:
         assigned_class = DependNode
-        for node_type in mc.nodeType(node, i=True)[::-1]:
+        for node_type in mc.nodeType(node, i=True)[::-1]:  # checks each inherited types for the node
             if node_type in supported_classes:
                 assigned_class = supported_classes[node_type]
                 break
+
     if attr is not None:
-        return assigned_class(mObject, mfn).attr(attr)
+        return assigned_class(mObject, mfn).attr(attr)  # gets and returns an Attribute object if an attribute was given
     return assigned_class(mObject, mfn)
 
 
 def yams(nodes):
+    """
+    Returns each nodes initialized as their appropriate YamNode. See 'yam' function.
+    :param nodes: (list) list of str of existing nodes.
+    :return: list of YamNode
+    """
     return [yam(node) for node in nodes]
 
 
@@ -87,17 +107,40 @@ class YamNode(object):
 
 
 class DependNode(YamNode):
+    """
+    Main maya node type that all nodes inherits from.
+    Links the node to its maya api 2.0 MObject to access many of the faster api functions and classes (MFn), and also in
+    case the node name changes.
+
+    All implemented maya api functions and variables are from api 2.0; for api 1.0 the functions and variables are
+    defined with a '1' behind them;
+    e.g.: >>> node.mDagPath  <-- gives a api 2.0 object
+    -     >>> node.mDagPath1 <-- gives a api 1.0 object
+    """
     def __init__(self, mObject, mFnDependencyNode):
+        """
+        Needs an maya api 2.0 MObject associated to the node and a MFnDependencyNode initialized with the mObject.
+        :param mObject: maya api MObject
+        :param mFnDependencyNode:
+        """
         assert isinstance(mObject, om.MObject)
         self.mObject = mObject
         self._mObject1 = None
         self.mFnDependencyNode = mFnDependencyNode
         self._mDagPath = None
+        self._mDagPath1 = None
 
     def __repr__(self):
-        return "{}('{}')".format(self.__class__.__name__, self.name)
+        """
+        Not a valid Python expression that could be used to recreate an object with the same value since the MObject and
+        MFnDependencyNode don't have clean str representation.
+        """
+        return "<class {}('{}')>".format(self.__class__.__name__, self.name)
 
     def __str__(self):
+        """
+        The current node name.
+        """
         return self.name
 
     def __getattr__(self, attr):
@@ -109,13 +152,13 @@ class DependNode(YamNode):
     def __radd__(self, other):
         return other.__add__(self.name)
 
-    # def __apiobject__(self):
-    #     """
-    #     This seems needed for reasons that I have not explored.
-    #     Returns: OpenMaya 1.0 MObject
-    #     """
-    #     print('calling __apiobject__')
-    #     return self.mObject1
+    def __apiobject__(self):
+        """
+        Gets the maya api 1.0 MObject for this object
+        Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
+        """
+        print('calling __apiobject__ form DependNode')
+        return self.mObject1
 
     @property
     def mObject1(self):
@@ -125,6 +168,12 @@ class DependNode(YamNode):
             mObject = om1.MObject()
             mSelectionList.getDependNode(0, mObject)
             self._mObject1 = mObject
+        return self._mObject1
+
+    @property
+    def mDagPath1(self):
+        if self._mDagPath1 is None:
+            self._mDagPath1 = om1.MDagPath.getApAthTo(self.mObject1)
         return self._mObject1
 
     @property
@@ -146,7 +195,7 @@ class DependNode(YamNode):
 
     def attr(self, attr):
         import attributes
-        reload(attributes)
+        reload(attributes)  # Temporary, while in-dev
         return attributes.get_attribute(self, attr)
 
     def listRelatives(self, *args, **kwargs):
@@ -161,6 +210,14 @@ class DagNode(DependNode):
         super(DagNode, self).__init__(mObject, mFnDependencyNode)
         self._mFnDagNode = None
 
+    def __apiobject__(self):
+        """
+        Gets the maya api 1.0 MDagPath for this object
+        Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
+        """
+        print('calling __apiobject__ form DagNode')
+        return self.mDagPath1
+
     @property
     def mFnDagNode(self):
         if self._mFnDagNode is None:
@@ -170,6 +227,13 @@ class DagNode(DependNode):
     @property
     def parent(self):
         return yam(self.mFnDagNode.parent(0))
+
+    @property
+    def name(self):
+        """
+        Returns the minimum string representation in case of other objects with same name.
+        """
+        return self.mFnDagNode.partialPathName()
 
 
 class Transform(DagNode):
