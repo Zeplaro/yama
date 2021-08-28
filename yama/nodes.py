@@ -35,15 +35,14 @@ def createNode(*args, **kwargs):
 def yam(node):
     """
     Handles all node class assignment to assign the proper class depending on the node type.
-    todo : make it works when an attribute is given.
+    Also works with passing a 'node.attribute'.
 
     examples :
     >> yam('skincluster42')
     SkinCluster('skincluster42')
 
-    todo:
-    >> yam('null0.translateX')
-    Attribute('null0.translateX')
+    >> yam('pCube1.tz')
+    Attribute('pCube1.tz')
     """
 
     attr = None
@@ -94,7 +93,7 @@ def yam(node):
 
 def yams(nodes):
     """
-    Returns each nodes initialized as their appropriate YamNode. See 'yam' function.
+    Returns each nodes or attributes initialized as their appropriate YamNode or Attribute. See 'yam' function.
     :param nodes: (list) list of str of existing nodes.
     :return: list of YamNode
     """
@@ -144,12 +143,27 @@ class DependNode(YamNode):
         return self.name
 
     def __getattr__(self, attr):
+        """
+        Returns a Attribute  linked to self.
+        :param attr: str
+        :return: Attribute object
+        """
         return self.attr(attr)
 
     def __add__(self, other):
+        """
+        Acts like a string with the node's name and returns a str
+        :param other: str or YamNode
+        :return: str
+        """
         return self.name.__add__(other)
 
     def __radd__(self, other):
+        """
+        Acts like a string with the node's name and returns a str
+        :param other: str or YamNode
+        :return: str
+        """
         return other.__add__(self.name)
 
     def __apiobject__(self):
