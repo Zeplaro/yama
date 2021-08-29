@@ -1,11 +1,11 @@
 # encoding: utf8
 
 from __future__ import division
+import sys
 import json
 
-try:
-    basestring
-except NameError:
+_pyversion = sys.version_info[0]
+if _pyversion == 3:
     basestring = str
 
 

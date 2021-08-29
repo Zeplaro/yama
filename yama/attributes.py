@@ -1,12 +1,16 @@
 # encoding: utf8
 
-import maya.cmds as mc
-import nodes
+import sys
+import importlib
+from maya import cmds
 
-try:
-    basestring
-except NameError:
+# python 2 to 3 compatibility
+_pyversion = sys.version_info[0]
+if _pyversion == 3:
     basestring = str
+    reload = importlib.reload
+
+import nodes
 
 
 def get_attribute(node, attr):
@@ -58,41 +62,136 @@ class Attribute(object):
         return MultiAttribute(self.node, self.attribute, item)
 
     def __add__(self, other):
-        self.name.__add__(other)
+        """
+        Using self.name for + operator.
+        :return: str
+        """
+        return self.name + other
 
     def __radd__(self, other):
-        other.__add__(self.name)
+        """
+        Using self.name for reverse + operator.
+        :return: str
+        """
+        return other + self.name
+
+    def __contains__(self, item):
+        """
+        Using self.attribute for 'in' operator.
+        :return: str
+        """
+        return self.attribute.__contains__(item)
+
+    def __rshift__(self, other):
+        """
+        Using the >> operator to connect self to the other attribute.
+        :return: None
+        """
+        self.connect_to(other)
+
+    def __lshift__(self, other):
+        """
+        Using the << operator to connect the other attribute to self.
+        :return: None
+        """
+        self.connect_from(other)
+
+    def __floordiv__(self, other):
+        """
+        Using the // operator to disconnect self from the other attribute.
+        :return: None
+        """
+        self.disconnect(other)
+
+    def __bool__(self):
+        """
+        Returns True if the attribute actually exists in the scene.
+        :return: bool
+        """
+        return self.exists
+
+    if _pyversion == 2:
+        # __nonzero__ is python 2 verison of __bool__; kind of...
+        def __nonzero__(self):
+            """
+            Returns True if the attribute actually exists in the scene.
+            :return: bool
+            """
+            return self.__bool__()
 
     @property
     def name(self):
+        """
+        The full node.attribute name.
+        :return: str
+        """
         return self.node + '.' + self.attribute
 
     def attr(self, attr):
+        """
+        Gets a children attribute
+        :param attr: str
+        :return: Attribute object
+        """
         return get_attribute(self.node, self.attribute + '.' + attr)
 
     @property
     def value(self):
-        print('getting', self.name)
-        value = mc.getAttr(self.name)
-        if isinstance(value, list) and len(value) == 1:
+        """
+        Gets the maya value.
+        """
+        value = cmds.getAttr(self.name)
+        # checks if the values are in a list in a list as maya does sometimes
+        if not isinstance(value, tuple) and len(value) == 1:
             value = value[0]
         return value
 
     @value.setter
     def value(self, value):
-        print('setting')
-        print(self, value)
-        mc.setAttr(self.name, value)
+        """
+        Sets the maya value.
+        """
+        cmds.setAttr(self.name, value)
 
-    def connect_to(self, attr, *args, **kwargs):
+    @property
+    def exists(self):
+        return cmds.objExists(self.name)
+
+    def connect_to(self, attr, **kwargs):
+        """
+        Connect this attribute to the given attr.
+        kwargs are passed on to cmds.connectAttr
+        """
         if isinstance(attr, Attribute):
             attr = attr.name
-        mc.connectAttr(self.name, attr, *args, **kwargs)
+        cmds.connectAttr(self.name, attr, **kwargs)
 
-    def connect_from(self, attr, *args, **kwargs):
+    def connect_from(self, attr, **kwargs):
+        """
+        Connect the given attr to this attribute.
+        kwargs are passed on to cmds.connectAttr
+        """
         if isinstance(attr, Attribute):
             attr = attr.name
-        mc.connectAttr(attr, self.name, *args, **kwargs)
+        cmds.connectAttr(attr, self.name, **kwargs)
+
+    def disconnect(self, attr=None):
+        if isinstance(attr, Attribute):
+            attr = attr.name
+        cmds.disconnectAttr(self.name, attr)
+
+    def listConnections(self, **kwargs):
+        if 'scn' not in kwargs and 'skipConversionNodes' not in kwargs:
+            kwargs['skipConversionNodes'] = True
+        if 'p' not in kwargs and 'plugs' not in kwargs:
+            kwargs['plugs'] = True
+        return nodes.yams(cmds.listConnections(self.name, **kwargs) or [])
+
+    def source_connections(self, **kwargs):
+        return self.listConnections(destination=False, **kwargs)
+
+    def destination_connections(self, **kwargs):
+        return self.listConnections(source=False, **kwargs)
 
     @property
     def type(self):
@@ -100,81 +199,81 @@ class Attribute(object):
         Returns the type of data currently in the attribute.
         :return: str
         """
-        return mc.getAttr(self.name, type=True)
+        return cmds.getAttr(self.name, type=True)
 
     @property
     def defaultValue(self):
-        return mc.addAttr(self.name, q=True, defaultValue=True)
+        return cmds.addAttr(self.name, q=True, defaultValue=True)
 
     @defaultValue.setter
     def defaultValue(self, value):
-        mc.addAttr(self.name, e=True, defaultValue=value)
+        cmds.addAttr(self.name, e=True, defaultValue=value)
 
     @property
     def hasMinValue(self):
-        return mc.attributeQuery(self.name, node=self.obj, minExists=True)
+        return cmds.attributeQuery(self.name, node=self.obj, minExists=True)
 
     @hasMinValue.setter
     def hasMinValue(self, value):
         """
-        Maya can only toggle the minValue and can not set it to a certain state, regardless of passing True or False,
-         which implies the following way of setting it.
+        Maya can only toggle the minValue and cannot set it to a certain state, regardless of passing True or False,
+        which implies the following way of setting it.
         """
         if not bool(value) == bool(self.hasMinValue):
-            mc.addAttr(self.name, e=True, hasMinValue=value)
+            cmds.addAttr(self.name, e=True, hasMinValue=value)
 
     @property
     def minValue(self):
-        return mc.attributeQuery(self._attr, node=self.obj, minimum=True)[0]
+        return cmds.attributeQuery(self._attr, node=self.obj, minimum=True)[0]
 
     @minValue.setter
     def minValue(self, value):
-        mc.addAttr(self.name, e=True, minValue=value)
+        cmds.addAttr(self.name, e=True, minValue=value)
 
     @property
     def hasMaxValue(self):
-        return mc.attributeQuery(self._attr, node=self.obj, maxExists=True)
+        return cmds.attributeQuery(self._attr, node=self.obj, maxExists=True)
 
     @hasMaxValue.setter
     def hasMaxValue(self, value):
         """
-        Maya can only toggle the maxValue and can not set it to a certain state, regardless of passing True or False,
-         which implies the following way of setting it.
+        Maya can only toggle the maxValue and cannot set it to a certain state, regardless of passing True or False,
+        which implies the following way of setting it.
         """
         if not bool(value) == bool(self.hasMaxValue):
-            mc.addAttr(self, e=True, hasMaxValue=value)
+            cmds.addAttr(self, e=True, hasMaxValue=value)
 
     @property
     def maxValue(self):
-        return mc.attributeQuery(self._attr, node=self.obj, maximum=True)[0]
+        return cmds.attributeQuery(self._attr, node=self.obj, maximum=True)[0]
 
     @maxValue.setter
     def maxValue(self, value):
-        mc.addAttr(self, e=True, maxValue=value)
+        cmds.addAttr(self, e=True, maxValue=value)
 
     @property
     def locked(self):
-        return mc.getAttr(self, lock=True)
+        return cmds.getAttr(self, lock=True)
 
     @locked.setter
     def locked(self, value):
-        mc.setAttr(self, lock=value)
+        cmds.setAttr(self, lock=value)
 
     @property
     def keyable(self):
-        return mc.getAttr(self, keyable=True)
+        return cmds.getAttr(self, keyable=True)
 
     @keyable.setter
     def keyable(self, value):
         """
         When value is False, sets the attribute as channelBox (displayable).
         """
-        mc.setAttr(self, keyable=value)
-        mc.setAttr(self, channelBox=True)
+        cmds.setAttr(self, keyable=value)
+        cmds.setAttr(self, channelBox=True)
 
     @property
     def channelBox(self):
-        if not self.keyable and mc.getAttr(channelBox=True):
+        if not cmds.getAttr(self, keyable=True) and cmds.getAttr(channelBox=True):
             return True
         return False
 
@@ -184,15 +283,15 @@ class Attribute(object):
         When value is False, sets the attribute as hidden.
         """
         if value:
-            mc.setAttr(self, keyable=False)
-            mc.setAttr(self, channelBox=True)
+            cmds.setAttr(self, keyable=False)
+            cmds.setAttr(self, channelBox=True)
         else:
-            mc.setAttr(self, keyable=False)
-            mc.setAttr(self, channelBox=False)
+            cmds.setAttr(self, keyable=False)
+            cmds.setAttr(self, channelBox=False)
 
     @property
     def hidden(self):
-        if mc.getAttr(self, keyable=True) or mc.getAttr(self, channelBox=True):
+        if cmds.getAttr(self, keyable=True) or cmds.getAttr(self, channelBox=True):
             return False
         return True
 
@@ -202,11 +301,11 @@ class Attribute(object):
         When value is False, sets the attribute as channelBox (displayable).
         """
         if value:
-            mc.setAttr(self, keyable=False)
-            mc.setAttr(self, channelBox=False)
+            cmds.setAttr(self, keyable=False)
+            cmds.setAttr(self, channelBox=False)
         else:
-            mc.setAttr(self, keyable=False)
-            mc.setAttr(self, channelBox=False)
+            cmds.setAttr(self, keyable=False)
+            cmds.setAttr(self, channelBox=True)
 
 
 class MultiAttribute(Attribute):
