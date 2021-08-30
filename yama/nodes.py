@@ -235,7 +235,7 @@ class DependNode(YamNode):
         """
         if 'scn' not in kwargs and 'skipConversionNodes' not in kwargs:
             kwargs['scn'] = True
-        return cmds.listConnections(self.name, **kwargs)
+        return yams(cmds.listConnections(self.name, **kwargs))
 
     def source_connections(self, **kwargs):
         """
