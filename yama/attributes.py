@@ -1,5 +1,9 @@
 # encoding: utf8
 
+"""
+Contains all the class and functions for maya attributes.
+"""
+
 import sys
 import importlib
 from maya import cmds
@@ -142,7 +146,7 @@ class Attribute(object):
         """
         value = cmds.getAttr(self.name)
         # checks if the values are in a list in a list as maya does sometimes
-        if not isinstance(value, tuple) and len(value) == 1:
+        if isinstance(value, list) and len(value) == 1:
             value = value[0]
         return value
 
@@ -153,9 +157,15 @@ class Attribute(object):
         """
         cmds.setAttr(self.name, value)
 
-    @property
     def exists(self):
         return cmds.objExists(self.name)
+
+    def settable(self):
+        """
+        Gets if the attribute is settable if it's not locked and either not connected, or has only keyframed animation.
+        Returns: bool
+        """
+        return cmds.getAttr(self.name, settable=True)
 
     def connect_to(self, attr, **kwargs):
         """
@@ -331,3 +341,37 @@ class MultiAttribute(Attribute):
     @property
     def parent(self):
         return get_attribute(self.node, self.parent_attr)
+
+
+def reset_attrs(objs=None, t=True, r=True, s=True, v=True, user=False):
+
+    if not objs:
+        objs = cmds.ls(sl=True, fl=True)
+        if not objs:
+            cmds.warning('Select a least one object')
+            return
+    objs = nodes.yams(objs)
+
+    tr = ''
+    if t:
+        tr += 't'
+    if r:
+        tr += 'r'
+    for obj in objs:
+        for axe in 'xyz':
+            for tr_ in tr:
+                if obj.attr(tr_+axe).settable():
+                    obj.attr(tr_+axe).value = 0
+            if s:
+                if obj.attr('s'+axe).settable():
+                    obj.attr('s'+axe).value = 1
+        if v:
+            if obj.v.settable():
+                obj.v.value = True
+        if user:
+            attrs = obj.listAttr(ud=True, scalar=True, visible=True)
+            for attr in attrs:
+                if not attr.settable():
+                    continue
+                attr.value = attr.defaultValue
+    return objs

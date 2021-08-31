@@ -8,6 +8,7 @@ __credits__ = {'emotionalSupport': "Emilie Jolin", 'spellchecking': "Pranil Naic
 import sys
 import importlib
 from maya import cmds
+import maya.api.OpenMaya as om
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]
@@ -30,3 +31,16 @@ def ls(*args, **kwargs):
 
 def selected():
     return yams(cmds.ls(sl=True, fl=True))
+
+
+def select(objs):
+    # todo: unpack lists, add add and other cmds kwargs
+    selection_list = om.MSelectionList()
+    if isinstance(objs, basestring):
+        objs = [objs]
+    for obj in objs:
+        if isinstance(obj, nodes.DependNode):
+            selection_list.add(obj.mObject)
+        else:
+            selection_list.add(obj)
+    om.MGlobal.selectCommand(selection_list)

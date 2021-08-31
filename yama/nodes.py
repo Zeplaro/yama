@@ -5,6 +5,7 @@ Contains all the class for maya node types, and all nodes related functions.
 The main functions used would be createNode to create a new node and get it initialized as its proper class type; and
 yam or yams to initialize existing objects into their proper class type.
 """
+
 import sys
 import importlib
 from math import sqrt
@@ -63,6 +64,9 @@ def yam(node):
         mObject = mSelectionList.getDependNode(0)
         mfn = om.MFnDependencyNode(mObject)
 
+    elif isinstance(node, YamNode):
+        return node
+
     elif isinstance(node, om.MObject):
         mObject = node
         mfn = om.MFnDependencyNode(mObject)
@@ -116,6 +120,7 @@ class DependNode(YamNode):
     e.g.: >>> node.mObject  <-- gives a api 2.0 object
     -     >>> node.mObject1 <-- gives a api 1.0 object
     """
+
     def __init__(self, mObject, mFnDependencyNode):
         """
         Needs an maya api 2.0 MObject associated to the node and a MFnDependencyNode initialized with the mObject.
@@ -179,7 +184,7 @@ class DependNode(YamNode):
         Gets the maya api 1.0 MObject for this object.
         Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
         """
-        print('calling __apiobject__ for '+self.name)
+        print('calling __apiobject__ for ' + self.name)
         return self.mObject1
 
     @property
@@ -235,7 +240,7 @@ class DependNode(YamNode):
         """
         if 'scn' not in kwargs and 'skipConversionNodes' not in kwargs:
             kwargs['scn'] = True
-        return yams(cmds.listConnections(self.name, **kwargs))
+        return yams(cmds.listConnections(self.name, **kwargs) or [])
 
     def source_connections(self, **kwargs):
         """
@@ -251,6 +256,14 @@ class DependNode(YamNode):
         """
         return self.listConnections(source=False, **kwargs)
 
+    def listAttr(self, **kwargs):
+        """
+        Returns the maya cmds.listAttr as YamNode objects or Attribute objects.
+        :param kwargs: kwargs passed on to cmds.listAttr
+        :return: list[Attribute, ...]
+        """
+        return yams(cmds.listAttr(self.name, **kwargs) or [])
+
     def type(self):
         """
         Returns the node type name
@@ -263,6 +276,7 @@ class DagNode(DependNode):
     """
     Subclass for all maya dag nodes.
     """
+
     def __init__(self, mObject, mFnDependencyNode):
         super(DagNode, self).__init__(mObject, mFnDependencyNode)
         self._mDagPath = None
@@ -302,7 +316,7 @@ class DagNode(DependNode):
         Gets the maya api 1.0 MDagPath for this object
         Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
         """
-        print('calling __apiobject__ from dagNode for '+self.name)
+        print('calling __apiobject__ from dagNode for ' + self.name)
         return self.mDagPath1
 
     @property
@@ -530,18 +544,18 @@ class NurbsCurve(Shape):
         print('Nb of knots: {}'.format(nb_knots))
 
         if self.form.value == 0:
-            knots = list(range(nb_knots-(self.degree.value - 1) * 2))
+            knots = list(range(nb_knots - (self.degree.value - 1) * 2))
             for i in range(self.degree.value - 1):
                 knots = knots[:1] + knots
                 knots += knots[-1:]
         else:
-            knots = list(range(nb_knots-(self.degree.value - 1)))
+            knots = list(range(nb_knots - (self.degree.value - 1)))
             for i in range(self.degree.value - 1):
-                knots.insert(0, knots[0]-1)
+                knots.insert(0, knots[0] - 1)
 
         if self.type == 'bezierCurve':
             knots = []
-            for i in range(nb_knots/3):
+            for i in range(nb_knots / 3):
                 for j in range(3):
                     knots.append(i)
         knots = [float(x) for x in knots]
