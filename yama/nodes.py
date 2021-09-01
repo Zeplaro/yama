@@ -514,8 +514,14 @@ class NurbsCurve(Shape):
         [cmds.xform(control, os=True, t=position) for control in controls for position in positions]
 
     @property
-    def arclen(self):
-        # todo: copied form old node work, needs cleanup
+    def arclen(self, os=False):
+        """
+        Gets the world space or object space arc length of the curve.
+        :param os: if True return the objectSpace length.
+        :return: float
+        """
+        if os:
+            return self.mFnNurbsCurve.length()
         return cmds.arclen(self.name)
 
     @property

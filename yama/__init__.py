@@ -30,17 +30,38 @@ def ls(*args, **kwargs):
 
 
 def selected():
-    return yams(cmds.ls(sl=True, fl=True))
+    # todo: add support for component selection
+    sel = om.MGlobal.getActiveSelectionList(orderedSelectionIfAvailable=True)
+    return yams(sel.getDependNode(x) for x in range(sel.length()))
 
 
-def select(objs):
-    # todo: unpack lists, add add and other cmds kwargs
+def select(*args, add=False, replace=True):
+    # todo: check if it really is undoable
+    """
+    Selects the args in the scene.
+    :param args:
+    :param add:
+    :param replace:
+    :param hierarchy:
+    """
+    # Checks that only one kwarg is used at a time.
+    assert add ^ replace, AttributeError("add and replace can not be used at the same time")
+
     selection_list = om.MSelectionList()
-    if isinstance(objs, basestring):
-        objs = [objs]
-    for obj in objs:
-        if isinstance(obj, nodes.DependNode):
-            selection_list.add(obj.mObject)
+    for arg in args:
+        if isinstance(arg, (basestring, om.MObject, om.MDagPath)):
+            selection_list.add(arg)
+        elif isinstance(arg, nodes.DependNode):
+            selection_list.add(arg.name)
+        elif hasattr(arg, '__iter__'):
+            for arg_ in arg:
+                if isinstance(arg_, (basestring, om.MObject, om.MDagPath)):
+                    selection_list.add(arg_)
+                elif isinstance(arg_, nodes.DependNode):
+                    selection_list.add(arg_.name)
         else:
-            selection_list.add(obj)
-    om.MGlobal.selectCommand(selection_list)
+            raise AttributeError('failed to select: {} of type {}'.format(arg, type(arg).__name__))
+    if replace:
+        om.MGlobal.selectCommand(selection_list, listAdjustment=om.MGlobal.kReplaceList)
+    else:
+        om.MGlobal.selectCommand(selection_list, listAdjustment=om.MGlobal.kAddToList)
