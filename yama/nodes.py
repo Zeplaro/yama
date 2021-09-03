@@ -20,6 +20,7 @@ if _pyversion == 3:
     from importlib import reload
 
 import weightsdict as wdt
+import utils
 
 
 def createNode(*args, **kwargs):
@@ -201,7 +202,13 @@ class DependNode(YamNode):
         return self._mObject1
 
     def rename(self, new_name):
-        self.mFnDependencyNode.setName(new_name)
+        """
+        Renames the node.
+        Needs to use cmds to be undoable.
+        :param new_name: str
+        """
+        # self.mFnDependencyNode.setName(new_name)
+        cmds.rename(self.name, new_name)
 
     @property
     def name(self):
@@ -286,9 +293,9 @@ class DagNode(DependNode):
         """
         Checks if the item is a children of self.
         """
-        if isinstance(item, (basestring, om.MObject)):
+        if not isinstance(item, DependNode):
             item = yam(item)
-        return item.longname.startswith(self.longname)
+        return item.longname().startswith(self.longname())
 
     @property
     def mDagPath(self):
@@ -339,6 +346,13 @@ class DagNode(DependNode):
             return None
         return yam(p)
 
+    @parent.setter
+    def parent(self, parent):
+        if parent is None:
+            cmds.parent(self.name, world=True)
+        else:
+            cmds.parent(self.name, parent)
+
     @property
     def name(self):
         """
@@ -351,9 +365,8 @@ class DagNode(DependNode):
         """
         Property setter needed again even if defined in parent class.
         """
-        self.rename(value)
+        super(DagNode, self).name = value
 
-    @property
     def longname(self):
         """
         Gets the full path name of the object including the leading |.
@@ -400,35 +413,37 @@ class Transform(DagNode):
         shapes = self.shapes()
         return shapes[0] if shapes else None
 
-    def get_world_translation(self):
-        return cmds.xform(self.name, q=True, ws=True, t=True)
+    def get_translation(self, ws=False):
+        os = not ws
+        return cmds.xform(self.name, q=True, t=True, ws=ws, os=os)
 
-    def set_world_translation(self, value):
-        cmds.xform(self.name, ws=True, t=value)
+    def set_translation(self, value, ws=False):
+        os = not ws
+        cmds.xform(self.name, t=value, ws=ws, os=os)
 
-    def get_world_rotation(self):
-        return cmds.xform(self.name, q=True, ws=True, ro=True)
+    def get_rotation(self, ws=False):
+        os = not ws
+        return cmds.xform(self.name, q=True, ro=True, ws=ws, os=os)
 
-    def set_world_rotation(self, value):
-        cmds.xform(self.name, ws=True, ro=value)
+    def set_rotation(self, value, ws=False):
+        os = not ws
+        cmds.xform(self.name, ro=value, ws=ws, os=os)
 
-    def get_world_scale(self):
-        return cmds.xform(self.name, q=True, ws=True, s=True)
+    def get_scale(self, ws=False):
+        os = not ws
+        return cmds.xform(self.name, q=True, s=True, ws=ws, os=os)
 
-    def set_world_scale(self, value):
-        cmds.xform(self.name, ws=True, s=value)
+    def set_scale(self, value, ws=False):
+        os = not ws
+        cmds.xform(self.name, s=value, ws=ws, os=os)
 
-    def get_rotate_pivot(self):
-        return cmds.xform(self.name, q=True, os=True, rp=True)
+    def get_rotate_pivot(self, ws=False):
+        os = not ws
+        return cmds.xform(self.name, q=True, rp=True, ws=ws, os=os)
 
-    def set_rotate_pivot(self, value):
-        cmds.xform(self.name, os=True, rp=value)
-
-    def get_world_rotate_pivot(self):
-        return cmds.xform(self.name, q=True, ws=True, rp=True)
-
-    def set_world_rotate_pivot(self, value):
-        cmds.xform(self.name, ws=True, rp=value)
+    def set_rotate_pivot(self, value, ws=False):
+        os = not ws
+        cmds.xform(self.name, rp=value, ws=ws, os=os)
 
     def distance(self, obj):
         if isinstance(obj, Transform):
@@ -457,6 +472,14 @@ class Shape(DagNode):
     def __init__(self, mObject, mFnDependencyNode):
         super(Shape, self).__init__(mObject, mFnDependencyNode)
 
+    @property
+    def parent(self):
+        return super(Shape, self).parent
+
+    @parent.setter
+    def parent(self, parent):
+        cmds.parent(self.name, parent, r=True, s=True)
+
 
 class Mesh(Shape):
     def __init__(self, mObject, mFnDependencyNode):
@@ -475,6 +498,18 @@ class Mesh(Shape):
         if self._mFnMesh is None:
             self._mFnMesh = om.MFnMesh(self.mObject)
         return self._mFnMesh
+
+    def get_vtx_position(self, ws=False):
+        pos = []
+        os = not ws
+        for vtx in utils.component_range(self, 'vtx', len(self)):
+            pos.append(cmds.xform(vtx, q=True, t=True, ws=ws, os=os))
+        return pos
+
+    def set_vtx_position(self, data, ws=False):
+        os = not ws
+        for vtx, pos in zip(utils.component_range(self, 'vtx', len(self)), data):
+            cmds.xform(vtx, t=pos, ws=ws, os=os)
 
 
 class NurbsCurve(Shape):
@@ -495,12 +530,17 @@ class NurbsCurve(Shape):
             self._mFnNurbsCurve = om.MFnNurbsCurve(self.mObject)
         return self._mFnNurbsCurve
 
-    @property
-    def cps(self):
-        # todo: copied form old node work, needs cleanup
-        cps = cmds.ls('{}.cp[*]'.format(self.name), flatten=True)
-        cps = [x.replace('.cv', '.cp') for x in cps]
-        return cps
+    def get_cvs_position(self, ws=False):
+        pos = []
+        os = not ws
+        for cv in utils.component_range(self, 'cv', len(self)):
+            pos.append(cmds.xform(cv, q=True, t=True, ws=ws, os=os))
+        return pos
+
+    def set_cvs_position(self, data, ws=False):
+        os = not ws
+        for cv, pos in zip(utils.component_range(self, 'cv', len(self)), data):
+            cmds.xform(cv, t=pos, ws=ws, os=os)
 
     @staticmethod
     def get_control_point_position(controls):

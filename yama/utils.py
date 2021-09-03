@@ -2,7 +2,7 @@
 
 import sys
 from maya import cmds
-from . import select, yam, yams
+import __init__ as ym
 import nodes
 
 # python 2 to 3 compatibility
@@ -29,7 +29,7 @@ def create_hook(node, suffix_name='hook', parent=None):
     return hook
 
 
-def comp_range(node, comp, *args):
+def component_range(node, comp, *args):
     """
     Returns a generator to iterate over a length of vertices full name.
     :param node: str or YamNode; the node containing the vertices.
@@ -54,8 +54,8 @@ def skinas(slave_namespace=None, master=None, *slaves):
             return
         master = objs[0]
         slaves = objs[1:]
-    master = yam(master)
-    slaves = yams(slaves)
+    master = ym.yam(master)
+    slaves = ym.yams(slaves)
 
     masterskn = get_skinCluster(master)
     if not masterskn:
@@ -63,7 +63,7 @@ def skinas(slave_namespace=None, master=None, *slaves):
         return
     infs = masterskn.influences()
     if slave_namespace is not None:
-        infs = yams(['{}:{}'.format(slave_namespace, inf) for inf in infs])
+        infs = ym.yams(['{}:{}'.format(slave_namespace, inf) for inf in infs])
     sm = masterskn.skinMethod.value
     mi = masterskn.maximumInfluences.value
     nw = masterskn.normalizeWeights.value
@@ -74,7 +74,7 @@ def skinas(slave_namespace=None, master=None, *slaves):
         if nodes.SkinCluster.get_skinCluster(slave):
             print(slave+' already has a skin attached')
             continue
-        select(infs, slave)
+        ym.select(infs, slave)
         cmds.skinCluster(name='skinCluster_{}#'.format(slave), sm=sm, mi=mi, nw=nw, omi=mmi, wd=wd, ihs=True, tsb=True)
         slaveskn = get_skinCluster(slave)
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint',
@@ -85,8 +85,8 @@ def skinas(slave_namespace=None, master=None, *slaves):
 
 
 def hierarchize(objs, invert=False):
-    objs = yams(objs)
-    objs = {obj.longname: obj for obj in objs}
+    objs = ym.yams(objs)
+    objs = {obj.longname(): obj for obj in objs}
     longnames = list(objs)
     done = False
     while not done:
