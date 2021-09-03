@@ -7,7 +7,6 @@ yam or yams to initialize existing objects into their proper class type.
 """
 
 import sys
-import importlib
 from math import sqrt
 from maya import cmds
 import maya.mel as mel
@@ -18,7 +17,7 @@ import maya.OpenMaya as om1
 _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
-    reload = importlib.reload
+    from importlib import reload
 
 import weightsdict as wdt
 

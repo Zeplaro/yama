@@ -5,14 +5,12 @@ Contains all the class and functions for maya attributes.
 """
 
 import sys
-import importlib
 from maya import cmds
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
-    reload = importlib.reload
 
 import nodes
 

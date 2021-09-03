@@ -1,7 +1,6 @@
 # encoding: utf8
 
 import sys
-import importlib
 from maya import cmds
 from . import select, yam, yams
 import nodes
@@ -10,7 +9,6 @@ import nodes
 _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
-    reload = importlib.reload
 
 
 def create_hook(node, suffix_name='hook', parent=None):
@@ -76,7 +74,7 @@ def skinas(slave_namespace=None, master=None, *slaves):
         if nodes.SkinCluster.get_skinCluster(slave):
             print(slave+' already has a skin attached')
             continue
-        cmds.select(infs, slave, r=True)
+        select(infs, slave)
         cmds.skinCluster(name='skinCluster_{}#'.format(slave), sm=sm, mi=mi, nw=nw, omi=mmi, wd=wd, ihs=True, tsb=True)
         slaveskn = get_skinCluster(slave)
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint',
