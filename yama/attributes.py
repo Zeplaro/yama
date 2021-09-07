@@ -184,9 +184,13 @@ class Attribute(object):
         cmds.connectAttr(attr, self.name, **kwargs)
 
     def disconnect(self, attr=None):
+        # todo: make better; like break connections maybe ?
         if isinstance(attr, Attribute):
             attr = attr.name
-        cmds.disconnectAttr(self.name, attr)
+        try:
+            cmds.disconnectAttr(self.name, attr)
+        except:
+            cmds.disconnectAttr(attr, self.name)
 
     def listConnections(self, **kwargs):
         if 'scn' not in kwargs and 'skipConversionNodes' not in kwargs:
@@ -200,6 +204,14 @@ class Attribute(object):
 
     def destination_connections(self, **kwargs):
         return self.listConnections(source=False, **kwargs)
+
+    def breakConnections(self, source=True, destination=False):
+        if source:
+            for c in self.source_connections():
+                self.disconnect(c)
+        if destination:
+            for c in self.destination_connections():
+                self.disconnect(c)
 
     @property
     def type(self):
@@ -249,39 +261,39 @@ class Attribute(object):
         which implies the following way of setting it.
         """
         if not bool(value) == bool(self.hasMaxValue):
-            cmds.addAttr(self, e=True, hasMaxValue=value)
+            cmds.addAttr(self.name, e=True, hasMaxValue=value)
 
     @property
     def maxValue(self):
-        return cmds.attributeQuery(self._attr, node=self.obj, maximum=True)[0]
+        return cmds.attributeQuery(self.attr, node=self.obj, maximum=True)[0]
 
     @maxValue.setter
     def maxValue(self, value):
-        cmds.addAttr(self, e=True, maxValue=value)
+        cmds.addAttr(self.name, e=True, maxValue=value)
 
     @property
     def locked(self):
-        return cmds.getAttr(self, lock=True)
+        return cmds.getAttr(self.name, lock=True)
 
     @locked.setter
     def locked(self, value):
-        cmds.setAttr(self, lock=value)
+        cmds.setAttr(self.name, lock=value)
 
     @property
     def keyable(self):
-        return cmds.getAttr(self, keyable=True)
+        return cmds.getAttr(self.name, keyable=True)
 
     @keyable.setter
     def keyable(self, value):
         """
         When value is False, sets the attribute as channelBox (displayable).
         """
-        cmds.setAttr(self, keyable=value)
-        cmds.setAttr(self, channelBox=True)
+        cmds.setAttr(self.name, channelBox=True)
+        cmds.setAttr(self.name, keyable=value)
 
     @property
     def channelBox(self):
-        if not cmds.getAttr(self, keyable=True) and cmds.getAttr(channelBox=True):
+        if not cmds.getAttr(self.name, keyable=True) and cmds.getAttr(channelBox=True):
             return True
         return False
 
@@ -291,15 +303,15 @@ class Attribute(object):
         When value is False, sets the attribute as hidden.
         """
         if value:
-            cmds.setAttr(self, keyable=False)
-            cmds.setAttr(self, channelBox=True)
+            cmds.setAttr(self.name, keyable=False)
+            cmds.setAttr(self.name, channelBox=True)
         else:
-            cmds.setAttr(self, keyable=False)
-            cmds.setAttr(self, channelBox=False)
+            cmds.setAttr(self.name, keyable=False)
+            cmds.setAttr(self.name, channelBox=False)
 
     @property
     def hidden(self):
-        if cmds.getAttr(self, keyable=True) or cmds.getAttr(self, channelBox=True):
+        if cmds.getAttr(self.name, keyable=True) or cmds.getAttr(self.name, channelBox=True):
             return False
         return True
 
@@ -309,11 +321,11 @@ class Attribute(object):
         When value is False, sets the attribute as channelBox (displayable).
         """
         if value:
-            cmds.setAttr(self, keyable=False)
-            cmds.setAttr(self, channelBox=False)
+            cmds.setAttr(self.name, keyable=False)
+            cmds.setAttr(self.name, channelBox=False)
         else:
-            cmds.setAttr(self, keyable=False)
-            cmds.setAttr(self, channelBox=True)
+            cmds.setAttr(self.name, keyable=False)
+            cmds.setAttr(self.name, channelBox=True)
 
 
 class MultiAttribute(Attribute):
