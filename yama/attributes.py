@@ -184,13 +184,13 @@ class Attribute(object):
         cmds.connectAttr(attr, self.name, **kwargs)
 
     def disconnect(self, attr=None):
-        # todo: make better; like break connections maybe ?
+        """
+        Disconnect the the connection between self (source) and attr (destination)
+        :param attr: str or Attribute
+        """
         if isinstance(attr, Attribute):
             attr = attr.name
-        try:
-            cmds.disconnectAttr(self.name, attr)
-        except:
-            cmds.disconnectAttr(attr, self.name)
+        cmds.disconnectAttr(self.name, attr)
 
     def listConnections(self, **kwargs):
         if 'scn' not in kwargs and 'skipConversionNodes' not in kwargs:
