@@ -354,7 +354,15 @@ class MultiAttribute(Attribute):
 
 
 def reset_attrs(objs=None, t=True, r=True, s=True, v=True, user=False):
-
+    """
+    Resets the objs translate, rotate, scale, visibility and/or user defined attributes to their default values.
+    :param objs: list of objects to reset the attributes on. If None then the selected objects are reset.
+    :param t: if True resets the translate value to 0
+    :param r: if True resets the rotate value to 0
+    :param s: if True resets the scale value to 1
+    :param v: if True resets the visibility value to 1
+    :param user: if True resets the user attributes values to their respective default values.
+    """
     if not objs:
         objs = cmds.ls(sl=True, fl=True)
         if not objs:
@@ -384,4 +392,3 @@ def reset_attrs(objs=None, t=True, r=True, s=True, v=True, user=False):
                 if not attr.settable():
                     continue
                 attr.value = attr.defaultValue
-    return objs
