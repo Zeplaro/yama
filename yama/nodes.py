@@ -524,6 +524,16 @@ class NurbsCurve(Shape):
         """
         return self.mFnNurbsCurve.numCVs
 
+    @staticmethod
+    def create(cvs, knots, degree, form, parent):
+        if isinstance(parent, basestring):
+            parent = yam(parent).mObject
+        elif isinstance(parent, DependNode):
+            parent = parent.mObject
+        assert isinstance(parent, om.MObject)
+        curve = om.MFnNurbsCurve().create(cvs, knots, degree, form, False, True, parent)
+        return yam(curve)
+
     @property
     def mFnNurbsCurve(self):
         if self._mFnNurbsCurve is None:
@@ -565,14 +575,10 @@ class NurbsCurve(Shape):
 
     @property
     def data(self):
-        # todo: copied form old node work, needs cleanup
-        data = {'name': self.name,
-                'type': self.type,
-                'spans': self.spans.value,
-                'form': self.form.value,
-                'degree': self.degree.value,
-                'cps': self.get_control_point_position(self.cps),
-                'knots': self.knots
+        data = {'cvs': self.mFnNurbsCurve.cvPositions(),
+                'knots': self.mFnNurbsCurve.knots(),
+                'degree': self.mFnNurbsCurve.degree,
+                'form': self.mFnNurbsCurve.form,
                 }
         return data
 
@@ -688,10 +694,8 @@ class SkinCluster(GeometryFilter):
     @property
     def dq_weights(self):
         dq_weights = wdt.WeightsDict()
-        for i, comp in enumerate(cmds.ls('{}.weightList[*]'.format(self.name))):
-            weight = self.blendWeights[i].value
-            if weight:
-                dq_weights[i] = weight
+        for i in range(len(self.geometry)):
+            dq_weights[i] = self.blendWeights[i].value
         return dq_weights
 
     @dq_weights.setter
@@ -705,17 +709,17 @@ class SkinCluster(GeometryFilter):
 
     def reskin(self):
         """
-        Resets the skincluster and mesh to the current influences position.
+        Resets the skinCluster and mesh to the current influences position.
         """
         for inf in self.influences():
-            conns = cmds.listConnections(inf.worldMatrix, type='skinCluster', p=True)
+            conns = (x for x in inf.worldMatrix.destination_connections(type='skinCluster') if x.node == self)
             for conn in conns:
-                bpm = conn.replace('matrix', 'bindPreMatrix')
+                bpm = self.bindPreMatrix[conn.index]
+                if bpm.source_connections():
+                    print("{} is connected and can't be reset".format(bpm))
+                    continue
                 wim = inf.worldInverseMatrix.value
-                if not cmds.listConnections(bpm):
-                    cmds.setAttr(bpm, *wim, type='matrix')
-                else:
-                    print('{} is connected'.format(bpm))
+                cmds.setAttr(bpm.name, *wim, type='matrix')
         cmds.skinCluster(self.name, e=True, rbm=True)
 
     @staticmethod
@@ -733,9 +737,9 @@ class BlendShape(GeometryFilter):
         self.get_targets()
 
     def get_targets(self):
-        targets = cmds.blendShape(self.name, q=True, target=True) or []
-        self._targets = [BlendshapeTarget(self, n, i) for i, n in enumerate(targets)]
-        self._targets_names = {target.name: target for target in self._targets}
+        targets_nodes = yams(cmds.blendShape(self.name, q=True, target=True)) or []
+        self._targets = [BlendshapeTarget(self, target_node, index) for index, target_node in enumerate(targets_nodes)]
+        self._targets_names = {target.target_node.name: target for target in self._targets}
         return self._targets
 
     def targets(self, target):
@@ -752,8 +756,8 @@ class BlendShape(GeometryFilter):
     @property
     def weights(self):
         weights = wdt.WeightsDict()
-        for c, _ in enumerate(self.geometry.get_components()):
-            weights[c] = self.weights_attr(c).value
+        for index in range(len(self.geometry)):
+            weights[index] = self.weights_attr(index).value
         return weights
 
     @weights.setter
@@ -763,43 +767,40 @@ class BlendShape(GeometryFilter):
 
 
 class BlendshapeTarget(object):
-    def __init__(self, node, name, index):
-        self._name = name
-        self._node = node
-        self._index = index
+    def __init__(self, node, target_node, index):
+        self.target_node = target_node
+        self.node = node
+        self.index = index
+        self.attribute = node.attr(target_node.name)
 
     def __str__(self):
-        return self._name
+        return self.attribute.name
 
     def __repr__(self):
-        return 'Target({}, {}, {})'.format(self._node, self._name, self._index)
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def index(self):
-        return self._index
-
-    @property
-    def node(self):
-        return self._node
+        return "Target({}, {}, {})".format(self.node, self.target_node, self.index)
 
     def weights_attr(self, index):
-        return self._node.inputTarget[0].inputTargetGroup[self._index].targetWeights[index]
+        return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights[index]
 
     @property
     def weights(self):
         weights = wdt.WeightsDict()
-        for c, _ in enumerate(self._node.geometry.get_components()):
-            weights[c] = self.weights_attr(c).value
+        for i in range(len(self.node.geometry)):
+            weights[i] = self.weights_attr(i).value
         return weights
 
     @weights.setter
     def weights(self, weights):
         for i, weight in weights.items():
             self.weights_attr(i).value = weight
+
+    @property
+    def value(self):
+        return self.attribute.value
+
+    @value.setter
+    def value(self, value):
+        self.attribute.value = value
 
 
 # Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from
