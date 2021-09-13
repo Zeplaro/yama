@@ -6,16 +6,16 @@ Contains all the class and functions for maya attributes.
 
 import sys
 from maya import cmds
+import nodes
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
 
-import nodes
-
 
 def get_attribute(node, attr):
+    # todo: support index such as [*] and [2:-1]
     if attr.endswith(']'):
         split = attr.split('[')
         index = int(split.pop(-1)[:-1])
