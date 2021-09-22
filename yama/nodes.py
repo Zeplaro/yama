@@ -19,6 +19,7 @@ if _pyversion == 3:
     basestring = str
     from importlib import reload
 
+import components
 import weightsdict as wdt
 import utils
 
@@ -381,6 +382,11 @@ class Transform(DagNode):
     def __init__(self, mObject, mFnDependencyNode):
         super(Transform, self).__init__(mObject, mFnDependencyNode)
 
+    def __getattr__(self, item):
+        if item in components.supported_components:
+            return components.Components(self, item)
+        return super(Transform, self).__getattr__(item)
+
     def children(self, noIntermediate=True):
         """
         Gets all the node's children as a list of YamNode.
@@ -481,7 +487,20 @@ class Shape(DagNode):
         cmds.parent(self.name, parent, r=True, s=True)
 
 
-class Mesh(Shape):
+class ControlPoint(Shape):
+    """
+    Handles shape that have control point; e.g.: Mesh, NurbsCurve, NurbsSurface, Lattice
+    """
+    def __init__(self, mObject, mFnDependencyNode):
+        super(ControlPoint, self).__init__(mObject, mFnDependencyNode)
+
+    def __getattr__(self, item):
+        if item in components.supported_components:
+            return components.Components(self, item)
+        return super(ControlPoint, self).__getattr__(item)
+
+
+class Mesh(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
         super(Mesh, self).__init__(mObject, mFnDependencyNode)
         self._mFnMesh = None
@@ -512,7 +531,7 @@ class Mesh(Shape):
             cmds.xform(vtx, t=pos, ws=ws, os=os)
 
 
-class NurbsCurve(Shape):
+class NurbsCurve(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
         super(NurbsCurve, self).__init__(mObject, mFnDependencyNode)
         self._mFnNurbsCurve = None
@@ -613,19 +632,19 @@ class NurbsCurve(Shape):
         return knots
 
 
-class NurbsSurface(Shape):
+class NurbsSurface(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
         super(NurbsSurface, self).__init__(mObject, mFnDependencyNode)
+
+
+class Lattice(ControlPoint):
+    def __init__(self, mObject, mFnDependencyNode):
+        super(Lattice, self).__init__(mObject, mFnDependencyNode)
 
 
 class Locator(Shape):
     def __init__(self, mObject, mFnDependencyNode):
         super(Locator, self).__init__(mObject, mFnDependencyNode)
-
-
-class Lattice(Shape):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(Lattice, self).__init__(mObject, mFnDependencyNode)
 
 
 class GeometryFilter(DependNode):
@@ -666,6 +685,26 @@ class WeightGeometryFilter(GeometryFilter):
 class Cluster(WeightGeometryFilter):
     def __init__(self, mObject, mFnDependencyNode):
         super(Cluster, self).__init__(mObject, mFnDependencyNode)
+
+    def convert_to_root(self):
+        # todo
+        handle_shape = self.handle_shape
+        if not handle_shape:
+            raise RuntimeError('No clusterHandle found connected to ' + self.name)
+
+        root_grp = createNode('transform', name=self.name+'_clusterRoot')
+        cluster_grp = createNode('transform', name=self.name+'_cluster')
+
+        cluster_grp.worldMatrix[0].connect_to(self.matrix, force=True)
+        cluster_grp.matrix.connect_to(self.weightedMatrix, force=True)
+        root_grp.worldInverseMatrix[0].connect_to(self.bindPreMatrix, force=True)
+        root_grp.worldInverseMatrix[0].connect_to(self.preMatrix, force=True)
+        self.clusterXforms.breakConnections()
+        cmds.delete(handle_shape)
+
+    @property
+    def handle_shape(self):
+        return self.clusterXforms.source_connection(plugs=False)
 
 
 class SkinCluster(GeometryFilter):
@@ -721,12 +760,6 @@ class SkinCluster(GeometryFilter):
                 wim = inf.worldInverseMatrix.value
                 cmds.setAttr(bpm.name, *wim, type='matrix')
         cmds.skinCluster(self.name, e=True, rbm=True)
-
-    @staticmethod
-    def get_skinCluster(obj):
-        # todo: find a better way than 'mel.eval'
-        skn = mel.eval('findRelatedSkinCluster ' + obj)
-        return yam(skn) if skn else None
 
 
 class BlendShape(GeometryFilter):
@@ -814,6 +847,7 @@ supported_classes = {'skinCluster': SkinCluster,
                      'lattice': Lattice,
                      'geometryFilter': GeometryFilter,
                      'weightGeometryFilter': WeightGeometryFilter,
+                     'cluster': Cluster,
                      'blendShape': BlendShape,
                      'transform': Transform,
                      'joint': Joint,

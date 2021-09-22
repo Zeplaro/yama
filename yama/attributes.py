@@ -63,6 +63,9 @@ class Attribute(object):
             item = int(item)
         return MultiAttribute(self.node, self.attribute, item)
 
+    def __iter__(self):
+        raise NotImplementedError("cannot iterate on '{}'".format(self.name))
+
     def __add__(self, other):
         """
         Using self.name for + operator.
@@ -110,7 +113,7 @@ class Attribute(object):
         Returns True if the attribute actually exists in the scene.
         :return: bool
         """
-        return self.exists
+        return self.exists()
 
     if _pyversion == 2:
         # __nonzero__ is python 2 verison of __bool__; kind of...
@@ -183,13 +186,17 @@ class Attribute(object):
             attr = attr.name
         cmds.connectAttr(attr, self.name, **kwargs)
 
-    def disconnect(self, attr=None):
+    def disconnect(self, attr):
         """
         Disconnect the the connection between self (source) and attr (destination)
         :param attr: str or Attribute
         """
-        if isinstance(attr, Attribute):
+        print(isinstance(attr, Attribute))
+        if isinstance(attr, Attribute):  # todo: WTF ?! not working ???
+            print('doing it')
             attr = attr.name
+        print(self.name, attr)
+        print(map(type, (self.name, attr)))
         cmds.disconnectAttr(self.name, attr)
 
     def listConnections(self, **kwargs):
@@ -199,16 +206,19 @@ class Attribute(object):
             kwargs['plugs'] = True
         return nodes.yams(cmds.listConnections(self.name, **kwargs) or [])
 
-    def source_connections(self, **kwargs):
-        return self.listConnections(destination=False, **kwargs)
+    def source_connection(self, **kwargs):
+        connection = self.listConnections(destination=False, **kwargs)
+        if connection:
+            return connection[0]
 
     def destination_connections(self, **kwargs):
         return self.listConnections(source=False, **kwargs)
 
     def breakConnections(self, source=True, destination=False):
         if source:
-            for c in self.source_connections():
-                self.disconnect(c)
+            connection = self.source_connection()
+            if connection:
+                connection.disconnect(self)
         if destination:
             for c in self.destination_connections():
                 self.disconnect(c)

@@ -1,7 +1,7 @@
 # encoding: utf8
 
 import sys
-from maya import cmds
+from maya import cmds, mel
 import __init__ as ym
 import nodes
 
@@ -43,7 +43,14 @@ def component_range(node, comp, *args):
         yield vtx_string.format(i)
 
 
-get_skinCluster = nodes.SkinCluster.get_skinCluster
+def get_skinCluster(obj):
+    # todo: find a better way than 'mel.eval'
+    skn = mel.eval('findRelatedSkinCluster {}'.format(obj))
+    return nodes.yam(skn) if skn else None
+
+
+def get_skinClusters(objs):
+    return [get_skinCluster(obj) for obj in objs]
 
 
 def skinas(slave_namespace=None, master=None, *slaves):
@@ -72,9 +79,9 @@ def skinas(slave_namespace=None, master=None, *slaves):
     done = []
     for slave in slaves:
         if nodes.SkinCluster.get_skinCluster(slave):
-            print(slave+' already has a skin attached')
+            print(slave+' already has a skinCluster attached')
             continue
-        ym.select(infs, slave)
+        cmds.select(infs, slave)
         cmds.skinCluster(name='skinCluster_{}#'.format(slave), sm=sm, mi=mi, nw=nw, omi=mmi, wd=wd, ihs=True, tsb=True)
         slaveskn = get_skinCluster(slave)
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint',

@@ -36,6 +36,7 @@ def selected():
 
 def select(*args, **kwargs):
     """
+    todo: find something not verbose
     Changes the scene active selection.
     This is maya undoable even if it uses the api.
     :param args: any objects or list of objects to select.
