@@ -25,6 +25,8 @@ createNode = nodes.createNode
 
 
 def ls(*args, **kwargs):
+    if 'fl' not in kwargs and 'flatten' not in kwargs:
+        kwargs['fl'] = True
     return yams(cmds.ls(*args, **kwargs))
 
 
