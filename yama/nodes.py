@@ -9,7 +9,6 @@ yam or yams to initialize existing objects into their proper class type.
 import sys
 from math import sqrt
 from maya import cmds
-import maya.mel as mel
 import maya.api.OpenMaya as om
 import maya.OpenMaya as om1
 
@@ -102,7 +101,7 @@ def yams(nodes):
     :param nodes: (list) list of str of existing nodes.
     :return: list of YamNode
     """
-    return [yam(node) for node in nodes]
+    return YamList(yam(node) for node in nodes)
 
 
 class YamNode(object):
@@ -186,6 +185,7 @@ class DependNode(YamNode):
         Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
         """
         print('calling __apiobject__ for ' + self.name)
+        raise RuntimeError("Probably passed a yam node into a cmds object")
         return self.mObject1
 
     @property
@@ -395,7 +395,7 @@ class Transform(DagNode):
         """
         children = yams(self.mDagPath.child(x) for x in range(self.mDagPath.childCount()))
         if noIntermediate:
-            children = [x for x in children if not x.mFnDagNode.isIntermediateObject]
+            children = YamList(x for x in children if not x.mFnDagNode.isIntermediateObject)
         return children
 
     def shapes(self, noIntermediate=True):
@@ -405,9 +405,9 @@ class Transform(DagNode):
         :return: list of Shape object
         """
         children = yams(self.mDagPath.child(x) for x in range(self.mDagPath.childCount()))
-        children = [x for x in children if isinstance(x, Shape)]
+        children = YamList(x for x in children if isinstance(x, Shape))
         if noIntermediate:
-            children = [x for x in children if not x.mFnDagNode.isIntermediateObject]
+            children = YamList(x for x in children if not x.mFnDagNode.isIntermediateObject)
         return children
 
     @property
@@ -852,3 +852,33 @@ supported_classes = {'skinCluster': SkinCluster,
                      'transform': Transform,
                      'joint': Joint,
                      }
+
+
+class YamList(list):
+    def __init__(self, *args):
+        for arg in args:
+            if not hasattr(arg, 'name'):
+                raise TypeError("YamList can  only have object that have a 'name' attribute.")
+        super(YamList, self).__init__(args)
+
+    def append(self, item):
+        assert hasattr(item, 'name')
+        super(YamList, self).append(item)
+
+    def extend(self, item):
+        if not isinstance(item, YamList):
+            for i in item:
+                if not hasattr(i, 'name'):
+                    raise TypeError("YamList can  only have object that have a 'name' attribute.")
+        super(YamList, self).extend(item)
+
+    def insert(self, index: int, item):
+        assert hasattr(item, 'name')
+        super(YamList, self).insert(index, item)
+
+    def sort(self, key=lambda x: x.name, reverse=False):
+        super(YamList, self).sort(key=key, reverse=reverse)
+
+    @property
+    def names(self):
+        return [x.name for x in self]

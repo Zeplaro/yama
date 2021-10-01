@@ -254,7 +254,7 @@ class Attribute(object):
 
     @property
     def minValue(self):
-        return cmds.attributeQuery(self._attr, node=self.obj, minimum=True)[0]
+        return cmds.attributeQuery(self.attribute, node=self.obj, minimum=True)[0]
 
     @minValue.setter
     def minValue(self, value):
@@ -262,7 +262,7 @@ class Attribute(object):
 
     @property
     def hasMaxValue(self):
-        return cmds.attributeQuery(self._attr, node=self.obj, maxExists=True)
+        return cmds.attributeQuery(self.attribute, node=self.obj, maxExists=True)
 
     @hasMaxValue.setter
     def hasMaxValue(self, value):
@@ -275,7 +275,7 @@ class Attribute(object):
 
     @property
     def maxValue(self):
-        return cmds.attributeQuery(self.attr, node=self.obj, maximum=True)[0]
+        return cmds.attributeQuery(self.attribute, node=self.obj, maximum=True)[0]
 
     @maxValue.setter
     def maxValue(self, value):
@@ -303,7 +303,7 @@ class Attribute(object):
 
     @property
     def channelBox(self):
-        if not cmds.getAttr(self.name, keyable=True) and cmds.getAttr(channelBox=True):
+        if not cmds.getAttr(self.name, keyable=True) and cmds.getAttr(self.name, channelBox=True):
             return True
         return False
 

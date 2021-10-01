@@ -71,19 +71,19 @@ def skinas(slave_namespace=None, master=None, *slaves):
     infs = masterskn.influences()
     if slave_namespace is not None:
         infs = ym.yams(['{}:{}'.format(slave_namespace, inf) for inf in infs])
-    sm = masterskn.skinMethod.value
-    mi = masterskn.maximumInfluences.value
+    sm = masterskn.skinningMethod.value
+    mi = masterskn.maxInfluences.value
     nw = masterskn.normalizeWeights.value
     mmi = masterskn.maintainMaxInfluences.value
     wd = masterskn.weightDistribution.value
     done = []
     for slave in slaves:
-        if nodes.SkinCluster.get_skinCluster(slave):
+        if get_skinCluster(slave):
             print(slave+' already has a skinCluster attached')
             continue
-        cmds.select(infs, slave)
-        cmds.skinCluster(name='skinCluster_{}#'.format(slave), sm=sm, mi=mi, nw=nw, omi=mmi, wd=wd, ihs=True, tsb=True)
-        slaveskn = get_skinCluster(slave)
+        cmds.select(infs.names, slave.name)
+        slaveskn = cmds.skinCluster(name='skinCluster_{}#'.format(slave), sm=sm, mi=mi, nw=nw, omi=mmi, wd=wd,
+                                    includeHiddenSelections=True, toSelectedBones=True)[0]
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint',
                              ia=('oneToOne', 'label', 'closestJoint'))
         print(slave+' skinned')
@@ -104,3 +104,45 @@ def hierarchize(objs, invert=False):
                 done = False
     ordered = [objs[x] for x in longnames]
     return ordered if not invert else ordered[::-1]
+
+
+def mx_constraint(master=None, slave=None):
+    # todo
+    if not master or not slave:
+        sel = ym.ls(sl=True, tr=True, fl=True)
+        if len(sel) != 2:
+            cmds.warning('Select two objects')
+            return
+        master, slave = ym.yams(sel)
+        
+    mmx = ym.createNode('multMatrix', n='{}_mmx'.format(master))
+    dmx = ym.createNode('decomposeMatrix', n='{}_dmx'.format(master))
+    cmx = ym.createNode('composeMatrix', n='{}_cmx'.format(master))
+    cmx.outputMatrix.connectTo(mmx.matrixIn[0], f=True)
+    master.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
+    slave.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
+    mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
+
+    loc1 = ym.yam(cmds.spaceLocator(n='{}_loc'.format(master))[0])
+    ro = cmds.xform(master, q=True, ws=True, ro=True)
+    t = cmds.xform(master, q=True, ws=True, t=True)
+    cmds.xform(loc1, ws=True, ro=ro, t=t)
+    loc2 = cmds.spaceLocator(n='{}_loc'.format(slave))[0]
+    ro = cmds.xform(slave, q=True, ws=True, ro=True)
+    t = cmds.xform(slave, q=True, ws=True, t=True)
+    cmds.xform(loc2, ws=True, ro=ro, t=t)
+    cmds.parent(loc2, loc1)
+
+    cmds.setAttr('{}.inputTranslate'.format(cmx), *cmds.getAttr('{}.translate'.format(loc2))[0])
+    cmds.setAttr('{}.inputRotate'.format(cmx), *cmds.getAttr('{}.rotate'.format(loc2))[0])
+    cmds.setAttr('{}.inputScale'.format(cmx), *cmds.getAttr('{}.scale'.format(loc2))[0])
+    cmds.setAttr('{}.inputShear'.format(cmx), *cmds.getAttr('{}.shear'.format(loc2))[0])
+
+    cmds.connectAttr('{}.outputTranslate'.format(dmx), '{}.translate'.format(slave), f=True)
+    cmds.connectAttr('{}.outputRotate'.format(dmx), '{}.rotate'.format(slave), f=True)
+    cmds.connectAttr('{}.outputScale'.format(dmx), '{}.scale'.format(slave), f=True)
+    cmds.connectAttr('{}.outputShear'.format(dmx), '{}.shear'.format(slave), f=True)
+
+    cmds.delete(loc1, loc2)
+
+    return target
