@@ -226,8 +226,8 @@ class DependNode(YamNode):
         :param attr: str
         :return: Attribute object
         """
+        assert attr
         import attributes
-        reload(attributes)  # Temporary, while in-dev; todo: remove that line
         return attributes.get_attribute(self, attr)
 
     def listRelatives(self, **kwargs):
@@ -277,6 +277,9 @@ class DependNode(YamNode):
         :return: str
         """
         return self.mFnDependencyNode.typeName
+
+    def inherited_types(self):
+        return cmds.nodeType(self.name, inherited=True)
 
 
 class DagNode(DependNode):
@@ -387,7 +390,7 @@ class Transform(DagNode):
             return components.Components(self, item)
         return super(Transform, self).__getattr__(item)
 
-    def children(self, noIntermediate=True):
+    def children(self, noIntermediate=True, type=None):
         """
         Gets all the node's children as a list of YamNode.
         :param noIntermediate: if True skips intermediate shapes.
@@ -396,6 +399,8 @@ class Transform(DagNode):
         children = yams(self.mDagPath.child(x) for x in range(self.mDagPath.childCount()))
         if noIntermediate:
             children = YamList(x for x in children if not x.mFnDagNode.isIntermediateObject)
+        if type:
+            children.keep_type(type=type)
         return children
 
     def shapes(self, noIntermediate=True):
@@ -411,12 +416,12 @@ class Transform(DagNode):
         return children
 
     @property
-    def shape(self):
+    def shape(self, noIntermediate=True):
         """
         Returns the first shape if it exists.
         :return: Shape object
         """
-        shapes = self.shapes()
+        shapes = self.shapes(noIntermediate=noIntermediate)
         return shapes[0] if shapes else None
 
     def get_translation(self, ws=False):
@@ -855,30 +860,75 @@ supported_classes = {'skinCluster': SkinCluster,
 
 
 class YamList(list):
-    def __init__(self, *args):
-        for arg in args:
-            if not hasattr(arg, 'name'):
-                raise TypeError("YamList can  only have object that have a 'name' attribute.")
-        super(YamList, self).__init__(args)
+    def __init__(self, arg):
+        super(YamList, self).__init__(arg)
+        self._check()
+
+    def __repr__(self):
+        return "<YamList({})>".format(list(self))
+
+    def __str__(self):
+        return "YamList({})".format(self.names)
+
+    def _check(self, item=None):
+        if item is not None:
+            assert hasattr(item, 'name')
+        else:
+            for i in self:
+                assert hasattr(i, 'name')
 
     def append(self, item):
-        assert hasattr(item, 'name')
+        self._check(item)
         super(YamList, self).append(item)
 
-    def extend(self, item):
-        if not isinstance(item, YamList):
-            for i in item:
-                if not hasattr(i, 'name'):
-                    raise TypeError("YamList can  only have object that have a 'name' attribute.")
-        super(YamList, self).extend(item)
+    def extend(self, items):
+        if not isinstance(items, YamList):
+            for item in items:
+                self._check(item)
+        super(YamList, self).extend(items)
 
-    def insert(self, index: int, item):
-        assert hasattr(item, 'name')
+    def insert(self, index, item):
+        self._check(item)
         super(YamList, self).insert(index, item)
 
-    def sort(self, key=lambda x: x.name, reverse=False):
+    def sort(self, key=None, reverse=False):
+        if key is None:
+            def name(x): return x.name
+            key = name
         super(YamList, self).sort(key=key, reverse=reverse)
+
+    def attrs(self, attr):
+        return [x.attr(attr) for x in self]
+
+    def values(self, attr=None):
+        if attr:
+            return [x.attr(attr).value for x in self]
+        return [x.value for x in self]
 
     @property
     def names(self):
         return [x.name for x in self]
+
+    @property
+    def mObject(self):
+        return [x.mObject for x in self]
+
+    def remove_type(self, type=None, inherited=True):
+        assert type and isinstance(type, basestring)
+        for i, item in reversed(list(enumerate(self))):
+            if inherited:
+                if type in item.inherited_types():
+                    self.pop(i)
+            else:
+                if type == item.type():
+                    self.pop(i)
+
+    def keep_type(self, type=None, inherited=True):
+        assert type and isinstance(type, basestring)
+        for i, item in reversed(list(enumerate(self))):
+            if inherited:
+                if type not in item.inherited_types():
+                    self.pop(i)
+            else:
+                if type != item.type():
+                    self.pop(i)

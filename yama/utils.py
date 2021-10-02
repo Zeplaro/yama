@@ -50,19 +50,20 @@ def get_skinCluster(obj):
 
 
 def get_skinClusters(objs):
-    return [get_skinCluster(obj) for obj in objs]
+    return nodes.YamList([get_skinCluster(obj) for obj in objs])
 
 
 def skinas(slave_namespace=None, master=None, *slaves):
     if not master or not slaves:
-        objs = cmds.ls(sl=True, tr=True, fl=True)
+        objs = ym.ls(sl=True, tr=True, fl=True)
         if len(objs) < 2:
             cmds.warning('Please select at least two objects')
             return
         master = objs[0]
         slaves = objs[1:]
-    master = ym.yam(master)
-    slaves = ym.yams(slaves)
+    else:
+        master = ym.yam(master)
+        slaves = ym.yams(slaves)
 
     masterskn = get_skinCluster(master)
     if not masterskn:
@@ -82,11 +83,11 @@ def skinas(slave_namespace=None, master=None, *slaves):
             print(slave+' already has a skinCluster attached')
             continue
         cmds.select(infs.names, slave.name)
-        slaveskn = cmds.skinCluster(name='skinCluster_{}#'.format(slave), sm=sm, mi=mi, nw=nw, omi=mmi, wd=wd,
-                                    includeHiddenSelections=True, toSelectedBones=True)[0]
+        slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave), sm=sm, mi=mi, nw=nw, omi=mmi, wd=wd,
+                                              includeHiddenSelections=True, toSelectedBones=True)[0])
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint',
                              ia=('oneToOne', 'label', 'closestJoint'))
-        print(slave+' skinned')
+        print(slave + ' skinned -> ' + slaveskn.name)
         done.append(slave)
     return done
 
