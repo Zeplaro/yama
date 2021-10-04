@@ -115,7 +115,8 @@ def mxConstraint(master=None, slave=None):
             cmds.warning('Select two objects')
             return
         master, slave = ym.yams(sel)
-    master, slave = ym.yams([master, slave])
+    else:
+        master, slave = ym.yams([master, slave])
         
     mmx = ym.createNode('multMatrix', n='{}_mmx'.format(master))
     dmx = ym.createNode('decomposeMatrix', n='{}_dmx'.format(master))
