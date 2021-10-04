@@ -185,7 +185,6 @@ class DependNode(YamNode):
         Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
         """
         print('calling __apiobject__ for ' + self.name)
-        raise RuntimeError("Probably passed a yam node into a cmds object")
         return self.mObject1
 
     @property
@@ -228,7 +227,7 @@ class DependNode(YamNode):
         """
         assert attr
         import attributes
-        return attributes.get_attribute(self, attr)
+        return attributes.getAttribute(self, attr)
 
     def listRelatives(self, **kwargs):
         """
@@ -249,14 +248,14 @@ class DependNode(YamNode):
             kwargs['scn'] = True
         return yams(cmds.listConnections(self.name, **kwargs) or [])
 
-    def source_connections(self, **kwargs):
+    def sourceConnections(self, **kwargs):
         """
         Returns listConnections with destination connections disabled.
         See listConnections for more info.
         """
         return self.listConnections(destination=False, **kwargs)
 
-    def destination_connections(self, **kwargs):
+    def destinationConnections(self, **kwargs):
         """
         Returns listConnections with source connections disabled.
         See listConnections for more info.
@@ -278,7 +277,7 @@ class DependNode(YamNode):
         """
         return self.mFnDependencyNode.typeName
 
-    def inherited_types(self):
+    def inheritedTypes(self):
         return cmds.nodeType(self.name, inherited=True)
 
 
@@ -400,7 +399,7 @@ class Transform(DagNode):
         if noIntermediate:
             children = YamList(x for x in children if not x.mFnDagNode.isIntermediateObject)
         if type:
-            children.keep_type(type=type)
+            children.keepType(type=type)
         return children
 
     def shapes(self, noIntermediate=True):
@@ -424,35 +423,35 @@ class Transform(DagNode):
         shapes = self.shapes(noIntermediate=noIntermediate)
         return shapes[0] if shapes else None
 
-    def get_translation(self, ws=False):
+    def getTranslation(self, ws=False):
         os = not ws
         return cmds.xform(self.name, q=True, t=True, ws=ws, os=os)
 
-    def set_translation(self, value, ws=False):
+    def setTranslation(self, value, ws=False):
         os = not ws
         cmds.xform(self.name, t=value, ws=ws, os=os)
 
-    def get_rotation(self, ws=False):
+    def getRotation(self, ws=False):
         os = not ws
         return cmds.xform(self.name, q=True, ro=True, ws=ws, os=os)
 
-    def set_rotation(self, value, ws=False):
+    def setRotation(self, value, ws=False):
         os = not ws
         cmds.xform(self.name, ro=value, ws=ws, os=os)
 
-    def get_scale(self, ws=False):
+    def getScale(self, ws=False):
         os = not ws
         return cmds.xform(self.name, q=True, s=True, ws=ws, os=os)
 
-    def set_scale(self, value, ws=False):
+    def setScale(self, value, ws=False):
         os = not ws
         cmds.xform(self.name, s=value, ws=ws, os=os)
 
-    def get_rotate_pivot(self, ws=False):
+    def getRotatePivot(self, ws=False):
         os = not ws
         return cmds.xform(self.name, q=True, rp=True, ws=ws, os=os)
 
-    def set_rotate_pivot(self, value, ws=False):
+    def setRotatePivot(self, value, ws=False):
         os = not ws
         cmds.xform(self.name, rp=value, ws=ws, os=os)
 
@@ -523,16 +522,16 @@ class Mesh(ControlPoint):
             self._mFnMesh = om.MFnMesh(self.mObject)
         return self._mFnMesh
 
-    def get_vtx_position(self, ws=False):
+    def getVtxPosition(self, ws=False):
         pos = []
         os = not ws
-        for vtx in utils.component_range(self, 'vtx', len(self)):
+        for vtx in utils.componentRange(self, 'vtx', len(self)):
             pos.append(cmds.xform(vtx, q=True, t=True, ws=ws, os=os))
         return pos
 
-    def set_vtx_position(self, data, ws=False):
+    def setVtxPosition(self, data, ws=False):
         os = not ws
-        for vtx, pos in zip(utils.component_range(self, 'vtx', len(self)), data):
+        for vtx, pos in zip(utils.componentRange(self, 'vtx', len(self)), data):
             cmds.xform(vtx, t=pos, ws=ws, os=os)
 
 
@@ -564,25 +563,25 @@ class NurbsCurve(ControlPoint):
             self._mFnNurbsCurve = om.MFnNurbsCurve(self.mObject)
         return self._mFnNurbsCurve
 
-    def get_cvs_position(self, ws=False):
+    def getCvsPosition(self, ws=False):
         pos = []
         os = not ws
-        for cv in utils.component_range(self, 'cv', len(self)):
+        for cv in utils.componentRange(self, 'cv', len(self)):
             pos.append(cmds.xform(cv, q=True, t=True, ws=ws, os=os))
         return pos
 
-    def set_cvs_position(self, data, ws=False):
+    def setCvsPosition(self, data, ws=False):
         os = not ws
-        for cv, pos in zip(utils.component_range(self, 'cv', len(self)), data):
+        for cv, pos in zip(utils.componentRange(self, 'cv', len(self)), data):
             cmds.xform(cv, t=pos, ws=ws, os=os)
 
     @staticmethod
-    def get_control_point_position(controls):
+    def getControlPointPosition(controls):
         # todo: copied form old node work, needs cleanup
         return [cmds.xform(x, q=True, os=True, t=True) for x in controls]
 
     @staticmethod
-    def set_control_point_position(controls, positions):
+    def setControlPointPosition(controls, positions):
         # todo: copied form old node work, needs cleanup
         [cmds.xform(control, os=True, t=position) for control in controls for position in positions]
 
@@ -670,15 +669,15 @@ class WeightGeometryFilter(GeometryFilter):
     def weights(self):
         weights = wdt.WeightsDict(self)
         for i in self.geometry.get_components_index():
-            weights[i] = self.weights_attr(i).value
+            weights[i] = self.weightsAttr(i).value
         return weights
 
     @weights.setter
     def weights(self, weights):
         for i, weight in weights.items():
-            self.weights_attr(i).value = weight
+            self.weightsAttr(i).value = weight
 
-    def weights_attr(self, index):
+    def weightsAttr(self, index):
         """
         Gets the standard deformer weight attribute at the given index
         :param index:
@@ -691,25 +690,25 @@ class Cluster(WeightGeometryFilter):
     def __init__(self, mObject, mFnDependencyNode):
         super(Cluster, self).__init__(mObject, mFnDependencyNode)
 
-    def convert_to_root(self):
+    def convertToRoot(self):
         # todo
-        handle_shape = self.handle_shape
+        handle_shape = self.handleShape
         if not handle_shape:
             raise RuntimeError('No clusterHandle found connected to ' + self.name)
 
         root_grp = createNode('transform', name=self.name+'_clusterRoot')
         cluster_grp = createNode('transform', name=self.name+'_cluster')
 
-        cluster_grp.worldMatrix[0].connect_to(self.matrix, force=True)
-        cluster_grp.matrix.connect_to(self.weightedMatrix, force=True)
-        root_grp.worldInverseMatrix[0].connect_to(self.bindPreMatrix, force=True)
-        root_grp.worldInverseMatrix[0].connect_to(self.preMatrix, force=True)
+        cluster_grp.worldMatrix[0].connectTo(self.matrix, force=True)
+        cluster_grp.matrix.connectTo(self.weightedMatrix, force=True)
+        root_grp.worldInverseMatrix[0].connectTo(self.bindPreMatrix, force=True)
+        root_grp.worldInverseMatrix[0].connectTo(self.preMatrix, force=True)
         self.clusterXforms.breakConnections()
         cmds.delete(handle_shape)
 
     @property
-    def handle_shape(self):
-        return self.clusterXforms.source_connection(plugs=False)
+    def handleShape(self):
+        return self.clusterXforms.sourceConnection(plugs=False)
 
 
 class SkinCluster(GeometryFilter):
@@ -736,14 +735,14 @@ class SkinCluster(GeometryFilter):
                 self.weightList[vtx].weights[jnt].value = weights[vtx][jnt]
 
     @property
-    def dq_weights(self):
+    def dqWeights(self):
         dq_weights = wdt.WeightsDict()
         for i in range(len(self.geometry)):
             dq_weights[i] = self.blendWeights[i].value
         return dq_weights
 
-    @dq_weights.setter
-    def dq_weights(self, data):
+    @dqWeights.setter
+    def dqWeights(self, data):
         data = wdt.WeightsDict(data)
         for vtx in data:
             self.blendWeights[vtx].value = data[vtx]
@@ -756,10 +755,10 @@ class SkinCluster(GeometryFilter):
         Resets the skinCluster and mesh to the current influences position.
         """
         for inf in self.influences():
-            conns = (x for x in inf.worldMatrix.destination_connections(type='skinCluster') if x.node == self)
+            conns = (x for x in inf.worldMatrix.destinationConnections(type='skinCluster') if x.node == self)
             for conn in conns:
                 bpm = self.bindPreMatrix[conn.index]
-                if bpm.source_connections():
+                if bpm.sourceConnections():
                     print("{} is connected and can't be reset".format(bpm))
                     continue
                 wim = inf.worldInverseMatrix.value
@@ -772,9 +771,9 @@ class BlendShape(GeometryFilter):
         super(BlendShape, self).__init__(mObject, mFnDependencyNode)
         self._targets = []
         self._targets_names = {}
-        self.get_targets()
+        self.getTargets()
 
-    def get_targets(self):
+    def getTargets(self):
         targets_nodes = yams(cmds.blendShape(self.name, q=True, target=True)) or []
         self._targets = [BlendshapeTarget(self, target_node, index) for index, target_node in enumerate(targets_nodes)]
         self._targets_names = {target.target_node.name: target for target in self._targets}
@@ -788,20 +787,20 @@ class BlendShape(GeometryFilter):
         else:
             raise KeyError(target)
 
-    def weights_attr(self, index):
+    def weightsAttr(self, index):
         return self.inputTarget[0].baseWeights[index]
 
     @property
     def weights(self):
         weights = wdt.WeightsDict()
         for index in range(len(self.geometry)):
-            weights[index] = self.weights_attr(index).value
+            weights[index] = self.weightsAttr(index).value
         return weights
 
     @weights.setter
     def weights(self, weights):
         for i, weight in weights.items():
-            self.weights_attr(i).value = weight
+            self.weightsAttr(i).value = weight
 
 
 class BlendshapeTarget(object):
@@ -817,20 +816,20 @@ class BlendshapeTarget(object):
     def __repr__(self):
         return "Target({}, {}, {})".format(self.node, self.target_node, self.index)
 
-    def weights_attr(self, index):
+    def weightsAttr(self, index):
         return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights[index]
 
     @property
     def weights(self):
         weights = wdt.WeightsDict()
         for i in range(len(self.node.geometry)):
-            weights[i] = self.weights_attr(i).value
+            weights[i] = self.weightsAttr(i).value
         return weights
 
     @weights.setter
     def weights(self, weights):
         for i, weight in weights.items():
-            self.weights_attr(i).value = weight
+            self.weightsAttr(i).value = weight
 
     @property
     def value(self):
@@ -913,21 +912,21 @@ class YamList(list):
     def mObject(self):
         return [x.mObject for x in self]
 
-    def remove_type(self, type=None, inherited=True):
+    def removeType(self, type=None, inherited=True):
         assert type and isinstance(type, basestring)
         for i, item in reversed(list(enumerate(self))):
             if inherited:
-                if type in item.inherited_types():
+                if type in item.inheritedTypes():
                     self.pop(i)
             else:
                 if type == item.type():
                     self.pop(i)
 
-    def keep_type(self, type=None, inherited=True):
+    def keepType(self, type=None, inherited=True):
         assert type and isinstance(type, basestring)
         for i, item in reversed(list(enumerate(self))):
             if inherited:
-                if type not in item.inherited_types():
+                if type not in item.inheritedTypes():
                     self.pop(i)
             else:
                 if type != item.type():

@@ -11,7 +11,7 @@ if _pyversion == 3:
     basestring = str
 
 
-def create_hook(node, suffix_name='hook', parent=None):
+def createHook(node, suffix_name='hook', parent=None):
     if cmds.objExists('{}_{}'.format(node.name, suffix_name)):
         suffix_name += '#'
     hook = cmds.group(em=True, n='{}_{}'.format(node, suffix_name))
@@ -29,7 +29,7 @@ def create_hook(node, suffix_name='hook', parent=None):
     return hook
 
 
-def component_range(node, comp, *args):
+def componentRange(node, comp, *args):
     """
     Returns a generator to iterate over a length of vertices full name.
     :param node: str or YamNode; the node containing the vertices.
@@ -43,14 +43,14 @@ def component_range(node, comp, *args):
         yield vtx_string.format(i)
 
 
-def get_skinCluster(obj):
+def getSkinCluster(obj):
     # todo: find a better way than 'mel.eval'
     skn = mel.eval('findRelatedSkinCluster {}'.format(obj))
     return nodes.yam(skn) if skn else None
 
 
-def get_skinClusters(objs):
-    return nodes.YamList([get_skinCluster(obj) for obj in objs])
+def getSkinClusters(objs):
+    return nodes.YamList([getSkinCluster(obj) for obj in objs])
 
 
 def skinas(slave_namespace=None, master=None, *slaves):
@@ -65,7 +65,7 @@ def skinas(slave_namespace=None, master=None, *slaves):
         master = ym.yam(master)
         slaves = ym.yams(slaves)
 
-    masterskn = get_skinCluster(master)
+    masterskn = getSkinCluster(master)
     if not masterskn:
         cmds.warning('First object as no skinCluster attached')
         return
@@ -79,7 +79,7 @@ def skinas(slave_namespace=None, master=None, *slaves):
     wd = masterskn.weightDistribution.value
     done = []
     for slave in slaves:
-        if get_skinCluster(slave):
+        if getSkinCluster(slave):
             print(slave+' already has a skinCluster attached')
             continue
         cmds.select(infs.names, slave.name)
@@ -107,7 +107,7 @@ def hierarchize(objs, invert=False):
     return ordered if not invert else ordered[::-1]
 
 
-def mx_constraint(master=None, slave=None):
+def mxConstraint(master=None, slave=None):
     # todo
     if not master or not slave:
         sel = ym.ls(sl=True, tr=True, fl=True)
@@ -115,6 +115,7 @@ def mx_constraint(master=None, slave=None):
             cmds.warning('Select two objects')
             return
         master, slave = ym.yams(sel)
+    master, slave = ym.yams([master, slave])
         
     mmx = ym.createNode('multMatrix', n='{}_mmx'.format(master))
     dmx = ym.createNode('decomposeMatrix', n='{}_dmx'.format(master))
@@ -124,26 +125,59 @@ def mx_constraint(master=None, slave=None):
     slave.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
     mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
 
-    loc1 = ym.yam(cmds.spaceLocator(n='{}_loc'.format(master))[0])
-    ro = cmds.xform(master, q=True, ws=True, ro=True)
-    t = cmds.xform(master, q=True, ws=True, t=True)
-    cmds.xform(loc1, ws=True, ro=ro, t=t)
-    loc2 = cmds.spaceLocator(n='{}_loc'.format(slave))[0]
-    ro = cmds.xform(slave, q=True, ws=True, ro=True)
-    t = cmds.xform(slave, q=True, ws=True, t=True)
-    cmds.xform(loc2, ws=True, ro=ro, t=t)
-    cmds.parent(loc2, loc1)
+    master_tmp = ym.createNode('transform', n='{}_mastertmp'.format(master))
+    slave_tmp = ym.createNode('transform', n='{}_mastertmp'.format(slave))
+    slave_tmp.parent = master_tmp
 
-    cmds.setAttr('{}.inputTranslate'.format(cmx), *cmds.getAttr('{}.translate'.format(loc2))[0])
-    cmds.setAttr('{}.inputRotate'.format(cmx), *cmds.getAttr('{}.rotate'.format(loc2))[0])
-    cmds.setAttr('{}.inputScale'.format(cmx), *cmds.getAttr('{}.scale'.format(loc2))[0])
-    cmds.setAttr('{}.inputShear'.format(cmx), *cmds.getAttr('{}.shear'.format(loc2))[0])
+    cmx.inputTranslate.value = slave_tmp.translate.value
+    cmx.inputRotate.value = slave_tmp.rotate.value
+    cmx.inputScale.value = slave_tmp.scale.value
+    cmx.inputShear.value = slave_tmp.shear.value
 
-    cmds.connectAttr('{}.outputTranslate'.format(dmx), '{}.translate'.format(slave), f=True)
-    cmds.connectAttr('{}.outputRotate'.format(dmx), '{}.rotate'.format(slave), f=True)
-    cmds.connectAttr('{}.outputScale'.format(dmx), '{}.scale'.format(slave), f=True)
-    cmds.connectAttr('{}.outputShear'.format(dmx), '{}.shear'.format(slave), f=True)
+    dmx.outputTranslate.connectTo(slave.translate, f=True)
+    dmx.outputRotate.connectTo(slave.rotate, f=True)
+    dmx.outputScale.connectTo(slave.scale, f=True)
+    dmx.outputShear.connectTo(slave.shear, f=True)
 
-    cmds.delete(loc1, loc2)
+    cmds.delete(master_tmp.name, slave_tmp.name)
 
-    return target
+
+def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
+    """
+    Resets the objs translate, rotate, scale, visibility and/or user defined attributes to their default values.
+    :param objs: list of objects to reset the attributes on. If None then the selected objects are reset.
+    :param t: if True resets the translate value to 0
+    :param r: if True resets the rotate value to 0
+    :param s: if True resets the scale value to 1
+    :param v: if True resets the visibility value to 1
+    :param user: if True resets the user attributes values to their respective default values.
+    """
+    if not objs:
+        objs = cmds.ls(sl=True, fl=True)
+        if not objs:
+            cmds.warning('Select a least one object')
+            return
+    objs = nodes.yams(objs)
+
+    tr = ''
+    if t:
+        tr += 't'
+    if r:
+        tr += 'r'
+    for obj in objs:
+        for axe in 'xyz':
+            for tr_ in tr:
+                if obj.attr(tr_+axe).settable():
+                    obj.attr(tr_+axe).value = 0
+            if s:
+                if obj.attr('s'+axe).settable():
+                    obj.attr('s'+axe).value = 1
+        if v:
+            if obj.v.settable():
+                obj.v.value = True
+        if user:
+            attrs = obj.listAttr(ud=True, scalar=True, visible=True)
+            for attr in attrs:
+                if not attr.settable():
+                    continue
+                attr.value = attr.defaultValue

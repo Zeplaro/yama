@@ -14,7 +14,7 @@ if _pyversion == 3:
     basestring = str
 
 
-def get_attribute(node, attr):
+def getAttribute(node, attr):
     # todo: support index such as [*] and [2:-1]
     if attr.endswith(']'):
         split = attr.split('[')
@@ -92,14 +92,14 @@ class Attribute(object):
         Using the >> operator to connect self to the other attribute.
         :return: None
         """
-        self.connect_to(other)
+        self.connectTo(other)
 
     def __lshift__(self, other):
         """
         Using the << operator to connect the other attribute to self.
         :return: None
         """
-        self.connect_from(other)
+        self.connectFrom(other)
 
     def __floordiv__(self, other):
         """
@@ -124,6 +124,11 @@ class Attribute(object):
             """
             return self.__bool__()
 
+    def __call__(self, *args, **kwargs):
+        if not self.exists():
+            raise ValueError("No object matches name: {}".format(self.name))
+        raise TypeError("'{}' object is not callable".format(self.__class__.__name__))
+
     @property
     def name(self):
         """
@@ -138,7 +143,7 @@ class Attribute(object):
         :param attr: str
         :return: Attribute object
         """
-        return get_attribute(self.node, self.attribute + '.' + attr)
+        return getAttribute(self.node, self.attribute + '.' + attr)
 
     @property
     def value(self):
@@ -156,10 +161,13 @@ class Attribute(object):
         """
         Sets the maya value.
         """
-        cmds.setAttr(self.name, value)
+        if self.type() == 'double3':
+            cmds.setAttr(self.name, *value)
+        else:
+            cmds.setAttr(self.name, value)
 
     def exists(self):
-        return cmds.objExists(self.name)
+        return cmds.attributeQuery(self.attribute, node=self.node.name, exists=True)
 
     def settable(self):
         """
@@ -168,7 +176,7 @@ class Attribute(object):
         """
         return cmds.getAttr(self.name, settable=True)
 
-    def connect_to(self, attr, **kwargs):
+    def connectTo(self, attr, **kwargs):
         """
         Connect this attribute to the given attr.
         kwargs are passed on to cmds.connectAttr
@@ -177,7 +185,7 @@ class Attribute(object):
             attr = attr.name
         cmds.connectAttr(self.name, attr, **kwargs)
 
-    def connect_from(self, attr, **kwargs):
+    def connectFrom(self, attr, **kwargs):
         """
         Connect the given attr to this attribute.
         kwargs are passed on to cmds.connectAttr
@@ -191,12 +199,8 @@ class Attribute(object):
         Disconnect the the connection between self (source) and attr (destination)
         :param attr: str or Attribute
         """
-        print(isinstance(attr, Attribute))
-        if isinstance(attr, Attribute):  # todo: WTF ?! not working ???
-            print('doing it')
+        if isinstance(attr, Attribute):
             attr = attr.name
-        print(self.name, attr)
-        print(map(type, (self.name, attr)))
         cmds.disconnectAttr(self.name, attr)
 
     def listConnections(self, **kwargs):
@@ -206,24 +210,23 @@ class Attribute(object):
             kwargs['plugs'] = True
         return nodes.yams(cmds.listConnections(self.name, **kwargs) or [])
 
-    def source_connection(self, **kwargs):
+    def sourceConnection(self, **kwargs):
         connection = self.listConnections(destination=False, **kwargs)
         if connection:
             return connection[0]
 
-    def destination_connections(self, **kwargs):
+    def destinationConnections(self, **kwargs):
         return self.listConnections(source=False, **kwargs)
 
     def breakConnections(self, source=True, destination=False):
         if source:
-            connection = self.source_connection()
+            connection = self.sourceConnection()
             if connection:
                 connection.disconnect(self)
         if destination:
-            for c in self.destination_connections():
+            for c in self.destinationConnections():
                 self.disconnect(c)
 
-    @property
     def type(self):
         """
         Returns the type of data currently in the attribute.
@@ -353,52 +356,11 @@ class MultiAttribute(Attribute):
         super(MultiAttribute, self).__init__(node, attr)
         self.attribute = attr + '[' + str(index) + ']'
         self.index = index
-        self.parent_attr = attr
+        self.parentAttr = attr
 
     def __repr__(self):
-        return '{}({}, {}, {})'.format(self.__class__.__name__, self.node, self.parent_attr, self.index)
+        return '{}({}, {}, {})'.format(self.__class__.__name__, self.node, self.parentAttr, self.index)
 
     @property
     def parent(self):
-        return get_attribute(self.node, self.parent_attr)
-
-
-def reset_attrs(objs=None, t=True, r=True, s=True, v=True, user=False):
-    """
-    Resets the objs translate, rotate, scale, visibility and/or user defined attributes to their default values.
-    :param objs: list of objects to reset the attributes on. If None then the selected objects are reset.
-    :param t: if True resets the translate value to 0
-    :param r: if True resets the rotate value to 0
-    :param s: if True resets the scale value to 1
-    :param v: if True resets the visibility value to 1
-    :param user: if True resets the user attributes values to their respective default values.
-    """
-    if not objs:
-        objs = cmds.ls(sl=True, fl=True)
-        if not objs:
-            cmds.warning('Select a least one object')
-            return
-    objs = nodes.yams(objs)
-
-    tr = ''
-    if t:
-        tr += 't'
-    if r:
-        tr += 'r'
-    for obj in objs:
-        for axe in 'xyz':
-            for tr_ in tr:
-                if obj.attr(tr_+axe).settable():
-                    obj.attr(tr_+axe).value = 0
-            if s:
-                if obj.attr('s'+axe).settable():
-                    obj.attr('s'+axe).value = 1
-        if v:
-            if obj.v.settable():
-                obj.v.value = True
-        if user:
-            attrs = obj.listAttr(ud=True, scalar=True, visible=True)
-            for attr in attrs:
-                if not attr.settable():
-                    continue
-                attr.value = attr.defaultValue
+        return getAttribute(self.node, self.parentAttr)
