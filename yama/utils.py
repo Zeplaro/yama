@@ -128,6 +128,8 @@ def mxConstraint(master=None, slave=None):
 
     master_tmp = ym.createNode('transform', n='{}_mastertmp'.format(master))
     slave_tmp = ym.createNode('transform', n='{}_mastertmp'.format(slave))
+    master_tmp.setXform(m=master.getXform(m=True, ws=True), ws=True)
+    slave_tmp.setXform(m=slave.getXform(m=True, ws=True), ws=True)
     slave_tmp.parent = master_tmp
 
     cmx.inputTranslate.value = slave_tmp.translate.value

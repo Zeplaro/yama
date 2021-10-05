@@ -423,37 +423,15 @@ class Transform(DagNode):
         shapes = self.shapes(noIntermediate=noIntermediate)
         return shapes[0] if shapes else None
 
-    def getTranslation(self, ws=False):
-        os = not ws
-        return cmds.xform(self.name, q=True, t=True, ws=ws, os=os)
+    def getXform(self, **kwargs):
+        if 'q' not in kwargs and 'query' not in kwargs:
+            kwargs['q'] = True
+        return cmds.xform(self.name, **kwargs)
 
-    def setTranslation(self, value, ws=False):
-        os = not ws
-        cmds.xform(self.name, t=value, ws=ws, os=os)
-
-    def getRotation(self, ws=False):
-        os = not ws
-        return cmds.xform(self.name, q=True, ro=True, ws=ws, os=os)
-
-    def setRotation(self, value, ws=False):
-        os = not ws
-        cmds.xform(self.name, ro=value, ws=ws, os=os)
-
-    def getScale(self, ws=False):
-        os = not ws
-        return cmds.xform(self.name, q=True, s=True, ws=ws, os=os)
-
-    def setScale(self, value, ws=False):
-        os = not ws
-        cmds.xform(self.name, s=value, ws=ws, os=os)
-
-    def getRotatePivot(self, ws=False):
-        os = not ws
-        return cmds.xform(self.name, q=True, rp=True, ws=ws, os=os)
-
-    def setRotatePivot(self, value, ws=False):
-        os = not ws
-        cmds.xform(self.name, rp=value, ws=ws, os=os)
+    def setXform(self, **kwargs):
+        if 'q' in kwargs or 'query' in kwargs:
+            raise RuntimeError("setXform kwargs cannot contain 'q' or 'query'")
+        cmds.xform(self.name, **kwargs)
 
     def distance(self, obj):
         if isinstance(obj, Transform):
