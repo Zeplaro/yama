@@ -53,38 +53,55 @@ def getSkinClusters(objs):
     return nodes.YamList([getSkinCluster(obj) for obj in objs])
 
 
-def skinas(slave_namespace=None, master=None, *slaves):
+def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None):
     if not master or not slaves:
         objs = ym.ls(sl=True, tr=True, fl=True)
         if len(objs) < 2:
             cmds.warning('Please select at least two objects')
             return
+
+        def get_skinnable(objs):
+            skinnable = nodes.YamList()
+            for obj in objs:
+                if obj.shapes(type='controlPoint'):
+                    skinnable.append(obj)
+                else:
+                    skinnable.extend(get_skinnable(obj.children(type='transform')))
+            return skinnable
+
         master = objs[0]
-        slaves = objs[1:]
+        slaves = get_skinnable(objs[1:])
     else:
         master = ym.yam(master)
         slaves = ym.yams(slaves)
+    slaves = hierarchize(slaves, reverse=True)
 
     masterskn = getSkinCluster(master)
     if not masterskn:
         cmds.warning('First object as no skinCluster attached')
         return
     infs = masterskn.influences()
+
     if slave_namespace is not None:
-        infs = ym.yams(['{}:{}'.format(slave_namespace, inf) for inf in infs])
-    sm = masterskn.skinningMethod.value
-    mi = masterskn.maxInfluences.value
-    nw = masterskn.normalizeWeights.value
-    mmi = masterskn.maintainMaxInfluences.value
-    wd = masterskn.weightDistribution.value
+        if master_namespace:
+            infs = ym.yams([inf.name.replace(master_namespace + ':', slave_namespace + ':') for inf in infs])
+        else:
+            infs = ym.yams([slave_namespace + ':' + inf.name for inf in infs])
     done = []
+    kwargs = {'skinMethod': masterskn.skinningMethod.value,
+              'maximumInfluences': masterskn.maxInfluences.value,
+              'normalizeWeights': masterskn.normalizeWeights.value,
+              'obeyMaxInfluences': masterskn.maintainMaxInfluences.value,
+              'weightDistribution': masterskn.weightDistribution.value,
+              'includeHiddenSelections': True,
+              'toSelectedBones': True,
+              }
     for slave in slaves:
         if getSkinCluster(slave):
-            print(slave+' already has a skinCluster attached')
+            print(slave + ' already has a skinCluster attached')
             continue
-        cmds.select(infs.names, slave.name)
-        slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave), sm=sm, mi=mi, nw=nw, omi=mmi, wd=wd,
-                                              includeHiddenSelections=True, toSelectedBones=True)[0])
+        cmds.select(infs.names(), slave.name)
+        slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave), **kwargs)[0])
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint',
                              ia=('oneToOne', 'label', 'closestJoint'))
         print(slave + ' skinned -> ' + slaveskn.name)
@@ -92,7 +109,7 @@ def skinas(slave_namespace=None, master=None, *slaves):
     return done
 
 
-def hierarchize(objs, invert=False):
+def hierarchize(objs, reverse=False):
     objs = ym.yams(objs)
     objs = {obj.longname(): obj for obj in objs}
     longnames = list(objs)
@@ -103,8 +120,10 @@ def hierarchize(objs, invert=False):
             if longnames[i].startswith(longnames[i + 1]):
                 longnames.insert(i, longnames.pop(i + 1))
                 done = False
-    ordered = [objs[x] for x in longnames]
-    return ordered if not invert else ordered[::-1]
+    ordered = nodes.YamList([objs[x] for x in longnames])
+    if reverse:
+        ordered.reverse()
+    return ordered
 
 
 def mxConstraint(master=None, slave=None):

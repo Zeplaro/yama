@@ -837,15 +837,15 @@ supported_classes = {'skinCluster': SkinCluster,
 
 
 class YamList(list):
-    def __init__(self, arg):
-        super(YamList, self).__init__(arg)
+    def __init__(self, *arg):
+        super(YamList, self).__init__(*arg)
         self._check()
 
     def __repr__(self):
         return "<YamList({})>".format(list(self))
 
     def __str__(self):
-        return "YamList({})".format(self.names)
+        return "YamList({})".format(self.names())
 
     def _check(self, item=None):
         if item is not None:
@@ -882,12 +882,10 @@ class YamList(list):
             return [x.attr(attr).value for x in self]
         return [x.value for x in self]
 
-    @property
     def names(self):
         return [x.name for x in self]
 
-    @property
-    def mObject(self):
+    def mObjects(self):
         return [x.mObject for x in self]
 
     def removeType(self, type=None, inherited=True):
