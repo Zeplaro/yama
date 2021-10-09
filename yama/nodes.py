@@ -104,12 +104,11 @@ def yams(nodes):
     return YamList(yam(node) for node in nodes)
 
 
-class YamNode(object):
-    # todo
+class Yam(object):
     pass
 
 
-class DependNode(YamNode):
+class DependNode(Yam):
     """
     Main maya node type that all nodes inherits from.
     Links the node to its maya api 2.0 MObject to access many of the faster api functions and classes (MFn), and also in
@@ -235,6 +234,7 @@ class DependNode(YamNode):
         :param kwargs: kwargs passed on to cmds.listRelatives
         :return: list[YamNode, ...]
         """
+        kwargs['fullPath'] = True  # Needed in case of multiple obj with same name
         return yams(cmds.listRelatives(self.name, **kwargs) or [])
 
     def listConnections(self, **kwargs):
@@ -384,12 +384,12 @@ class Transform(DagNode):
     def __init__(self, mObject, mFnDependencyNode):
         super(Transform, self).__init__(mObject, mFnDependencyNode)
 
-    def __getattr__(self, item):
-        if item in components.supported_components:
-            return components.Components(self, item)
-        return super(Transform, self).__getattr__(item)
+    def __getattr__(self, attr):
+        if attr in components.supported_components:
+            return components.Components(self, attr)
+        return self.attr(attr)
 
-    def children(self, noIntermediate=True, type=None):
+    def children(self, type=None, noIntermediate=True):
         """
         Gets all the node's children as a list of YamNode.
         :param noIntermediate: if True skips intermediate shapes.
@@ -402,7 +402,7 @@ class Transform(DagNode):
             children.keepType(type=type)
         return children
 
-    def shapes(self, noIntermediate=True):
+    def shapes(self, type=None, noIntermediate=True):
         """
         Gets the shapes of the transform as YamNode.
         :param noIntermediate: if True skips intermediate shapes.
@@ -412,6 +412,8 @@ class Transform(DagNode):
         children = YamList(x for x in children if isinstance(x, Shape))
         if noIntermediate:
             children = YamList(x for x in children if not x.mFnDagNode.isIntermediateObject)
+        if type:
+            children.keepType(type)
         return children
 
     @property
@@ -422,6 +424,11 @@ class Transform(DagNode):
         """
         shapes = self.shapes(noIntermediate=noIntermediate)
         return shapes[0] if shapes else None
+
+    def allDescendents(self, type=None):
+        if type:
+            return self.listRelatives(allDescendents=True, type=type)
+        return self.listRelatives(allDescendents=True)
 
     def getXform(self, **kwargs):
         if 'q' not in kwargs and 'query' not in kwargs:
@@ -848,11 +855,14 @@ class YamList(list):
         return "YamList({})".format(self.names())
 
     def _check(self, item=None):
+        error = TypeError("YamList can only contain YamNodes. '{}' is '{}'".format(item, type(item).__name__))
         if item is not None:
-            assert hasattr(item, 'name')
+            if not isinstance(item, Yam):
+                raise error
         else:
             for i in self:
-                assert hasattr(i, 'name')
+                if not isinstance(i, Yam):
+                    raise error
 
     def append(self, item):
         self._check(item)
@@ -887,6 +897,11 @@ class YamList(list):
 
     def mObjects(self):
         return [x.mObject for x in self]
+
+    def getattrs(self, attr, call=False):
+        if call:
+            return [getattr(x, attr)() for x in self]
+        return [getattr(x, attr) for x in self]
 
     def removeType(self, type=None, inherited=True):
         assert type and isinstance(type, basestring)

@@ -24,7 +24,7 @@ def getAttribute(node, attr):
     return Attribute(node, attr)
 
 
-class Attribute(object):
+class Attribute(nodes.Yam):
     """
     A class for handling a node attribute and sub-attributes.
     """

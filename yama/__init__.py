@@ -13,15 +13,14 @@ import maya.api.OpenMaya as om
 _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
-    from importlib import reload
 
 import nodes
-reload(nodes)  # Temporary, while in-dev; todo: remove that line
 
 
 yam = nodes.yam
 yams = nodes.yams
 createNode = nodes.createNode
+YamList = nodes.YamList
 
 
 def ls(*args, **kwargs):
