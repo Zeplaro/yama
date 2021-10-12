@@ -16,7 +16,6 @@ import maya.OpenMaya as om1
 _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
-    from importlib import reload
 
 import weightsdict as wdt
 import utils
@@ -27,7 +26,7 @@ def createNode(*args, **kwargs):
     Creates a node and returns it as its appropriate class depending on its type.
     :param args: cmds args for cmds.createNode
     :param kwargs: cmds kwargs for cmds.createNode
-    :return: a YamNode object
+    :return: a DependNode object
     """
     return yam(cmds.createNode(*args, **kwargs))
 
@@ -104,7 +103,7 @@ def yam(node):
         mObject = mSelectionList.getDependNode(0)
         mfn = om.MFnDependencyNode(mObject)
 
-    elif isinstance(node, YamNode):
+    elif isinstance(node, DependNode):
         return node
 
     elif isinstance(node, om.MObject):
@@ -137,9 +136,9 @@ def yam(node):
 
 def yams(nodes):
     """
-    Returns each nodes or attributes initialized as their appropriate YamNode or Attribute. See 'yam' function.
+    Returns each nodes or attributes initialized as their appropriate DependNode or Attribute. See 'yam' function.
     :param nodes: (list) list of str of existing nodes.
-    :return: list of YamNode
+    :return: list of DependNode
     """
     return YamList(yam(node) for node in nodes)
 
@@ -195,7 +194,7 @@ class DependNode(Yam):
     def __add__(self, other):
         """
         Adds the node's name and returns a str
-        :param other: str or YamNode
+        :param other: str or DependNode
         :return: str
         """
         return self.name + other
@@ -203,7 +202,7 @@ class DependNode(Yam):
     def __radd__(self, other):
         """
         Adds the node's name and returns a str.
-        :param other: str or YamNode
+        :param other: str or DependNode
         :return: str
         """
         return other + self.name
@@ -270,16 +269,16 @@ class DependNode(Yam):
 
     def listRelatives(self, **kwargs):
         """
-        Returns the maya cmds.listRelatives as YamNode objects.
+        Returns the maya cmds.listRelatives as DependNode objects.
         :param kwargs: kwargs passed on to cmds.listRelatives
-        :return: list[YamNode, ...]
+        :return: list[DependNode, ...]
         """
         kwargs['fullPath'] = True  # Needed in case of multiple obj with same name
         return yams(cmds.listRelatives(self.name, **kwargs) or [])
 
     def listConnections(self, **kwargs):
         """
-        Returns the maya cmds.listConnections as YamNode objects or Attribute objects.
+        Returns the maya cmds.listConnections as DependNode objects or Attribute objects.
         By default if not in kwargs, 'skipConversionNodes' is passed as True.
         :param kwargs: kwargs passed on to cmds.listConnections
         :return: list[Attribute, ...]
@@ -304,7 +303,7 @@ class DependNode(Yam):
 
     def listAttr(self, **kwargs):
         """
-        Returns the maya cmds.listAttr as YamNode objects or Attribute objects.
+        Returns the maya cmds.listAttr as DependNode objects or Attribute objects.
         :param kwargs: kwargs passed on to cmds.listAttr
         :return: list[Attribute, ...]
         """
@@ -382,7 +381,7 @@ class DagNode(DependNode):
     def parent(self):
         """
         Gets the node parent node or None if in world.
-        :return: YamNode or None
+        :return: DependNode or None
         """
         p = self.mFnDagNode.parent(0)
         if p.apiTypeStr == 'kWorld':
@@ -432,9 +431,9 @@ class Transform(DagNode):
 
     def children(self, type=None, noIntermediate=True):
         """
-        Gets all the node's children as a list of YamNode.
+        Gets all the node's children as a list of DependNode.
         :param noIntermediate: if True skips intermediate shapes.
-        :return: list of YamNode
+        :return: list of DependNode
         """
         children = yams(self.mDagPath.child(x) for x in range(self.mDagPath.childCount()))
         if noIntermediate:
@@ -445,7 +444,7 @@ class Transform(DagNode):
 
     def shapes(self, type=None, noIntermediate=True):
         """
-        Gets the shapes of the transform as YamNode.
+        Gets the shapes of the transform as DependNode.
         :param noIntermediate: if True skips intermediate shapes.
         :return: list of Shape object
         """
@@ -897,7 +896,7 @@ class YamList(list):
         return "YamList({})".format(self.names())
 
     def _check(self, item=None):
-        error = TypeError("YamList can only contain YamNodes. '{}' is '{}'".format(item, type(item).__name__))
+        error = TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
         if item is not None:
             if not isinstance(item, Yam):
                 raise error

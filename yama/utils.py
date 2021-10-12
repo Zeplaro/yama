@@ -31,7 +31,7 @@ def createHook(node, suffix_name='hook', parent=None):
 def componentRange(node, comp, *args):
     """
     Returns a generator to iterate over a length of vertices full name.
-    :param node: str or YamNode; the node containing the vertices.
+    :param node: str or Yam object; the node containing the vertices.
     :param comp: str; the component string; e.g.: 'vtx', 'cv', etc...
     :param args: int, int, int; start, stop and step as needed, passed on to 'range' function.
     :return: generator
