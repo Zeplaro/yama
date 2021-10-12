@@ -2,7 +2,6 @@
 
 import sys
 from maya import cmds, mel
-import __init__ as ym
 import nodes
 
 # python 2 to 3 compatibility
@@ -55,7 +54,7 @@ def getSkinClusters(objs):
 
 def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None):
     if not master or not slaves:
-        objs = ym.ls(sl=True, tr=True, fl=True)
+        objs = nodes.ls(sl=True, tr=True, fl=True)
         if len(objs) < 2:
             cmds.warning('Please select at least two objects')
             return
@@ -72,8 +71,8 @@ def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None
         master = objs[0]
         slaves = get_skinnable(objs[1:])
     else:
-        master = ym.yam(master)
-        slaves = ym.yams(slaves)
+        master = nodes.yam(master)
+        slaves = nodes.yams(slaves)
     slaves = hierarchize(slaves, reverse=True)
 
     masterskn = getSkinCluster(master)
@@ -84,9 +83,9 @@ def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None
 
     if slave_namespace is not None:
         if master_namespace:
-            infs = ym.yams([inf.name.replace(master_namespace + ':', slave_namespace + ':') for inf in infs])
+            infs = nodes.yams([inf.name.replace(master_namespace + ':', slave_namespace + ':') for inf in infs])
         else:
-            infs = ym.yams([slave_namespace + ':' + inf.name for inf in infs])
+            infs = nodes.yams([slave_namespace + ':' + inf.name for inf in infs])
     done = []
     kwargs = {'skinMethod': masterskn.skinningMethod.value,
               'maximumInfluences': masterskn.maxInfluences.value,
@@ -110,7 +109,7 @@ def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None
 
 
 def hierarchize(objs, reverse=False):
-    objs = ym.yams(objs)
+    objs = nodes.yams(objs)
     objs = {obj.longname(): obj for obj in objs}
     longnames = list(objs)
     done = False
@@ -129,24 +128,24 @@ def hierarchize(objs, reverse=False):
 def mxConstraint(master=None, slave=None):
     # todo
     if not master or not slave:
-        sel = ym.ls(sl=True, tr=True, fl=True)
+        sel = nodes.ls(sl=True, tr=True, fl=True)
         if len(sel) != 2:
             cmds.warning('Select two objects')
             return
-        master, slave = ym.yams(sel)
+        master, slave = nodes.yams(sel)
     else:
-        master, slave = ym.yams([master, slave])
+        master, slave = nodes.yams([master, slave])
         
-    mmx = ym.createNode('multMatrix', n='{}_mmx'.format(master))
-    dmx = ym.createNode('decomposeMatrix', n='{}_dmx'.format(master))
-    cmx = ym.createNode('composeMatrix', n='{}_cmx'.format(master))
+    mmx = nodes.createNode('multMatrix', n='{}_mmx'.format(master))
+    dmx = nodes.createNode('decomposeMatrix', n='{}_dmx'.format(master))
+    cmx = nodes.createNode('composeMatrix', n='{}_cmx'.format(master))
     cmx.outputMatrix.connectTo(mmx.matrixIn[0], f=True)
     master.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
     slave.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
     mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
 
-    master_tmp = ym.createNode('transform', n='{}_mastertmp'.format(master))
-    slave_tmp = ym.createNode('transform', n='{}_mastertmp'.format(slave))
+    master_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(master))
+    slave_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(slave))
     master_tmp.setXform(m=master.getXform(m=True, ws=True), ws=True)
     slave_tmp.setXform(m=slave.getXform(m=True, ws=True), ws=True)
     slave_tmp.parent = master_tmp

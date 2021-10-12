@@ -18,7 +18,6 @@ if _pyversion == 3:
     basestring = str
     from importlib import reload
 
-import components
 import weightsdict as wdt
 import utils
 
@@ -31,6 +30,47 @@ def createNode(*args, **kwargs):
     :return: a YamNode object
     """
     return yam(cmds.createNode(*args, **kwargs))
+
+
+def ls(*args, **kwargs):
+    if 'fl' not in kwargs and 'flatten' not in kwargs:
+        kwargs['fl'] = True
+    return yams(cmds.ls(*args, **kwargs))
+
+
+def selected():
+    # todo: add support for component selection
+    sel = om.MGlobal.getActiveSelectionList(orderedSelectionIfAvailable=True)
+    return yams(sel.getDependNode(x) for x in range(sel.length()))
+
+
+def select(*args, **kwargs):
+    """
+    todo: find something not verbose
+    Changes the scene active selection.
+    This is maya undoable even if it uses the api.
+    :param args: any objects or list of objects to select.
+    :param kwargs: checks only for 'add' in kwargs to add to the current selection instead of replacing it.
+    """
+    add = kwargs.get('add', False)
+    selection_list = om.MSelectionList()
+    for arg in args:
+        if isinstance(arg, (basestring, om.MObject, om.MDagPath)):
+            selection_list.add(arg)
+        elif isinstance(arg, DependNode):
+            selection_list.add(arg.name)
+        elif hasattr(arg, '__iter__'):
+            for arg_ in arg:
+                if isinstance(arg_, (basestring, om.MObject, om.MDagPath)):
+                    selection_list.add(arg_)
+                elif isinstance(arg_, DependNode):
+                    selection_list.add(arg_.name)
+        else:
+            raise AttributeError('failed to select: {} of type {}'.format(arg, type(arg).__name__))
+    if add:
+        om.MGlobal.selectCommand(selection_list, listAdjustment=om.MGlobal.kAddToList)
+    else:
+        om.MGlobal.selectCommand(selection_list, listAdjustment=om.MGlobal.kReplaceList)
 
 
 def yam(node):
@@ -385,6 +425,7 @@ class Transform(DagNode):
         super(Transform, self).__init__(mObject, mFnDependencyNode)
 
     def __getattr__(self, attr):
+        import components
         if attr in components.supported_components:
             return components.Components(self, attr)
         return self.attr(attr)
@@ -484,6 +525,7 @@ class ControlPoint(Shape):
         super(ControlPoint, self).__init__(mObject, mFnDependencyNode)
 
     def __getattr__(self, item):
+        import components
         if item in components.supported_components:
             return components.Components(self, item)
         return super(ControlPoint, self).__getattr__(item)
