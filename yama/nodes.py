@@ -18,58 +18,6 @@ if _pyversion == 3:
     basestring = str
 
 import weightsdict as wdt
-import utils
-
-
-def createNode(*args, **kwargs):
-    """
-    Creates a node and returns it as its appropriate class depending on its type.
-    :param args: cmds args for cmds.createNode
-    :param kwargs: cmds kwargs for cmds.createNode
-    :return: a DependNode object
-    """
-    return yam(cmds.createNode(*args, **kwargs))
-
-
-def ls(*args, **kwargs):
-    if 'fl' not in kwargs and 'flatten' not in kwargs:
-        kwargs['fl'] = True
-    return yams(cmds.ls(*args, **kwargs))
-
-
-def selected():
-    # todo: add support for component selection
-    sel = om.MGlobal.getActiveSelectionList(orderedSelectionIfAvailable=True)
-    return yams(sel.getDependNode(x) for x in range(sel.length()))
-
-
-def select(*args, **kwargs):
-    """
-    todo: find something not verbose
-    Changes the scene active selection.
-    This is maya undoable even if it uses the api.
-    :param args: any objects or list of objects to select.
-    :param kwargs: checks only for 'add' in kwargs to add to the current selection instead of replacing it.
-    """
-    add = kwargs.get('add', False)
-    selection_list = om.MSelectionList()
-    for arg in args:
-        if isinstance(arg, (basestring, om.MObject, om.MDagPath)):
-            selection_list.add(arg)
-        elif isinstance(arg, DependNode):
-            selection_list.add(arg.name)
-        elif hasattr(arg, '__iter__'):
-            for arg_ in arg:
-                if isinstance(arg_, (basestring, om.MObject, om.MDagPath)):
-                    selection_list.add(arg_)
-                elif isinstance(arg_, DependNode):
-                    selection_list.add(arg_.name)
-        else:
-            raise AttributeError('failed to select: {} of type {}'.format(arg, type(arg).__name__))
-    if add:
-        om.MGlobal.selectCommand(selection_list, listAdjustment=om.MGlobal.kAddToList)
-    else:
-        om.MGlobal.selectCommand(selection_list, listAdjustment=om.MGlobal.kReplaceList)
 
 
 def yam(node):
@@ -117,7 +65,7 @@ def yam(node):
         node = mfn.name()
 
     else:
-        raise TypeError("yam() str or OpenMaya.MObject of OpenMaya.MDagPath expected,"
+        raise TypeError("yam(): str, OpenMaya.MObject or OpenMaya.MDagPath expected,"
                         " got {}.".format(node.__class__.__name__))
 
     # checking if node type has a supported class, if not defaults to DependNode
@@ -141,6 +89,26 @@ def yams(nodes):
     :return: list of DependNode
     """
     return YamList(yam(node) for node in nodes)
+
+
+def createNode(*args, **kwargs):
+    """
+    Creates a node and returns it as its appropriate class depending on its type.
+    :param args: cmds args for cmds.createNode
+    :param kwargs: cmds kwargs for cmds.createNode
+    :return: a DependNode object
+    """
+    return yam(cmds.createNode(*args, **kwargs))
+
+
+def ls(*args, **kwargs):
+    if 'fl' not in kwargs and 'flatten' not in kwargs:
+        kwargs['fl'] = True
+    return yams(cmds.ls(*args, **kwargs))
+
+
+def selected():
+    return ls(sl=True, fl=True)
 
 
 class Yam(object):
@@ -423,12 +391,6 @@ class Transform(DagNode):
     def __init__(self, mObject, mFnDependencyNode):
         super(Transform, self).__init__(mObject, mFnDependencyNode)
 
-    def __getattr__(self, attr):
-        import components
-        if attr in components.supported_components:
-            return components.Components(self, attr)
-        return self.attr(attr)
-
     def children(self, type=None, noIntermediate=True):
         """
         Gets all the node's children as a list of DependNode.
@@ -523,12 +485,6 @@ class ControlPoint(Shape):
     def __init__(self, mObject, mFnDependencyNode):
         super(ControlPoint, self).__init__(mObject, mFnDependencyNode)
 
-    def __getattr__(self, item):
-        import components
-        if item in components.supported_components:
-            return components.Components(self, item)
-        return super(ControlPoint, self).__getattr__(item)
-
 
 class Mesh(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
@@ -549,6 +505,7 @@ class Mesh(ControlPoint):
         return self._mFnMesh
 
     def getVtxPosition(self, ws=False):
+        import utils
         pos = []
         os = not ws
         for vtx in utils.componentRange(self, 'vtx', len(self)):
@@ -556,6 +513,7 @@ class Mesh(ControlPoint):
         return pos
 
     def setVtxPosition(self, data, ws=False):
+        import utils
         os = not ws
         for vtx, pos in zip(utils.componentRange(self, 'vtx', len(self)), data):
             cmds.xform(vtx, t=pos, ws=ws, os=os)
@@ -590,6 +548,7 @@ class NurbsCurve(ControlPoint):
         return self._mFnNurbsCurve
 
     def getCvsPosition(self, ws=False):
+        import utils
         pos = []
         os = not ws
         for cv in utils.componentRange(self, 'cv', len(self)):
@@ -597,6 +556,7 @@ class NurbsCurve(ControlPoint):
         return pos
 
     def setCvsPosition(self, data, ws=False):
+        import utils
         os = not ws
         for cv, pos in zip(utils.componentRange(self, 'cv', len(self)), data):
             cmds.xform(cv, t=pos, ws=ws, os=os)

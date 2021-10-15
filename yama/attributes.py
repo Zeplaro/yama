@@ -108,22 +108,6 @@ class Attribute(nodes.Yam):
         """
         self.disconnect(other)
 
-    def __bool__(self):
-        """
-        Returns True if the attribute actually exists in the scene.
-        :return: bool
-        """
-        return self.exists()
-
-    if _pyversion == 2:
-        # __nonzero__ is python 2 verison of __bool__; kind of...
-        def __nonzero__(self):
-            """
-            Returns True if the attribute actually exists in the scene.
-            :return: bool
-            """
-            return self.__bool__()
-
     def __call__(self, *args, **kwargs):
         if not self.exists():
             raise ValueError("No object matches name: {}".format(self.name))
@@ -167,7 +151,7 @@ class Attribute(nodes.Yam):
             cmds.setAttr(self.name, value)
 
     def exists(self):
-        return cmds.attributeQuery(self.attribute, node=self.node.name, exists=True)
+        return cmds.objExists(self.name)
 
     def settable(self):
         """
