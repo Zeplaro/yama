@@ -76,26 +76,30 @@ class Component(nodes.Yam):
         if self.third_index is not None:
             raise AttributeError("'{}' cannot get more than three indexes")
         elif self.second_index is not None:
-            return self.__class__(self.node, self.index, self.second_index, item)
+            return self.__class__(self.node, self.type, self.index, self.second_index, item)
         else:
-            return self.__class__(self.node, self.index, item)
+            return self.__class__(self.node, self.type, self.index, item)
 
     def exists(self):
         return cmds.objExists(self.name)
 
     @property
     def name(self):
-        name = '{}.{}[{}]'.format(self.node, self.type, self.index)
-        if self.second_index is not None:
-            name += '[{}]'.format(self.second_index)
-        if self.third_index is not None:
-            name += '[{}]'.format(self.third_index)
-        return name
+        return self.node + '.' + self.attribute
 
-    def get_position(self, ws=False):
+    @property
+    def attribute(self):
+        attribute = '{}[{}]'.format(self.type, self.index)
+        if self.second_index is not None:
+            attribute += '[{}]'.format(self.second_index)
+        if self.third_index is not None:
+            attribute += '[{}]'.format(self.third_index)
+        return attribute
+
+    def getPosition(self, ws=False):
         return cmds.xform(self.name, q=True, t=True, ws=ws, os=not ws)
 
-    def set_position(self, value, ws=False):
+    def setPosition(self, value, ws=False):
         cmds.xform(self.name, t=value, ws=ws, os=not ws)
 
 

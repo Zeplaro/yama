@@ -34,7 +34,7 @@ def getAttribute(node, attr):
                 elif index_type == 'double':
                     return components.Components(node, components.comp_MFn_id[api_type][0])[index[0]][index[1]]
                 elif index_type == 'triple':
-                    return components.Components(node, components.comp_MFn_id[api_type][0])[index[0]][index[1]][index[3]]
+                    return components.Components(node, components.comp_MFn_id[api_type][0])[index[0]][index[1]][index[2]]
         except RuntimeError:
             pass
 
@@ -78,7 +78,7 @@ class Attribute(nodes.Yam):
         """
         todo
         """
-        return getAttribute(self.node, '{}[{}]'.format(self.attr, item))
+        return getAttribute(self.node, '{}[{}]'.format(self.attribute, item))
 
     def __iter__(self):
         raise NotImplementedError("cannot iterate on '{}'".format(self.name))
