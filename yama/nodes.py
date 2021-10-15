@@ -856,14 +856,13 @@ class YamList(list):
         return "YamList({})".format(self.names())
 
     def _check(self, item=None):
-        error = TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
         if item is not None:
             if not isinstance(item, Yam):
-                raise error
+                raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
         else:
             for i in self:
                 if not isinstance(i, Yam):
-                    raise error
+                    raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(i, type(i).__name__))
 
     def append(self, item):
         self._check(item)

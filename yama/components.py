@@ -50,7 +50,7 @@ comp_MFn_id = {533: ('cv', 'single'),  # kCurveCVComponent
                }
 
 
-class Component(object):
+class Component(nodes.Yam):
     def __init__(self, node, component_type, index, second_index=None, third_index=None):
         self.node = node
         self.type = component_type
@@ -63,13 +63,13 @@ class Component(object):
 
     def __repr__(self):
         if self.third_index is not None:
-            return "<{}({}, {}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index,
-                                                 self.second_index, self.third_index)
+            return "<{}({}, {}, {}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index,
+                                                     self.second_index, self.third_index)
         elif self.second_index is not None:
-            return "<{}({}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index,
-                                             self.second_index)
+            return "<{}({}, {}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index,
+                                                 self.second_index)
         else:
-            return "<{}({}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index)
+            return "<{}({}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index)
 
     def __getitem__(self, item):
         assert isinstance(item, int)
@@ -85,7 +85,7 @@ class Component(object):
 
     @property
     def name(self):
-        name = '{}.{}[{}]'.format(self.node, self.type(), self.index)
+        name = '{}.{}[{}]'.format(self.node, self.type, self.index)
         if self.second_index is not None:
             name += '[{}]'.format(self.second_index)
         if self.third_index is not None:
@@ -99,7 +99,7 @@ class Component(object):
         cmds.xform(self.name, t=value, ws=ws, os=not ws)
 
 
-class Components(object):
+class Components(nodes.Yam):
     def __init__(self, node, comp_type):
         assert isinstance(node, nodes.DependNode)
         self.node = node
