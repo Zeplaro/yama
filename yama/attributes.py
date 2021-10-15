@@ -6,7 +6,9 @@ Contains all the class and functions for maya attributes.
 
 import sys
 from maya import cmds
+import maya.api.OpenMaya as om
 import nodes
+import components
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]
@@ -17,6 +19,25 @@ if _pyversion == 3:
 def getAttribute(node, attr):
     # todo: support index such as [*] and [2:-1]
     if attr.endswith(']'):
+        # Trying to get a component
+        try:
+            ls = om.MSelectionList()
+            ls.add(node.name + '.' + attr)
+            dag, comp = ls.getComponent(0)
+            api_type = comp.apiType()
+            if api_type in components.comp_MFn_id:
+                index_type = components.comp_MFn_id[api_type][1]
+                fn = components.comp_Mfn[index_type](comp)
+                index = fn.getElements()[0]
+                if index_type == 'single':
+                    return components.Components(node, components.comp_MFn_id[api_type][0])[index]
+                elif index_type == 'double':
+                    return components.Components(node, components.comp_MFn_id[api_type][0])[index[0]][index[1]]
+                elif index_type == 'triple':
+                    return components.Components(node, components.comp_MFn_id[api_type][0])[index[0]][index[1]][index[3]]
+        except RuntimeError:
+            pass
+
         split = attr.split('[')
         index = int(split.pop(-1)[:-1])
         attr = '['.join(split)
@@ -55,13 +76,9 @@ class Attribute(nodes.Yam):
 
     def __getitem__(self, item):
         """
-        Gets attributes of type multi; for exemple a deformer weights attribute.
-        :param item (int): the attribute index.
-        :return: MultiAttribute object.
+        todo
         """
-        if isinstance(item, basestring):
-            item = int(item)
-        return MultiAttribute(self.node, self.attribute, item)
+        return getAttribute(self.node, '{}[{}]'.format(self.attr, item))
 
     def __iter__(self):
         raise NotImplementedError("cannot iterate on '{}'".format(self.name))

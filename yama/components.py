@@ -6,6 +6,7 @@ Contains all the class and functions for maya components.
 
 import sys
 from maya import cmds
+import maya.api.OpenMaya as om
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]
@@ -15,17 +16,38 @@ if _pyversion == 3:
 import nodes
 
 
-supported_components = {'vtx',  # Mesh vertex
-                        'e',  # Mesh edge
-                        'f',  # Mesh face
-                        'cv',  # Nurbs control vertex
-                        'cp',  # Nurbs control point
+supported_components = {'cv',  # Nurbs control vertex
+                        'cp',  # Nurbs control point, actually the same a cv
                         'ep',  # Nurbs edit point
-                        'sf',  # NurbsSurface patch
                         'u',  # NurbsSurface u "edge"
                         'v',  # NurbsSurface v "edge"
                         'pt',  # Lattice point
+                        'e',  # Mesh edge
+                        'f',  # Mesh face
+                        'vtx',  # Mesh vertex
+                        'vtxFace',  # Mesh vertexFace point
+                        'sf',  # NurbsSurface patch
+                        'map',
                         }
+
+comp_Mfn = {'single': om.MFnSingleIndexedComponent,
+            'double': om.MFnDoubleIndexedComponent,
+            'triple': om.MFnTripleIndexedComponent,
+            }
+
+comp_MFn_id = {533: ('cv', 'single'),  # kCurveCVComponent
+               534: ('ep', 'single'),  # kCurveEPComponent
+               536: ('u', 'single'),  # kCurveParamComponent
+               537: ('v', 'double'),  # kIsoparmComponent
+               539: ('cv', 'double'),  # kSurfaceCVComponent
+               543: ('pt', 'triple'),  # kLatticeComponent
+               548: ('e', 'single'),  # kMeshEdgeComponent
+               549: ('f', 'single'),  # kMeshPolygonComponent
+               551: ('vtx', 'single'),  # kMeshVertComponent
+               741: ('vtxFace', 'double'),  # kCharacterMappingData
+               774: ('sf', 'double'),  # kSurfaceFaceComponent
+               813: ('map', 'single'),  # kInt64ArrayData
+               }
 
 
 class Component(object):
