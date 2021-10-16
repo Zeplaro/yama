@@ -174,7 +174,7 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
     :param user: if True resets the user attributes values to their respective default values.
     """
     if not objs:
-        objs = cmds.ls(sl=True, fl=True)
+        objs = nodes.selected(type='transform')
         if not objs:
             cmds.warning('Select a least one object')
             return
@@ -202,3 +202,42 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
                 if not attr.settable():
                     continue
                 attr.value = attr.defaultValue
+
+
+def reskin(objs=None):
+    if not objs:
+        objs = nodes.selected()
+        if not objs:
+            raise RuntimeError("No object given and no object selected")
+    objs = nodes.yams(objs)
+    for skn in getSkinClusters(objs):
+        skn.reskin()
+
+
+def insertGroup(obj=None, suffix='GRP'):
+    if not obj:
+        obj = nodes.selected()
+        if not obj:
+            raise RuntimeError("No object given and no object selected")
+        obj = obj[0]
+    obj = nodes.yam(obj)
+    grp = nodes.createNode('transform', name='{}_{}'.format(obj, suffix))
+    world_matrix = obj.getMatrix(ws=True)
+    parent = obj.parent
+    if parent:
+        grp.parent = parent
+    grp.setMatrix(world_matrix, ws=True)
+    obj.parent = grp
+    return grp
+
+
+def insertGroups(objs=None, suffix='GRP'):
+    if not objs:
+        objs = nodes.selected()
+        if not objs:
+            raise RuntimeError("No object given and no object selected")
+    objs = nodes.yams(nodes)
+    grps = nodes.YamList()
+    for obj in objs:
+        grps.append(insertGroup(obj, suffix=suffix))
+    return grps

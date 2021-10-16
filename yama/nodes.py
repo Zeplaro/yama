@@ -51,7 +51,7 @@ def yam(node):
         mObject = mSelectionList.getDependNode(0)
         mfn = om.MFnDependencyNode(mObject)
 
-    elif isinstance(node, DependNode):
+    elif isinstance(node, Yam):
         return node
 
     elif isinstance(node, om.MObject):
@@ -107,8 +107,8 @@ def ls(*args, **kwargs):
     return yams(cmds.ls(*args, **kwargs))
 
 
-def selected():
-    return ls(sl=True, fl=True)
+def selected(**kwargs):
+    return ls(sl=True, fl=True, **kwargs)
 
 
 class Yam(object):
