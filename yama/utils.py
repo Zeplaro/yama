@@ -3,6 +3,7 @@
 import sys
 from maya import cmds, mel
 import nodes
+import xformutils
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]
@@ -146,8 +147,8 @@ def mxConstraint(master=None, slave=None):
 
     master_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(master))
     slave_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(slave))
-    master_tmp.setXform(m=master.getXform(m=True, ws=True), ws=True)
-    slave_tmp.setXform(m=slave.getXform(m=True, ws=True), ws=True)
+    xformutils.match([master, master_tmp])
+    xformutils.match([slave, slave_tmp])
     slave_tmp.parent = master_tmp
 
     cmx.inputTranslate.value = slave_tmp.translate.value
@@ -226,7 +227,7 @@ def insertGroup(obj=None, suffix='GRP'):
     parent = obj.parent
     if parent:
         grp.parent = parent
-    grp.setMatrix(world_matrix, ws=True)
+    grp.setXform(m=world_matrix, ws=True)
     obj.parent = grp
     return grp
 
