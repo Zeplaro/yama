@@ -108,7 +108,7 @@ def ls(*args, **kwargs):
 
 
 def selected(**kwargs):
-    return ls(sl=True, fl=True, **kwargs)
+    return ls(os=True, **kwargs)
 
 
 class Yam(object):
@@ -433,14 +433,19 @@ class Transform(DagNode):
         return self.listRelatives(allDescendents=True)
 
     def getXform(self, **kwargs):
-        if 'q' not in kwargs and 'query' not in kwargs:
-            kwargs['q'] = True
+        kwargs['q'] = True
         return cmds.xform(self.name, **kwargs)
 
     def setXform(self, **kwargs):
         if 'q' in kwargs or 'query' in kwargs:
             raise RuntimeError("setXform kwargs cannot contain 'q' or 'query'")
         cmds.xform(self.name, **kwargs)
+
+    def getPosition(self, ws=False):
+        return self.getXform(t=True, ws=ws, os=not ws)
+
+    def setPosition(self, value, ws=False):
+        self.setXform(t=value, ws=ws, os=not ws)
 
     def distance(self, obj):
         if isinstance(obj, Transform):

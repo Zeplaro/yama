@@ -222,7 +222,7 @@ def insertGroup(obj=None, suffix='GRP'):
         obj = obj[0]
     obj = nodes.yam(obj)
     grp = nodes.createNode('transform', name='{}_{}'.format(obj, suffix))
-    world_matrix = obj.getMatrix(ws=True)
+    world_matrix = obj.getXform(m=True, ws=True)
     parent = obj.parent
     if parent:
         grp.parent = parent
