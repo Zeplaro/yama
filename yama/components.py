@@ -16,20 +16,6 @@ if _pyversion == 3:
 import nodes
 
 
-supported_components = {'cv',  # Nurbs control vertex
-                        'cp',  # Nurbs control point, actually the same a cv
-                        'ep',  # Nurbs edit point
-                        'u',  # NurbsSurface u "edge"
-                        'v',  # NurbsSurface v "edge"
-                        'pt',  # Lattice point
-                        'e',  # Mesh edge
-                        'f',  # Mesh face
-                        'vtx',  # Mesh vertex
-                        'vtxFace',  # Mesh vertexFace point
-                        'sf',  # NurbsSurface patch
-                        'map',
-                        }
-
 comp_Mfn = {'single': om.MFnSingleIndexedComponent,
             'double': om.MFnDoubleIndexedComponent,
             'triple': om.MFnTripleIndexedComponent,

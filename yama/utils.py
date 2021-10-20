@@ -60,17 +60,17 @@ def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None
             cmds.warning('Please select at least two objects')
             return
 
-        def get_skinnable(objs):
+        def getSkinnable(objs_):
             skinnable = nodes.YamList()
-            for obj in objs:
+            for obj in objs_:
                 if obj.shapes(type='controlPoint'):
                     skinnable.append(obj)
                 else:
-                    skinnable.extend(get_skinnable(obj.children(type='transform')))
+                    skinnable.extend(getSkinnable(obj.children(type='transform')))
             return skinnable
 
         master = objs[0]
-        slaves = get_skinnable(objs[1:])
+        slaves = getSkinnable(objs[1:])
     else:
         master = nodes.yam(master)
         slaves = nodes.yams(slaves)
@@ -127,13 +127,11 @@ def hierarchize(objs, reverse=False):
 
 
 def mxConstraint(master=None, slave=None):
-    # todo
     if not master or not slave:
-        sel = nodes.ls(sl=True, tr=True, fl=True)
+        sel = nodes.selected(type='transform')
         if len(sel) != 2:
-            cmds.warning('Select two objects')
-            return
-        master, slave = nodes.yams(sel)
+            raise RuntimeError("two 'transform' needed; {} given".format(len(sel)))
+        master, slave = sel
     else:
         master, slave = nodes.yams([master, slave])
         
@@ -177,8 +175,7 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
     if not objs:
         objs = nodes.selected(type='transform')
         if not objs:
-            cmds.warning('Select a least one object')
-            return
+            raise RuntimeError("No object given and no 'transform' selected")
     objs = nodes.yams(objs)
 
     tr = ''
@@ -216,11 +213,7 @@ def reskin(objs=None):
 
 
 def insertGroup(obj=None, suffix='GRP'):
-    if not obj:
-        obj = nodes.selected()
-        if not obj:
-            raise RuntimeError("No object given and no object selected")
-        obj = obj[0]
+    assert obj, "No obj given; Use 'insertGroups' to work on selection"
     obj = nodes.yam(obj)
     grp = nodes.createNode('transform', name='{}_{}'.format(obj, suffix))
     world_matrix = obj.getXform(m=True, ws=True)
@@ -234,9 +227,9 @@ def insertGroup(obj=None, suffix='GRP'):
 
 def insertGroups(objs=None, suffix='GRP'):
     if not objs:
-        objs = nodes.selected()
+        objs = nodes.selected(type='transform')
         if not objs:
-            raise RuntimeError("No object given and no object selected")
+            raise RuntimeError("No object given and no 'transform' selected")
     objs = nodes.yams(nodes)
     grps = nodes.YamList()
     for obj in objs:
