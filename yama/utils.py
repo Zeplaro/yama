@@ -3,6 +3,7 @@
 import sys
 from maya import cmds, mel
 import nodes
+import xformutils
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]
@@ -59,17 +60,17 @@ def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None
             cmds.warning('Please select at least two objects')
             return
 
-        def get_skinnable(objs):
+        def getSkinnable(objs_):
             skinnable = nodes.YamList()
-            for obj in objs:
+            for obj in objs_:
                 if obj.shapes(type='controlPoint'):
                     skinnable.append(obj)
                 else:
-                    skinnable.extend(get_skinnable(obj.children(type='transform')))
+                    skinnable.extend(getSkinnable(obj.children(type='transform')))
             return skinnable
 
         master = objs[0]
-        slaves = get_skinnable(objs[1:])
+        slaves = getSkinnable(objs[1:])
     else:
         master = nodes.yam(master)
         slaves = nodes.yams(slaves)
@@ -126,13 +127,11 @@ def hierarchize(objs, reverse=False):
 
 
 def mxConstraint(master=None, slave=None):
-    # todo
     if not master or not slave:
-        sel = nodes.ls(sl=True, tr=True, fl=True)
+        sel = nodes.selected(type='transform')
         if len(sel) != 2:
-            cmds.warning('Select two objects')
-            return
-        master, slave = nodes.yams(sel)
+            raise RuntimeError("two 'transform' needed; {} given".format(len(sel)))
+        master, slave = sel
     else:
         master, slave = nodes.yams([master, slave])
         
@@ -146,8 +145,8 @@ def mxConstraint(master=None, slave=None):
 
     master_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(master))
     slave_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(slave))
-    master_tmp.setXform(m=master.getXform(m=True, ws=True), ws=True)
-    slave_tmp.setXform(m=slave.getXform(m=True, ws=True), ws=True)
+    xformutils.match([master, master_tmp])
+    xformutils.match([slave, slave_tmp])
     slave_tmp.parent = master_tmp
 
     cmx.inputTranslate.value = slave_tmp.translate.value
@@ -174,10 +173,9 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
     :param user: if True resets the user attributes values to their respective default values.
     """
     if not objs:
-        objs = cmds.ls(sl=True, fl=True)
+        objs = nodes.selected(type='transform')
         if not objs:
-            cmds.warning('Select a least one object')
-            return
+            raise RuntimeError("No object given and no 'transform' selected")
     objs = nodes.yams(objs)
 
     tr = ''
@@ -202,3 +200,38 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
                 if not attr.settable():
                     continue
                 attr.value = attr.defaultValue
+
+
+def reskin(objs=None):
+    if not objs:
+        objs = nodes.selected()
+        if not objs:
+            raise RuntimeError("No object given and no object selected")
+    objs = nodes.yams(objs)
+    for skn in getSkinClusters(objs):
+        skn.reskin()
+
+
+def insertGroup(obj=None, suffix='GRP'):
+    assert obj, "No obj given; Use 'insertGroups' to work on selection"
+    obj = nodes.yam(obj)
+    grp = nodes.createNode('transform', name='{}_{}'.format(obj, suffix))
+    world_matrix = obj.getXform(m=True, ws=True)
+    parent = obj.parent
+    if parent:
+        grp.parent = parent
+    grp.setXform(m=world_matrix, ws=True)
+    obj.parent = grp
+    return grp
+
+
+def insertGroups(objs=None, suffix='GRP'):
+    if not objs:
+        objs = nodes.selected(type='transform')
+        if not objs:
+            raise RuntimeError("No object given and no 'transform' selected")
+    objs = nodes.yams(nodes)
+    grps = nodes.YamList()
+    for obj in objs:
+        grps.append(insertGroup(obj, suffix=suffix))
+    return grps

@@ -5,7 +5,7 @@ from functools import wraps
 from maya import cmds
 
 
-def maya_undo(func):
+def mayaundo(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         cmds.undoInfo(openChunk=True)
@@ -15,7 +15,7 @@ def maya_undo(func):
     return wrapper
 
 
-def keep_sel(func):
+def keepsel(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         sel = cmds.ls(sl=True, fl=True)
