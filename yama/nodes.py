@@ -111,6 +111,10 @@ def selected(**kwargs):
     return ls(os=True, **kwargs)
 
 
+def select(*args, **kwargs):
+    cmds.select(*args, **kwargs)
+
+
 class Yam(object):
     pass
 
