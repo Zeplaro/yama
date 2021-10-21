@@ -186,11 +186,11 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
     for obj in objs:
         for axe in 'xyz':
             for tr_ in tr:
-                attr = obj.attr(tr_+axe)
+                attr = obj.attr(tr_ + axe)
                 if attr.settable():
                     attr.value = 0
             if s:
-                attr = obj.attr('s'+axe)
+                attr = obj.attr('s' + axe)
                 if attr.settable():
                     attr.value = 1
         if v:
