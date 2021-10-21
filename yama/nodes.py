@@ -185,6 +185,12 @@ class DependNode(Yam):
             other = yam(other)
         return self.mObject == other.mObject
 
+    def __contains__(self, item):
+        """
+        Checks if the item is a children of self.
+        """
+        raise NotImplementedError
+
     def __apiobject__(self):
         """
         Gets the maya api 1.0 MObject for this object.
@@ -490,6 +496,9 @@ class ControlPoint(Shape):
     def __init__(self, mObject, mFnDependencyNode):
         super(ControlPoint, self).__init__(mObject, mFnDependencyNode)
 
+    def __len__(self):
+        return len(cmds.ls(self.name+'.cp[*]'))
+
 
 class Mesh(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
@@ -590,9 +599,9 @@ class NurbsCurve(ControlPoint):
     @property
     def data(self):
         data = {'cvs': self.mFnNurbsCurve.cvPositions(),
-                'knots': self.mFnNurbsCurve.knots(),
-                'degree': self.mFnNurbsCurve.degree,
-                'form': self.mFnNurbsCurve.form,
+                'knots': self.knots(),
+                'degree': self.degree(),
+                'form': self.form(),
                 }
         return data
 
@@ -602,29 +611,14 @@ class NurbsCurve(ControlPoint):
         for d in data:
             setattr(d, data[d])
 
-    @property
     def knots(self):
-        # todo: copied form old node work, needs cleanup
-        nb_knots = len(self) + self.degree.value - 1
-        print('Nb of knots: {}'.format(nb_knots))
+        return list(self.mFnNurbsCurve.knots())
 
-        if self.form.value == 0:
-            knots = list(range(nb_knots - (self.degree.value - 1) * 2))
-            for i in range(self.degree.value - 1):
-                knots = knots[:1] + knots
-                knots += knots[-1:]
-        else:
-            knots = list(range(nb_knots - (self.degree.value - 1)))
-            for i in range(self.degree.value - 1):
-                knots.insert(0, knots[0] - 1)
+    def degree(self):
+        return self.mFnNurbsCurve.degree
 
-        if self.type == 'bezierCurve':
-            knots = []
-            for i in range(nb_knots / 3):
-                for j in range(3):
-                    knots.append(i)
-        knots = [float(x) for x in knots]
-        return knots
+    def form(self):
+        return self.mFnNurbsCurve.form
 
 
 class NurbsSurface(ControlPoint):
