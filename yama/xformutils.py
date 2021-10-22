@@ -29,7 +29,7 @@ def align(objs=None, t=True, r=True):
 
     if r and not t:
         for obj, pos in zip(objs, poses):
-            cmds.xform(obj, t=pos, ws=True)
+            obj.setXform(t=pos, ws=True)
 
 
 @decorators.keepsel
