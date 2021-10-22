@@ -536,6 +536,36 @@ class Mesh(ControlPoint):
         for vtx, pos in zip(utils.componentRange(self, 'vtx', len(self)), data):
             cmds.xform(vtx, t=pos, ws=ws, os=os)
 
+    def shells(self):
+        polygon_counts, polygon_connects = self.mFnMesh.getVertices()
+        faces_vtxs = []
+        i = 0
+        for poly_count in polygon_counts:
+            faces_vtxs.append(polygon_connects[i:poly_count + i])
+            i += poly_count
+
+        shells = []
+        finished = False
+        while not finished:
+            finished = True
+            for face_vtxs in faces_vtxs:
+                added = False
+                for shell in shells:
+                    for vtx in face_vtxs:
+                        if vtx in shell:
+                            shell.update(face_vtxs)
+                            added = True
+                            finished = False
+                            break
+                    if added:
+                        break
+                if not added:
+                    shells.append(set(face_vtxs))
+            if not finished:
+                faces_vtxs = shells
+                shells = []
+        return shells
+
 
 class NurbsCurve(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
@@ -831,19 +861,22 @@ class BlendshapeTarget(object):
 
 # Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from
 # the yam method. Follow this syntax -> 'mayaType': class)
-supported_classes = {'skinCluster': SkinCluster,
+supported_classes = {'dagNode': DagNode,
+                     'transform': Transform,
+                     'joint': Joint,
+                     'constraint': Constraint,
                      'shape': Shape,
+                     'controlPoint': ControlPoint,
                      'mesh': Mesh,
                      'nurbsCurve': NurbsCurve,
                      'nurbsSurface': NurbsSurface,
-                     'locator': Locator,
                      'lattice': Lattice,
+                     'locator': Locator,
                      'geometryFilter': GeometryFilter,
                      'weightGeometryFilter': WeightGeometryFilter,
                      'cluster': Cluster,
+                     'skinCluster': SkinCluster,
                      'blendShape': BlendShape,
-                     'transform': Transform,
-                     'joint': Joint,
                      }
 
 
@@ -907,21 +940,27 @@ class YamList(list):
         return [getattr(x, attr) for x in self]
 
     def removeType(self, type=None, inherited=True):
-        assert type and isinstance(type, basestring)
+        if isinstance(type, basestring):
+            type = [type]
+        assert type and isinstance(type, (list, tuple))
         for i, item in reversed(list(enumerate(self))):
-            if inherited:
-                if type in item.inheritedTypes():
-                    self.pop(i)
-            else:
-                if type == item.type():
-                    self.pop(i)
+            for type_ in type:
+                if inherited:
+                    if type_ in item.inheritedTypes():
+                        self.pop(i)
+                else:
+                    if type_ == item.type():
+                        self.pop(i)
 
     def keepType(self, type=None, inherited=True):
-        assert type and isinstance(type, basestring)
+        if isinstance(type, basestring):
+            type = [type]
+        assert type and isinstance(type, (list, tuple))
         for i, item in reversed(list(enumerate(self))):
-            if inherited:
-                if type not in item.inheritedTypes():
-                    self.pop(i)
-            else:
-                if type != item.type():
-                    self.pop(i)
+            for type_ in type:
+                if inherited:
+                    if type_ not in item.inheritedTypes():
+                        self.pop(i)
+                else:
+                    if type_ != item.type():
+                        self.pop(i)

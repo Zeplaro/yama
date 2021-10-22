@@ -2,6 +2,7 @@
 
 import sys
 from maya import cmds, mel
+import maya.api.OpenMaya as om
 import nodes
 import xformutils
 
@@ -233,8 +234,39 @@ def insertGroups(objs=None, suffix='GRP'):
         objs = nodes.selected(type='transform')
         if not objs:
             raise RuntimeError("No object given and no 'transform' selected")
-    objs = nodes.yams(nodes)
+    objs = nodes.yams(objs)
     grps = nodes.YamList()
     for obj in objs:
         grps.append(insertGroup(obj, suffix=suffix))
     return grps
+
+
+def wrapMesh(objs=None, ws=True):
+    if not objs:
+        objs = nodes.selected(type=['transform', 'mesh'])
+        if not objs:
+            raise RuntimeError("No object given and no 'transform' or 'mesh' selected")
+        if len(objs) < 2:
+            raise RuntimeError("Not enough object given or selected")
+    objs = nodes.yams(objs)
+    master = objs[0]
+    slaves = objs[1:]
+    if isinstance(master, nodes.Transform):
+        master = master.shape
+        if not isinstance(master, nodes.Mesh):
+            raise RuntimeError("first object '{}' is not a 'mesh'".format(master))
+    master_mfn = master.mFnMesh
+    if ws:
+        space = om.MSpace.kworld
+    else:
+        space = om.MSpace.kObject
+    for slave in slaves:
+        if isinstance(slave, nodes.Transform):
+            slave = slave.shape
+            if not isinstance(slave, nodes.Mesh):
+                cmds.warning("cannot match '{}' of type '{}'".format(slave, type(slave).__name__))
+                continue
+        slave_mfn = slave.mFnMesh
+        for i in range(len(slave)):
+            point = master_mfn.getClosestPoint(slave_mfn.getPoint(i), space)[0]
+            cmds.xform('{}.vtx[{}]'.format(slave, i), t=tuple(point)[:-1], ws=ws, os=not ws)
