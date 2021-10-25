@@ -21,18 +21,18 @@ comp_Mfn = {'single': om.MFnSingleIndexedComponent,
             'triple': om.MFnTripleIndexedComponent,
             }
 
-comp_MFn_id = {533: ('cv', 'single'),  # kCurveCVComponent
-               534: ('ep', 'single'),  # kCurveEPComponent
-               536: ('u', 'single'),  # kCurveParamComponent
-               537: ('v', 'double'),  # kIsoparmComponent
-               539: ('cv', 'double'),  # kSurfaceCVComponent
-               543: ('pt', 'triple'),  # kLatticeComponent
-               548: ('e', 'single'),  # kMeshEdgeComponent
-               549: ('f', 'single'),  # kMeshPolygonComponent
-               551: ('vtx', 'single'),  # kMeshVertComponent
-               741: ('vtxFace', 'double'),  # kCharacterMappingData
-               774: ('sf', 'double'),  # kSurfaceFaceComponent
-               813: ('map', 'single'),  # kInt64ArrayData
+comp_MFn_id = {'kCurveCVComponent': ('cv', 'single'),  # 533
+               'kCurveEPComponent': ('ep', 'single'),  # 534
+               'kCurveParamComponent': ('u', 'single'),  # 536
+               'kIsoparmComponent': ('v', 'double'),  # 537
+               'kSurfaceCVComponent': ('cv', 'double'),  # 539
+               'kLatticeComponent': ('pt', 'triple'),  # 543
+               'kMeshEdgeComponent': ('e', 'single'),  # 548
+               'kMeshPolygonComponent': ('f', 'single'),  # 549
+               'kMeshVertComponent': ('vtx', 'single'),  # 551
+               'kCharacterMappingData': ('vtxFace', 'double'),  # 741
+               'kSurfaceFaceComponent': ('sf', 'double'),  # 774
+               'kInt64ArrayData': ('map', 'single'),  # 813
                }
 
 

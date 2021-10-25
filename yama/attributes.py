@@ -24,7 +24,7 @@ def getAttribute(node, attr):
             ls = om.MSelectionList()
             ls.add(node.name + '.' + attr)
             dag, comp = ls.getComponent(0)
-            api_type = comp.apiType()
+            api_type = comp.apiTypeStr
             if api_type in components.comp_MFn_id:
                 index_type = components.comp_MFn_id[api_type][1]
                 fn = components.comp_Mfn[index_type](comp)
@@ -35,7 +35,7 @@ def getAttribute(node, attr):
                     return components.Components(node, components.comp_MFn_id[api_type][0])[index[0]][index[1]]
                 elif index_type == 'triple':
                     return components.Components(node, components.comp_MFn_id[api_type][0])[index[0]][index[1]][index[2]]
-        except RuntimeError:
+        except (RuntimeError, TypeError):
             pass
 
         split = attr.split('[')
@@ -59,6 +59,7 @@ class Attribute(nodes.Yam):
         assert isinstance(attr, (basestring, Attribute))
         self.node = node
         self.attribute = attr
+        self._mPlug = None
 
     def __str__(self):
         return self.name
@@ -131,6 +132,14 @@ class Attribute(nodes.Yam):
         raise TypeError("'{}' object is not callable".format(self.__class__.__name__))
 
     @property
+    def mPlug(self):
+        if self._mPlug is None:
+            m_list = om.MSelectionList()
+            m_list.add(self.name)
+            self._mPlug = m_list.getPlug(0)
+        return self._mPlug
+
+    @property
     def name(self):
         """
         The full node.attribute name.
@@ -162,8 +171,15 @@ class Attribute(nodes.Yam):
         """
         Sets the maya value.
         """
-        if self.type() == 'double3':
-            cmds.setAttr(self.name, *value)
+        type = self.type()
+        if type == 'double3':
+            cmds.setAttr(self.name, *value, type='double3')
+        elif type == 'matrix':
+            cmds.setAttr(self.name, value, type='matrix')
+        elif type == 'double2':
+            cmds.setAttr(self.name, *value, type='double2')
+        elif type == 'string':
+            cmds.setAttr(self.name, value, type='string')
         else:
             cmds.setAttr(self.name, value)
 

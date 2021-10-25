@@ -39,7 +39,7 @@ def componentRange(node, comp, *args):
     :return: generator
     """
     assert isinstance(comp, basestring)
-    vtx_string = str(node)+'.'+comp+'[{}]'
+    vtx_string = str(node) + '.' + comp + '[{}]'
     for i in range(*args):
         yield vtx_string.format(i)
 
@@ -135,7 +135,7 @@ def mxConstraint(master=None, slave=None):
         master, slave = sel
     else:
         master, slave = nodes.yams([master, slave])
-        
+
     mmx = nodes.createNode('multMatrix', n='{}_mmx'.format(master))
     dmx = nodes.createNode('decomposeMatrix', n='{}_dmx'.format(master))
     cmx = nodes.createNode('composeMatrix', n='{}_cmx'.format(master))
@@ -270,3 +270,15 @@ def wrapMesh(objs=None, ws=True):
         for i in range(len(slave)):
             point = master_mfn.getClosestPoint(slave_mfn.getPoint(i), space)[0]
             cmds.xform('{}.vtx[{}]'.format(slave, i), t=tuple(point)[:-1], ws=ws, os=not ws)
+
+
+def matrixMayaToRow(matrix):
+    return [matrix[0:4], matrix[4:8], matrix[8:12], matrix[12:16]]
+
+
+def matrixRowToMaya(matrix):
+    maya_matrix = []
+    for m in matrix:
+        maya_matrix += m
+    return maya_matrix
+
