@@ -62,7 +62,6 @@ def getComponent(node, attr):
             api_type = comp.apiTypeStr
             if api_type in comp_MFn_id:
                 component = Components(node, attr)
-
                 for i in split[1:]:
                     i = i[:-1]  # Removing the closing ']'
                     if i == '*':  # if using the maya wildcard symbol
