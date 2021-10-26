@@ -401,6 +401,12 @@ class Transform(DagNode):
     def __init__(self, mObject, mFnDependencyNode):
         super(Transform, self).__init__(mObject, mFnDependencyNode)
 
+    def __len__(self):
+        shape = self.shape
+        if shape:
+            return len(shape)
+        raise TypeError("object has no shape and type '{}' has no len()".format(self.__class__.__name__))
+
     def children(self, type=None, noIntermediate=True):
         """
         Gets all the node's children as a list of DependNode.

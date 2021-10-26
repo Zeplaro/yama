@@ -35,8 +35,56 @@ comp_MFn_id = {'kCurveCVComponent': ('cv', 'single'),  # 533
                'kInt64ArrayData': ('map', 'single'),  # 813
                }
 
+supported_types = {x for x, _ in comp_MFn_id.values()}
+
+
+def getComponent(node, attr):
+    """
+    todo
+    :param node:
+    :param attr:
+    :return:
+    """
+    indices = []
+    if '.' in attr:
+        return
+
+    split = []
+    if '[' in attr:  # Cheking if getting a specific index
+        split = attr.split('[')
+        attr = split[0]
+
+    if attr in supported_types:
+        try:
+            ls = om.MSelectionList()
+            ls.add(node.name + '.' + attr + '[0]')
+            dag, comp = ls.getComponent(0)
+            api_type = comp.apiTypeStr
+            if api_type in comp_MFn_id:
+                component = Components(node, attr)
+
+                for i in split[1:]:
+                    i = i[:-1]  # Removing the closing ']'
+                    if i == '*':  # if using the maya wildcard symbol
+                        indices.append(slice(None))
+                    elif ':' in i:  # if using a slice to list multiple components
+                        slice_args = [int(x) if x else None for x in
+                                      i.split(':')]  # parsing the string into a proper slice
+                        indices.append(slice(*slice_args))
+                    else:
+                        indices.append(int(i))
+                while indices:
+                    component = component[indices.pop(0)]
+                return component
+        except (RuntimeError, TypeError) as e:
+            print('failed to get component: {}'.format(e))
+
 
 class Component(nodes.Yam):
+    """
+    todo
+    """
+
     def __init__(self, node, component_type, index, second_index=None, third_index=None):
         self.node = node
         self.type = component_type
@@ -60,11 +108,19 @@ class Component(nodes.Yam):
     def __getitem__(self, item):
         assert isinstance(item, int)
         if self.third_index is not None:
-            raise AttributeError("'{}' cannot get more than three indexes")
+            raise AttributeError("'{}' cannot get more than three indexes".format(self))
         elif self.second_index is not None:
             return self.__class__(self.node, self.type, self.index, self.second_index, item)
         else:
             return self.__class__(self.node, self.type, self.index, item)
+
+    def __eq__(self, other):
+        if self.name == str(other):
+            return True
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def exists(self):
         return cmds.objExists(self.name)
@@ -90,36 +146,31 @@ class Component(nodes.Yam):
 
 
 class Components(nodes.Yam):
+    """
+    todo
+    """
+
     def __init__(self, node, comp_type):
-        assert isinstance(node, nodes.DependNode)
+        assert isinstance(node, (nodes.ControlPoint, nodes.Transform))
         self.node = node
         self.type = comp_type
 
     def __iter__(self):
-        if isinstance(self.node, nodes.Transform):
-            if self.node.shape:
-                try:
-                    length = len(self.node.shape)
-                except TypeError:
-                    raise NotImplementedError("Cannot iterate, "
-                                              "len() not implemented on node shape '{}'".format(self.node.shape))
-            else:
-                raise AttributeError("'{}' has no shape to get the component from".format(self.type, self.node))
-
-        elif isinstance(self.node, nodes.ControlPoint):
-            try:
-                length = len(self.node)
-            except TypeError:
-                raise NotImplementedError("Cannot iterate, node '{}' has no len()".format(self.node))
-
-        else:
-            raise NotImplementedError("Cannot iterate, node '{}' has no len()".format(self.node.shape))
-
-        for i in range(length):
+        """
+        todo: make work with double and triple indexed components
+        """
+        for i in range(len(self)):
             yield self.index(i)
 
     def __getitem__(self, item):
+        if item == '*':
+            item = slice(None)
+        if isinstance(item, slice):
+            return nodes.YamList(self.index(i) for i in range(len(self.node))[item])
         return self.index(item)
+
+    def __len__(self):
+        return len(self.node)
 
     def index(self, index):
         assert isinstance(index, int)

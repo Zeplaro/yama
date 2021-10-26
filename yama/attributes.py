@@ -17,31 +17,29 @@ if _pyversion == 3:
 
 
 def getAttribute(node, attr):
-    # todo: support index such as [*] and [2:-1]
-    if attr.endswith(']'):
-        # Trying to get a component
-        try:
-            ls = om.MSelectionList()
-            ls.add(node.name + '.' + attr)
-            dag, comp = ls.getComponent(0)
-            api_type = comp.apiTypeStr
-            if api_type in components.comp_MFn_id:
-                index_type = components.comp_MFn_id[api_type][1]
-                fn = components.comp_Mfn[index_type](comp)
-                index = fn.getElements()[0]
-                if index_type == 'single':
-                    return components.Components(node, components.comp_MFn_id[api_type][0])[index]
-                elif index_type == 'double':
-                    return components.Components(node, components.comp_MFn_id[api_type][0])[index[0]][index[1]]
-                elif index_type == 'triple':
-                    return components.Components(node, components.comp_MFn_id[api_type][0])[index[0]][index[1]][index[2]]
-        except (RuntimeError, TypeError):
-            pass
+    """
+    todo
+    :param node:
+    :param attr:
+    :return:
+    """
+    component = components.getComponent(node, attr)  # Trying to get component if one
+    if component is not None:
+        return component
 
+    if attr.endswith(']'):  # Checking is index ArrayAttribute
         split = attr.split('[')
-        index = int(split.pop(-1)[:-1])
+        index = split.pop(-1)[:-1]
+        if index == '*':  # if using the maya wildcard symbol
+            index = slice(None)
+        elif ':' in index:  # if using a slice to list multiple components
+            slice_args = [int(x) if x else None for x in
+                          index.split(':')]  # parsing the string into a proper slice
+            index = slice(*slice_args)
+        else:
+            index = int(index)
         attr = '['.join(split)
-        return MultiAttribute(node, attr, index)
+        return ArrayAttribute(node, attr, index)
     return Attribute(node, attr)
 
 
@@ -79,6 +77,10 @@ class Attribute(nodes.Yam):
         """
         todo
         """
+        if item == '*':
+            item = slice(None)
+        if isinstance(item, slice):
+            return nodes.YamList(getAttribute(self.node, '{}[{}]'.format(self.attribute, i)) for i in range(len(self))[item])
         return getAttribute(self.node, '{}[{}]'.format(self.attribute, item))
 
     def __iter__(self):
@@ -130,6 +132,12 @@ class Attribute(nodes.Yam):
         if not self.exists():
             raise ValueError("No object matches name: {}".format(self.name))
         raise TypeError("'{}' object is not callable".format(self.__class__.__name__))
+
+    def __len__(self):
+        try:
+            return self.mPlug.numElements()
+        except TypeError:
+            raise TypeError("TypeError: Plug is not an array; has no len()")
 
     @property
     def mPlug(self):
@@ -358,19 +366,19 @@ class Attribute(nodes.Yam):
             cmds.setAttr(self.name, channelBox=True)
 
 
-class MultiAttribute(Attribute):
+class ArrayAttribute(Attribute):
     """
     A sub-class to Attribute to handle attribute of type multi; for exemple a deformer weights attribute.
     """
 
     def __init__(self, node, attr, index):
         """
-        :param parent (Attribute/MultiAttribute): The parent attribute of this attribute; Needs to be of type Attribute
-                                                  or MultiAttribute.
+        :param parent (Attribute/ArrayAttribute): The parent attribute of this attribute; Needs to be of type Attribute
+                                                  or ArrayAttribute.
         :param index: The index of this attribute
         """
         assert isinstance(node, nodes.DependNode) and isinstance(attr, basestring) and isinstance(index, int)
-        super(MultiAttribute, self).__init__(node, attr)
+        super(ArrayAttribute, self).__init__(node, attr)
         self.attribute = attr + '[' + str(index) + ']'
         self.index = index
         self.parentAttr = attr
