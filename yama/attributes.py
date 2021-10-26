@@ -134,10 +134,7 @@ class Attribute(nodes.Yam):
         raise TypeError("'{}' object is not callable".format(self.__class__.__name__))
 
     def __len__(self):
-        try:
-            return self.mPlug.numElements()
-        except TypeError:
-            raise TypeError("TypeError: Plug is not an array; has no len()")
+        return self.mPlug.numElements()
 
     @property
     def mPlug(self):
