@@ -970,4 +970,4 @@ class YamList(list):
         return popped
 
     def copy(self):
-        return YamList(x for x in self)
+        return YamList(self)
