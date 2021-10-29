@@ -137,6 +137,7 @@ class DependNode(Yam):
         :param mObject: maya api MObject
         :param mFnDependencyNode:
         """
+        super(DependNode, self).__init__()
         assert isinstance(mObject, om.MObject)
         self.mObject = mObject
         self._mObject1 = None
@@ -195,13 +196,15 @@ class DependNode(Yam):
         """
         raise NotImplementedError
 
-    def __apiobject__(self):
+    def __bool__(self):
         """
-        Gets the maya api 1.0 MObject for this object.
-        Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
+        Needed for Truth testing since __len__ is defined but does not work on non array attributes.
+        :return: True
         """
-        print('calling __apiobject__ for ' + self.name)
-        return self.mObject1
+        return True
+
+    def __nonzero__(self):
+        return self.__bool__()
 
     @property
     def mObject1(self):
@@ -337,14 +340,6 @@ class DagNode(DependNode):
             self._mDagPath1 = om1.MDagPath.getApAthTo(self.mObject1)
         return self._mDagPath1
 
-    def __apiobject__(self):
-        """
-        Gets the maya api 1.0 MDagPath for this object
-        Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
-        """
-        print('calling __apiobject__ from dagNode for ' + self.name)
-        return self.mDagPath1
-
     @property
     def mFnDagNode(self):
         """
@@ -385,7 +380,7 @@ class DagNode(DependNode):
         """
         Property setter needed again even if defined in parent class.
         """
-        super(DagNode, self).name = value
+        self.rename(value)
 
     def longname(self):
         """
@@ -828,8 +823,9 @@ class BlendShape(GeometryFilter):
             self.weightsAttr(i).value = weight
 
 
-class BlendshapeTarget(object):
+class BlendshapeTarget(Yam):
     def __init__(self, node, target_node, index):
+        super(BlendshapeTarget, self).__init__()
         self.target_node = target_node
         self.node = node
         self.index = index
@@ -945,20 +941,7 @@ class YamList(list):
             return [getattr(x, attr)() for x in self]
         return [getattr(x, attr) for x in self]
 
-    def removeType(self, type=None, inherited=True):
-        if isinstance(type, basestring):
-            type = [type]
-        assert type and isinstance(type, (list, tuple))
-        for i, item in reversed(list(enumerate(self))):
-            for type_ in type:
-                if inherited:
-                    if type_ in item.inheritedTypes():
-                        self.pop(i)
-                else:
-                    if type_ == item.type():
-                        self.pop(i)
-
-    def keepType(self, type=None, inherited=True):
+    def keepType(self, type, inherited=True):
         if isinstance(type, basestring):
             type = [type]
         assert type and isinstance(type, (list, tuple))
@@ -970,3 +953,21 @@ class YamList(list):
                 else:
                     if type_ != item.type():
                         self.pop(i)
+
+    def popType(self, type, inherited=True):
+        popped = YamList()
+        if isinstance(type, basestring):
+            type = [type]
+        assert type and isinstance(type, (list, tuple))
+        for i, item in reversed(list(enumerate(self))):
+            for type_ in type:
+                if inherited:
+                    if type_ in item.inheritedTypes():
+                        popped.append(self.pop(i))
+                else:
+                    if type_ == item.type():
+                        popped.append(self.pop(i))
+        return popped
+
+    def copy(self):
+        return YamList(x for x in self)

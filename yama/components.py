@@ -13,29 +13,36 @@ _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
 
-import nodes
+from nodes import Yam, Transform, ControlPoint, YamList
 
+single, double, triple = om.MFnSingleIndexedComponent, om.MFnDoubleIndexedComponent, om.MFnTripleIndexedComponent
 
-comp_Mfn = {'single': om.MFnSingleIndexedComponent,
-            'double': om.MFnDoubleIndexedComponent,
-            'triple': om.MFnTripleIndexedComponent,
-            }
+supported_types = {'cv': single,
+                   'e': single,
+                   'ep': single,
+                   'f': single,
+                   'map': single,
+                   'pt': triple,
+                   'sf': double,
+                   'u': single,
+                   'v': double,
+                   'vtx': single,
+                   'vtxFace': double,
+                   }
 
-comp_MFn_id = {'kCurveCVComponent': ('cv', 'single'),  # 533
-               'kCurveEPComponent': ('ep', 'single'),  # 534
-               'kCurveParamComponent': ('u', 'single'),  # 536
-               'kIsoparmComponent': ('v', 'double'),  # 537
-               'kSurfaceCVComponent': ('cv', 'double'),  # 539
-               'kLatticeComponent': ('pt', 'triple'),  # 543
-               'kMeshEdgeComponent': ('e', 'single'),  # 548
-               'kMeshPolygonComponent': ('f', 'single'),  # 549
-               'kMeshVertComponent': ('vtx', 'single'),  # 551
-               'kCharacterMappingData': ('vtxFace', 'double'),  # 741
-               'kSurfaceFaceComponent': ('sf', 'double'),  # 774
-               'kInt64ArrayData': ('map', 'single'),  # 813
+comp_MFn_id = {'kCurveCVComponent': 'cv',  # 533
+               'kCurveEPComponent': 'ep',  # 534
+               'kCurveParamComponent': 'u',  # 536
+               'kIsoparmComponent': 'v',  # 537
+               'kSurfaceCVComponent': 'cv',  # 539
+               'kLatticeComponent': 'pt',  # 543
+               'kMeshEdgeComponent': 'e',  # 548
+               'kMeshPolygonComponent': 'f',  # 549
+               'kMeshVertComponent': 'vtx',  # 551
+               'kCharacterMappingData': 'vtxFace',  # 741
+               'kSurfaceFaceComponent': 'sf',  # 774
+               'kInt64ArrayData': 'map',  # 813
                }
-
-supported_types = {x for x, _ in comp_MFn_id.values()}
 
 
 def getComponent(node, attr):
@@ -76,15 +83,17 @@ def getComponent(node, attr):
                     component = component[indices.pop(0)]
                 return component
         except (RuntimeError, TypeError) as e:
-            print('failed to get component: {}'.format(e))
+            # print("failed to get component '{}' on '{}': {}".format(attr, node, e))
+            pass
 
 
-class Component(nodes.Yam):
+class Component(Yam):
     """
     todo
     """
 
     def __init__(self, node, component_type, index, second_index=None, third_index=None):
+        super(Component, self).__init__()
         self.node = node
         self.type = component_type
         self.index = index
@@ -144,13 +153,14 @@ class Component(nodes.Yam):
         cmds.xform(self.name, t=value, ws=ws, os=not ws)
 
 
-class Components(nodes.Yam):
+class Components(Yam):
     """
     todo
     """
 
     def __init__(self, node, comp_type):
-        assert isinstance(node, (nodes.ControlPoint, nodes.Transform))
+        super(Components, self).__init__()
+        assert isinstance(node, (ControlPoint, Transform))
         self.node = node
         self.type = comp_type
 
@@ -165,7 +175,7 @@ class Components(nodes.Yam):
         if item == '*':
             item = slice(None)
         if isinstance(item, slice):
-            return nodes.YamList(self.index(i) for i in range(len(self.node))[item])
+            return YamList(self.index(i) for i in range(len(self.node))[item])
         return self.index(item)
 
     def __len__(self):

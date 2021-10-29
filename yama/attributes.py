@@ -7,7 +7,7 @@ Contains all the class and functions for maya attributes.
 import sys
 from maya import cmds
 import maya.api.OpenMaya as om
-import nodes
+from nodes import yams, Yam, DependNode, YamList
 import components
 
 # python 2 to 3 compatibility
@@ -43,7 +43,7 @@ def getAttribute(node, attr):
     return Attribute(node, attr)
 
 
-class Attribute(nodes.Yam):
+class Attribute(Yam):
     """
     A class for handling a node attribute and sub-attributes.
     """
@@ -53,7 +53,8 @@ class Attribute(nodes.Yam):
         :param parent (Depend/Attribute): the node or attribute parent to attr.
         :param attr (str):
         """
-        assert isinstance(node, nodes.DependNode)
+        super(Attribute, self).__init__()
+        assert isinstance(node, DependNode)
         assert isinstance(attr, (basestring, Attribute))
         self.node = node
         self.attribute = attr
@@ -80,7 +81,7 @@ class Attribute(nodes.Yam):
         if item == '*':
             item = slice(None)
         if isinstance(item, slice):
-            return nodes.YamList(getAttribute(self.node, '{}[{}]'.format(self.attribute, i)) for i in range(len(self))[item])
+            return YamList(getAttribute(self.node, '{}[{}]'.format(self.attribute, i)) for i in range(len(self))[item])
         return getAttribute(self.node, '{}[{}]'.format(self.attribute, item))
 
     def __iter__(self):
@@ -135,6 +136,16 @@ class Attribute(nodes.Yam):
 
     def __len__(self):
         return self.mPlug.numElements()
+
+    def __bool__(self):
+        """
+        Needed for Truth testing since __len__ is defined but does not work on non array attributes.
+        :return: True
+        """
+        return True
+
+    def __nonzero__(self):
+        return self.__bool__()
 
     @property
     def mPlug(self):
@@ -230,7 +241,7 @@ class Attribute(nodes.Yam):
             kwargs['skipConversionNodes'] = True
         if 'p' not in kwargs and 'plugs' not in kwargs:
             kwargs['plugs'] = True
-        return nodes.yams(cmds.listConnections(self.name, **kwargs) or [])
+        return yams(cmds.listConnections(self.name, **kwargs) or [])
 
     def sourceConnection(self, **kwargs):
         connection = self.listConnections(destination=False, **kwargs)
@@ -374,7 +385,7 @@ class ArrayAttribute(Attribute):
                                                   or ArrayAttribute.
         :param index: The index of this attribute
         """
-        assert isinstance(node, nodes.DependNode) and isinstance(attr, basestring) and isinstance(index, int)
+        assert isinstance(node, DependNode) and isinstance(attr, basestring) and isinstance(index, int)
         super(ArrayAttribute, self).__init__(node, attr)
         self.attribute = attr + '[' + str(index) + ']'
         self.index = index
