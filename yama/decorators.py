@@ -1,6 +1,5 @@
 # encoding: utf8
 
-
 from functools import wraps
 from maya import cmds
 

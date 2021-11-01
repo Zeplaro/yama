@@ -17,7 +17,7 @@ _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
 
-import weightsdict as wdt
+import weightsdict
 
 
 def yam(node):
@@ -112,7 +112,23 @@ def selected(**kwargs):
 
 
 def select(*args, **kwargs):
-    cmds.select(*args, **kwargs)
+    sel = []
+    for arg in args:
+        if isinstance(arg, YamList):
+            sel.append(arg.names())
+        elif isinstance(arg, Yam):
+            sel.append(str(arg))
+        elif isinstance(arg, (list, tuple, dict, set)):
+            new = []
+            for arg_ in arg:
+                if isinstance(arg_, Yam):
+                    new.append(str(arg_))
+                else:
+                    new.append(arg_)
+            sel.append(new)
+        else:
+            sel.append(arg)
+    cmds.select(*sel, **kwargs)
 
 
 class Yam(object):
@@ -687,7 +703,7 @@ class WeightGeometryFilter(GeometryFilter):
 
     @property
     def weights(self):
-        weights = wdt.WeightsDict(self)
+        weights = weightsdict.WeightsDict(self)
         for i in self.geometry.get_components_index():
             weights[i] = self.weightsAttr(i).value
         return weights
@@ -743,7 +759,7 @@ class SkinCluster(GeometryFilter):
     def weights(self):
         weights = {}
         for i in self.geometry.get_component_indexes():
-            weights[i] = wdt.WeightsDict()
+            weights[i] = weightsdict.WeightsDict()
             for jnt, _ in enumerate(self.influences()):
                 weights[i][jnt] = self.weightList[i].weights[jnt].value
         return weights
@@ -756,14 +772,14 @@ class SkinCluster(GeometryFilter):
 
     @property
     def dqWeights(self):
-        dq_weights = wdt.WeightsDict()
+        dq_weights = weightsdict.WeightsDict()
         for i in range(len(self.geometry)):
             dq_weights[i] = self.blendWeights[i].value
         return dq_weights
 
     @dqWeights.setter
     def dqWeights(self, data):
-        data = wdt.WeightsDict(data)
+        data = weightsdict.WeightsDict(data)
         for vtx in data:
             self.blendWeights[vtx].value = data[vtx]
         for i, vtx in enumerate(cmds.ls('{}.weightList[*]'.format(self))):
@@ -812,7 +828,7 @@ class BlendShape(GeometryFilter):
 
     @property
     def weights(self):
-        weights = wdt.WeightsDict()
+        weights = weightsdict.WeightsDict()
         for index in range(len(self.geometry)):
             weights[index] = self.weightsAttr(index).value
         return weights
@@ -842,7 +858,7 @@ class BlendshapeTarget(Yam):
 
     @property
     def weights(self):
-        weights = wdt.WeightsDict()
+        weights = weightsdict.WeightsDict()
         for i in range(len(self.node.geometry)):
             weights[i] = self.weightsAttr(i).value
         return weights
