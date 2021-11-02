@@ -518,7 +518,7 @@ class ControlPoint(Shape):
         super(ControlPoint, self).__init__(mObject, mFnDependencyNode)
 
     def __len__(self):
-        return len(cmds.ls(self.name+'.cp[*]'))
+        return len(cmds.ls(self.name+'.cp[*]', fl=True))
 
 
 class Mesh(ControlPoint):
@@ -540,17 +540,17 @@ class Mesh(ControlPoint):
         return self._mFnMesh
 
     def getVtxPosition(self, ws=False):
-        import utils
+        import mayautils
         pos = []
         os = not ws
-        for vtx in utils.componentRange(self, 'vtx', len(self)):
+        for vtx in mayautils.componentRange(self, 'vtx', len(self)):
             pos.append(cmds.xform(vtx, q=True, t=True, ws=ws, os=os))
         return pos
 
     def setVtxPosition(self, data, ws=False):
-        import utils
+        import mayautils
         os = not ws
-        for vtx, pos in zip(utils.componentRange(self, 'vtx', len(self)), data):
+        for vtx, pos in zip(mayautils.componentRange(self, 'vtx', len(self)), data):
             cmds.xform(vtx, t=pos, ws=ws, os=os)
 
     def shells(self):
@@ -613,18 +613,16 @@ class NurbsCurve(ControlPoint):
         return self._mFnNurbsCurve
 
     def getCvsPosition(self, ws=False):
-        import utils
+        import mayautils
         pos = []
-        os = not ws
-        for cv in utils.componentRange(self, 'cv', len(self)):
-            pos.append(cmds.xform(cv, q=True, t=True, ws=ws, os=os))
+        for cv in mayautils.componentRange(self, 'cv', len(self)):
+            pos.append(cmds.xform(cv, q=True, t=True, ws=ws, os=not ws))
         return pos
 
     def setCvsPosition(self, data, ws=False):
-        import utils
-        os = not ws
-        for cv, pos in zip(utils.componentRange(self, 'cv', len(self)), data):
-            cmds.xform(cv, t=pos, ws=ws, os=os)
+        import mayautils
+        for cv, pos in zip(mayautils.componentRange(self, 'cv', len(self)), data):
+            cmds.xform(cv, t=pos, ws=ws, os=not ws)
 
     @staticmethod
     def getControlPointPosition(controls):
@@ -675,11 +673,46 @@ class NurbsCurve(ControlPoint):
 class NurbsSurface(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
         super(NurbsSurface, self).__init__(mObject, mFnDependencyNode)
+        self._mFnNurbsSurface = None
+
+    def __len__(self):
+        return self.lenU() * self.lenV()
+
+    @property
+    def mFnNurbsSurface(self):
+        if self._mFnNurbsSurface is None:
+            self._mFnNurbsSurface = om.MFnNurbsSurface(self.mObject)
+        return self._mFnNurbsSurface
+
+    def lenUV(self):
+        return [self.lenU(), self.lenV()]
+
+    def lenU(self):
+        return self.mFnNurbsSurface.numCVsInU
+
+    def lenV(self):
+        return self.mFnNurbsSurface.numCVsInV
 
 
 class Lattice(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
         super(Lattice, self).__init__(mObject, mFnDependencyNode)
+
+    def __len__(self):
+        x, y, z = self.lenXYZ()
+        return x * y * z
+
+    def lenXYZ(self):
+        return cmds.lattice(self.name, divisions=True, q=True)
+
+    def lenX(self):
+        return self.lenXYZ()[0]
+
+    def lenY(self):
+        return self.lenXYZ()[1]
+
+    def lenZ(self):
+        return self.lenXYZ()[2]
 
 
 class Locator(Shape):

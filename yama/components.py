@@ -160,16 +160,27 @@ class Components(Yam):
 
     def __init__(self, node, comp_type):
         super(Components, self).__init__()
-        assert isinstance(node, (ControlPoint, Transform))
+        if isinstance(node, Transform):
+            node = node.shape
+        assert isinstance(node, ControlPoint), "component node should be of type 'ControlPoint', " \
+                                               "instead node type is '{}'".format(type(node).__name__)
         self.node = node
         self.type = comp_type
 
     def __iter__(self):
-        """
-        todo: make work with double and triple indexed components
-        """
-        for i in range(len(self)):
-            yield self.index(i)
+        if supported_types[self.type] == single:
+            for i in range(len(self)):
+                yield self.index(i)
+        elif supported_types[self.type] == double:
+            for u in range(self.node.lenU()):
+                for v in range(self.node.lenV()):
+                    yield self.index(u, v)
+        else:
+            lenx, leny, lenz = self.node.lenXYZ()
+            for x in range(lenx):
+                for y in range(leny):
+                    for z in range(lenz):
+                        yield self.index(x, y, z)
 
     def __getitem__(self, item):
         if item == '*':
@@ -181,6 +192,5 @@ class Components(Yam):
     def __len__(self):
         return len(self.node)
 
-    def index(self, index):
-        assert isinstance(index, int)
-        return Component(self.node, self.type, index)
+    def index(self, index, second_index=None, third_index=None):
+        return Component(self.node, self.type, index, second_index, third_index)
