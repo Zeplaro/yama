@@ -56,15 +56,12 @@ def getSkinClusters(objs):
     return nodes.YamList([getSkinCluster(obj) for obj in objs])
 
 
-def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None):
-    if not master or not slaves:
+def skinAs(objs=None, master_namespace=None, slave_namespace=None):
+    if not objs:
         objs = nodes.ls(sl=True, tr=True, fl=True)
-        if len(objs) < 2:
-            cmds.warning('Please select at least two objects')
-            return
 
         def getSkinnable(objs_):
-            skinnable = nodes.YamList()
+            skinnable = []
             for obj in objs_:
                 if obj.shapes(type='controlPoint'):
                     skinnable.append(obj)
@@ -72,12 +69,12 @@ def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None
                     skinnable.extend(getSkinnable(obj.children(type='transform')))
             return skinnable
 
-        master = objs[0]
-        slaves = getSkinnable(objs[1:])
-    else:
-        master = nodes.yam(master)
-        slaves = nodes.yams(slaves)
-    slaves = hierarchize(slaves, reverse=True)
+        objs = [objs[0]] + getSkinnable(objs[1:])
+    if len(objs) < 2:
+            cmds.warning('Please select at least two objects')
+            return
+    master = nodes.yam(objs[0])
+    slaves = hierarchize(objs[1:], reverse=True)
 
     masterskn = getSkinCluster(master)
     if not masterskn:

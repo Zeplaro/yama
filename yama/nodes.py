@@ -188,6 +188,9 @@ class DependNode(Yam):
         """
         return self.name + other
 
+    def __iadd__(self, other):
+        self.rename(self.name + str(other))
+
     def __radd__(self, other):
         """
         Adds the node's name and returns a str.
@@ -328,14 +331,6 @@ class DagNode(DependNode):
         self._mDagPath1 = None
         self._mFnDagNode = None
 
-    def __contains__(self, item):
-        """
-        Checks if the item is a children of self.
-        """
-        if not isinstance(item, DependNode):
-            item = yam(item)
-        return item.longname().startswith(self.longname())
-
     @property
     def mDagPath(self):
         """
@@ -417,6 +412,14 @@ class Transform(DagNode):
         if shape:
             return len(shape)
         raise TypeError("object has no shape and type '{}' has no len()".format(self.__class__.__name__))
+
+    def __contains__(self, item):
+        """
+        Checks if the item is a children of self.
+        """
+        if not isinstance(item, DependNode):
+            item = yam(item)
+        return item.longname().startswith(self.longname())
 
     def children(self, type=None, noIntermediate=True):
         """
@@ -881,10 +884,14 @@ class BlendshapeTarget(Yam):
         self.attribute = node.attr(target_node.name)
 
     def __str__(self):
-        return self.attribute.name
+        return self.name
 
     def __repr__(self):
         return "Target({}, {}, {})".format(self.node, self.target_node, self.index)
+
+    @property
+    def name(self):
+        return self.attribute.name
 
     def weightsAttr(self, index):
         return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights[index]
