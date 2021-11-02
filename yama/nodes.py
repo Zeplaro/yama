@@ -209,12 +209,6 @@ class DependNode(Yam):
             other = yam(other)
         return self.mObject == other.mObject
 
-    def __contains__(self, item):
-        """
-        Checks if the item is a children of self.
-        """
-        raise NotImplementedError
-
     def __bool__(self):
         """
         Needed for Truth testing since __len__ is defined but does not work on non array attributes.
@@ -541,20 +535,6 @@ class Mesh(ControlPoint):
         if self._mFnMesh is None:
             self._mFnMesh = om.MFnMesh(self.mObject)
         return self._mFnMesh
-
-    def getVtxPosition(self, ws=False):
-        import mayautils
-        pos = []
-        os = not ws
-        for vtx in mayautils.componentRange(self, 'vtx', len(self)):
-            pos.append(cmds.xform(vtx, q=True, t=True, ws=ws, os=os))
-        return pos
-
-    def setVtxPosition(self, data, ws=False):
-        import mayautils
-        os = not ws
-        for vtx, pos in zip(mayautils.componentRange(self, 'vtx', len(self)), data):
-            cmds.xform(vtx, t=pos, ws=ws, os=os)
 
     def shells(self):
         polygon_counts, polygon_connects = self.mFnMesh.getVertices()

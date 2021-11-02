@@ -32,20 +32,6 @@ def createHook(node, suffix_name='hook', parent=None):
     return hook
 
 
-def componentRange(node, comp, *args):
-    """
-    Returns a generator to iterate over a length of vertices full name.
-    :param node: str or Yam object; the node containing the vertices.
-    :param comp: str; the component string; e.g.: 'vtx', 'cv', etc...
-    :param args: int, int, int; start, stop and step as needed, passed on to 'range' function.
-    :return: generator
-    """
-    assert isinstance(comp, basestring)
-    vtx_string = str(node) + '.' + comp + '[{}]'
-    for i in range(*args):
-        yield vtx_string.format(i)
-
-
 def getSkinCluster(obj):
     # todo: find a better way than 'mel.eval'
     skn = mel.eval('findRelatedSkinCluster {}'.format(obj))
