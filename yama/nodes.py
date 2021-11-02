@@ -517,6 +517,13 @@ class ControlPoint(Shape):
     def __len__(self):
         return len(cmds.ls(self.name+'.cp[*]', fl=True))
 
+    def getPositions(self, ws=False):
+        return [cp.getPosition(ws=ws) for cp in self.cp]
+
+    def setPositions(self, data, ws=False):
+        for cp, pos in zip(self.cp, data):
+            cp.setPosition(pos, ws=ws)
+
 
 class Mesh(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
@@ -594,28 +601,6 @@ class NurbsCurve(ControlPoint):
         if self._mFnNurbsCurve is None:
             self._mFnNurbsCurve = om.MFnNurbsCurve(self.mObject)
         return self._mFnNurbsCurve
-
-    def getCvsPosition(self, ws=False):
-        import mayautils
-        pos = []
-        for cv in mayautils.componentRange(self, 'cv', len(self)):
-            pos.append(cmds.xform(cv, q=True, t=True, ws=ws, os=not ws))
-        return pos
-
-    def setCvsPosition(self, data, ws=False):
-        import mayautils
-        for cv, pos in zip(mayautils.componentRange(self, 'cv', len(self)), data):
-            cmds.xform(cv, t=pos, ws=ws, os=not ws)
-
-    @staticmethod
-    def getControlPointPosition(controls):
-        # todo: copied form old node work, needs cleanup
-        return [cmds.xform(x, q=True, os=True, t=True) for x in controls]
-
-    @staticmethod
-    def setControlPointPosition(controls, positions):
-        # todo: copied form old node work, needs cleanup
-        [cmds.xform(control, os=True, t=position) for control in controls for position in positions]
 
     @property
     def arclen(self, os=False):

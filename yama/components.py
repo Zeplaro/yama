@@ -61,12 +61,14 @@ def getComponent(node, attr):
         split = attr.split('[')
         attr = split[0]
 
-    if attr in supported_types:
+    if attr in supported_types or attr == 'cp':
         try:
             ls = om.MSelectionList()
             ls.add(node.name + '.' + attr + '[0]')
             dag, comp = ls.getComponent(0)
             api_type = comp.apiTypeStr
+            if attr == 'cp':
+                attr = comp_MFn_id.get(api_type, attr)
             if api_type in comp_MFn_id:
                 component = Components(node, attr)
                 for i in split[1:]:
@@ -82,6 +84,7 @@ def getComponent(node, attr):
                 while indices:
                     component = component[indices.pop(0)]
                 return component
+            raise TypeError("attr '{}' of api type '{}' not in supported types".format(attr, api_type))
         except (RuntimeError, TypeError) as e:
             # print("failed to get component '{}' on '{}': {}".format(attr, node, e))
             pass
@@ -114,6 +117,11 @@ class Component(Yam):
             return "<{}({}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index)
 
     def __getitem__(self, item):
+        """
+        todo : work with slice
+        :param item:
+        :return:
+        """
         assert isinstance(item, int)
         if self.third_index is not None:
             raise AttributeError("'{}' cannot get more than three indexes".format(self))
