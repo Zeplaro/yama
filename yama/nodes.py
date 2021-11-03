@@ -132,7 +132,17 @@ def select(*args, **kwargs):
 
 
 class Yam(object):
-    pass
+    """
+    todo : docstring
+    """
+
+    def __eq__(self, other):
+        if str(self) == str(other):
+            return True
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class DependNode(Yam):
@@ -511,6 +521,7 @@ class ControlPoint(Shape):
     """
     Handles shape that have control point; e.g.: Mesh, NurbsCurve, NurbsSurface, Lattice
     """
+
     def __init__(self, mObject, mFnDependencyNode):
         super(ControlPoint, self).__init__(mObject, mFnDependencyNode)
 
@@ -852,7 +863,7 @@ class BlendshapeTarget(Yam):
         return self.name
 
     def __repr__(self):
-        return "Target({}, {}, {})".format(self.node, self.target_node, self.index)
+        return "<class {}({}, {}, {})>".format(self.__class__.__name__, self.node, self.target_node, self.index)
 
     @property
     def name(self):
@@ -904,15 +915,19 @@ supported_classes = {'dagNode': DagNode,
 
 
 class YamList(list):
+    """
+    todo : docstring
+    """
+
     def __init__(self, *arg):
         super(YamList, self).__init__(*arg)
         self._check()
 
     def __repr__(self):
-        return "<YamList({})>".format(list(self))
+        return "<class {}({})>".format(self.__class__.__name__, list(self))
 
     def __str__(self):
-        return "YamList({})".format(self.names())
+        return "{}({})".format(self.__class__.__name__, self.names())
 
     def _check(self, item=None):
         if item is not None:

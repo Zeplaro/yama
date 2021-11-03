@@ -47,7 +47,7 @@ comp_MFn_id = {'kCurveCVComponent': 'cv',  # 533
 
 def getComponent(node, attr):
     """
-    todo
+    todo : docstring
     :param node:
     :param attr:
     :return:
@@ -57,7 +57,7 @@ def getComponent(node, attr):
         return
 
     split = []
-    if '[' in attr:  # Cheking if getting a specific index
+    if '[' in attr:  # Checking if getting a specific index
         split = attr.split('[')
         attr = split[0]
 
@@ -92,7 +92,7 @@ def getComponent(node, attr):
 
 class Component(Yam):
     """
-    todo
+    todo : docstring
     """
 
     def __init__(self, node, component_type, index, second_index=None, third_index=None):
@@ -108,13 +108,13 @@ class Component(Yam):
 
     def __repr__(self):
         if self.third_index is not None:
-            return "<{}({}, {}, {}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index,
-                                                     self.second_index, self.third_index)
+            return "<class {}({}, {}, {}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type,
+                                                           self.index, self.second_index, self.third_index)
         elif self.second_index is not None:
-            return "<{}({}, {}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index,
-                                                 self.second_index)
+            return "<class {}({}, {}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index,
+                                                       self.second_index)
         else:
-            return "<{}({}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index)
+            return "<class {}({}, {}, {})>".format(self.__class__.__name__, self.node.name, self.type, self.index)
 
     def __getitem__(self, item):
         """
@@ -129,14 +129,6 @@ class Component(Yam):
             return self.__class__(self.node, self.type, self.index, self.second_index, item)
         else:
             return self.__class__(self.node, self.type, self.index, item)
-
-    def __eq__(self, other):
-        if self.name == str(other):
-            return True
-        return False
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
 
     def exists(self):
         return cmds.objExists(self.name)
@@ -163,7 +155,7 @@ class Component(Yam):
 
 class Components(Yam):
     """
-    todo
+    todo : docstring
     """
 
     def __init__(self, node, comp_type):
@@ -199,6 +191,16 @@ class Components(Yam):
 
     def __len__(self):
         return len(self.node)
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return "<class {}({}, {})>".format(self.__class__.__name__, self.node.name, self.type)
+
+    @property
+    def name(self):
+        return self.node + '.' + self.type
 
     def index(self, index, second_index=None, third_index=None):
         return Component(self.node, self.type, index, second_index, third_index)
