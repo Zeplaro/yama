@@ -64,7 +64,7 @@ class Attribute(Yam):
         return self.name
 
     def __repr__(self):
-        return "<class {}({}, '{}')>".format(self.__class__.__name__, repr(self.node), self.attribute)
+        return "<class {}('{}', '{}') {}>".format(self.__class__.__name__, self.node, self.attribute, "Exists" if self.exists() else "Doesn't Exists")
 
     def __getattr__(self, item):
         """
@@ -392,7 +392,7 @@ class ArrayAttribute(Attribute):
         self.parentAttr = attr
 
     def __repr__(self):
-        return "<class {}({}, {}, {})>".format(self.__class__.__name__, self.node, self.parentAttr, self.index)
+        return "<class {}('{}', '{}', {})>".format(self.__class__.__name__, self.node, self.parentAttr, self.index)
 
     @property
     def parent(self):

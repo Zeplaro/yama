@@ -1,7 +1,7 @@
 # encoding: utf8
 
 """
-Contains all the class and functions for the components of ControlPoint nodes.
+Contains all the class and functions for maya components.
 """
 
 import sys

@@ -96,8 +96,7 @@ def skinAs(objs=None, master_namespace=None, slave_namespace=None):
 
 
 def hierarchize(objs, reverse=False):
-    objs = nodes.yams(objs)
-    objs = {obj.longname(): obj for obj in objs}
+    objs = {obj.longName(): obj for obj in nodes.yams(objs)}
     longnames = list(objs)
     done = False
     while not done:
@@ -366,3 +365,26 @@ def flipPos(obj, table, reverse_face_normal=True):
 
     if reverse_face_normal:
         cmds.polyNormal(obj.name, normalMode=3, constructionHistory=False)
+
+
+def snapToCurve(objs=None, curve=None):
+    if not objs or not curve:
+        objs = nodes.selected()
+        if not objs:
+            raise RuntimeError("No object given and object selected")
+        if len(objs) < 3:
+            raise RuntimeError("Not enough object given or selected")
+        curve = objs.pop(0)
+
+    if isinstance(curve, nodes.Transform):
+        curve = curve.shape
+    assert isinstance(curve, nodes.NurbsCurve), "First object '{}' is not or doesn't contain a NurbsCurve".format(curve)
+
+    arclen = curve.arclen(ws=False)
+    step = arclen / (len(objs) - 1.0)
+    len_step = 0.0
+    for i, obj in enumerate(objs):
+        param = curve.mFnNurbsCurve.findParamFromLength(len_step)
+        x, y, z, _ = curve.mFnNurbsCurve.getPointAtParam(param, om.MSpace.kWorld)
+        obj.setPosition([x, y, z], ws=True)
+        len_step += step

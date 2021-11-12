@@ -101,6 +101,10 @@ def createNode(*args, **kwargs):
     return yam(cmds.createNode(*args, **kwargs))
 
 
+def spaceLocator(name, pos=None, rot=None, parent=None):
+    pass
+
+
 def ls(*args, **kwargs):
     if 'fl' not in kwargs and 'flatten' not in kwargs:
         kwargs['fl'] = True
@@ -321,6 +325,11 @@ class DependNode(Yam):
         return self.mFnDependencyNode.typeName
 
     def inheritedTypes(self):
+        """
+        Lists the inherited maya types.
+        e.g.: for a joint -> ['']
+        :return:
+        """
         return cmds.nodeType(self.name, inherited=True)
 
 
@@ -378,6 +387,10 @@ class DagNode(DependNode):
 
     @parent.setter
     def parent(self, parent):
+        """
+        Sets the node under the given parent or world if None.
+        :return: DependNode or None
+        """
         if parent is None:
             cmds.parent(self.name, world=True)
         else:
@@ -397,14 +410,14 @@ class DagNode(DependNode):
         """
         self.rename(value)
 
-    def longname(self):
+    def longName(self):
         """
         Gets the full path name of the object including the leading |.
         :return: str
         """
         return self.mDagPath.fullPathName()
 
-    fullPath = longname
+    fullPath = longName
 
 
 class Transform(DagNode):
@@ -422,8 +435,11 @@ class Transform(DagNode):
         Checks if the item is a children of self.
         """
         if not isinstance(item, DependNode):
-            item = yam(item)
-        return item.longname().startswith(self.longname())
+            try:
+                item = yam(item)
+            except RuntimeError:
+                raise RuntimeError("in '{}.__contains__('{}')'. No '{}' object found in scene".format(self, item, item))
+        return item.longName().startswith(self.longName())
 
     def children(self, type=None, noIntermediate=True):
         """
@@ -551,7 +567,7 @@ class Mesh(ControlPoint):
     @property
     def mFnMesh(self):
         if self._mFnMesh is None:
-            self._mFnMesh = om.MFnMesh(self.mObject)
+            self._mFnMesh = om.MFnMesh(self.mDagPath)
         return self._mFnMesh
 
     def shells(self):
@@ -610,17 +626,16 @@ class NurbsCurve(ControlPoint):
     @property
     def mFnNurbsCurve(self):
         if self._mFnNurbsCurve is None:
-            self._mFnNurbsCurve = om.MFnNurbsCurve(self.mObject)
+            self._mFnNurbsCurve = om.MFnNurbsCurve(self.mDagPath)
         return self._mFnNurbsCurve
 
-    @property
-    def arclen(self, os=False):
+    def arclen(self, ws=False):
         """
         Gets the world space or object space arc length of the curve.
-        :param os: if True return the objectSpace length.
+        :param ws: if False return the objectSpace length.
         :return: float
         """
-        if os:
+        if not ws:
             return self.mFnNurbsCurve.length()
         return cmds.arclen(self.name)
 
@@ -660,7 +675,7 @@ class NurbsSurface(ControlPoint):
     @property
     def mFnNurbsSurface(self):
         if self._mFnNurbsSurface is None:
-            self._mFnNurbsSurface = om.MFnNurbsSurface(self.mObject)
+            self._mFnNurbsSurface = om.MFnNurbsSurface(self.mDagPath)
         return self._mFnNurbsSurface
 
     def lenUV(self):
@@ -863,7 +878,7 @@ class BlendshapeTarget(Yam):
         return self.name
 
     def __repr__(self):
-        return "<class {}({}, {}, {})>".format(self.__class__.__name__, self.node, self.target_node, self.index)
+        return "<class {}('{}', {}, {})>".format(self.__class__.__name__, self.node, self.target_node, self.index)
 
     @property
     def name(self):

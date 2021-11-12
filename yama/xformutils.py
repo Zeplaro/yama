@@ -11,7 +11,7 @@ def align(objs=None, t=True, r=True):
         objs = nodes.selected()
     assert objs and len(objs) > 2, "Not enough object selected"
     objs = nodes.yams(objs)
-    poses = [x.getXform(t=True, ws=True) for x in objs]
+    poses = [x.getPosition(ws=True) for x in objs]
     if t:
         t_start, t_end = poses[0], poses[-1]
         t_step = [(t_end[x] - t_start[x]) / (len(objs) - 1.0) for x in range(3)]
@@ -22,14 +22,14 @@ def align(objs=None, t=True, r=True):
     for i, obj in enumerate(objs):
         if t:
             pos = [t_step[x] * i + t_start[x] for x in range(3)]
-            obj.setXform(t=pos, ws=True)
+            obj.setPosition(pos, ws=True)
         if r:
             rot = [r_step[x] * i + r_start[x] for x in range(3)]
             obj.setXform(ro=rot, ws=True)
 
     if r and not t:
         for obj, pos in zip(objs, poses):
-            obj.setXform(t=pos, ws=True)
+            obj.setPosition(pos, ws=True)
 
 
 @decorators.keepsel
