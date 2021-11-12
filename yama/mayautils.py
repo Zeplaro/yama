@@ -252,8 +252,8 @@ def wrapMesh(objs=None, ws=True):
                 continue
         slave_mfn = slave.mFnMesh
         for i in range(len(slave)):
-            point = master_mfn.getClosestPoint(slave_mfn.getPoint(i), space)[0]
-            cmds.xform('{}.vtx[{}]'.format(slave, i), t=tuple(point)[:-1], ws=ws, os=not ws)
+            x, y, z, _ = master_mfn.getClosestPoint(slave_mfn.getPoint(i), space)[0]
+            slave.vtx[i].setPosition((x, y, z), ws=True)
 
 
 def matrixMayaToRow(matrix):
