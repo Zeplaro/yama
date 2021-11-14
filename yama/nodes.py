@@ -101,7 +101,16 @@ def createNode(*args, **kwargs):
     return yam(cmds.createNode(*args, **kwargs))
 
 
-def spaceLocator(name, pos=None, rot=None, parent=None, ws=True):
+def spaceLocator(name, pos=(0, 0, 0), rot=(0, 0, 0), parent=None, ws=False):
+    """
+    Creates a locator.
+    :param name: str, the locator name
+    :param pos: list(float, float, float), the locator position after being parented
+    :param rot: list(float, float, float), the locator rotation after being parented
+    :param parent: the locator parent
+    :param ws: if true sets the pos and rot values in world space
+    :return: the locator Transform node object
+    """
     loc = yam(cmds.spaceLocator(name=name)[0])
     loc.parent = parent
     loc.setXform(t=pos, ro=rot, ws=ws)
@@ -109,16 +118,19 @@ def spaceLocator(name, pos=None, rot=None, parent=None, ws=True):
 
 
 def ls(*args, **kwargs):
+    """Wrapper for 'maya.cmds.ls' but returning yam objects."""
     if 'fl' not in kwargs and 'flatten' not in kwargs:
         kwargs['fl'] = True
     return yams(cmds.ls(*args, **kwargs))
 
 
 def selected(**kwargs):
+    """Returns current scene selection as yam objects; kwargs are passed on to 'ls'."""
     return ls(os=True, **kwargs)
 
 
 def select(*args, **kwargs):
+    """Set current scene selection with given args and kwargs. Allows to pass yam object into the select function."""
     sel = []
     for arg in args:
         if isinstance(arg, YamList):
@@ -998,8 +1010,8 @@ class YamList(list):
     def keepType(self, type, inherited=True):
         if isinstance(type, basestring):
             type = [type]
-        assert all(isinstance(x, basestring) for x in type), "type expected : 'str' or 'list(str, ...)' but was " \
-                                                             "given '{}'".format(type)
+        assert all(isinstance(x, basestring) for x in type), "arg 'type' expected : 'str' or 'list(str, ...)' but " \
+                                                             "was given '{}'".format(type)
         for i, item in reversed(list(enumerate(self))):
             for type_ in type:
                 if inherited:
@@ -1013,8 +1025,8 @@ class YamList(list):
         popped = YamList()
         if isinstance(type, basestring):
             type = [type]
-        assert all(isinstance(x, basestring) for x in type), "type expected : 'str' or 'list(str, ...)' but was " \
-                                                             "given '{}'".format(type)
+        assert all(isinstance(x, basestring) for x in type), "arg 'type' expected : 'str' or 'list(str, ...)' but " \
+                                                             "was given '{}'".format(type)
         for i, item in reversed(list(enumerate(self))):
             for type_ in type:
                 if inherited:
