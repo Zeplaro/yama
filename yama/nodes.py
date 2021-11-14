@@ -101,8 +101,11 @@ def createNode(*args, **kwargs):
     return yam(cmds.createNode(*args, **kwargs))
 
 
-def spaceLocator(name, pos=None, rot=None, parent=None):
-    pass
+def spaceLocator(name, pos=None, rot=None, parent=None, ws=True):
+    loc = yam(cmds.spaceLocator(name=name)[0])
+    loc.parent = parent
+    loc.setXform(t=pos, ro=rot, ws=ws)
+    return loc
 
 
 def ls(*args, **kwargs):
@@ -995,7 +998,8 @@ class YamList(list):
     def keepType(self, type, inherited=True):
         if isinstance(type, basestring):
             type = [type]
-        assert type and isinstance(type, (list, tuple))
+        assert all(isinstance(x, basestring) for x in type), "type expected : 'str' or 'list(str, ...)' but was " \
+                                                             "given '{}'".format(type)
         for i, item in reversed(list(enumerate(self))):
             for type_ in type:
                 if inherited:
@@ -1009,7 +1013,8 @@ class YamList(list):
         popped = YamList()
         if isinstance(type, basestring):
             type = [type]
-        assert type and isinstance(type, (list, tuple))
+        assert all(isinstance(x, basestring) for x in type), "type expected : 'str' or 'list(str, ...)' but was " \
+                                                             "given '{}'".format(type)
         for i, item in reversed(list(enumerate(self))):
             for type_ in type:
                 if inherited:
