@@ -5,7 +5,7 @@ def mult_list(list_a, list_b):
     return [x*y for x, y in zip(list_a, list_b)]
 
 
-def decimalToAlpha_old(index):
+def decimalToAlphabetical_old(index):
     """Very Slow"""
     from string import ascii_lowercase
     alphanum = ['a']
