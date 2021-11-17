@@ -1,13 +1,27 @@
 # encoding: utf8
 
+"""
+Contains non maya specific utils.
+"""
+
 
 def mult_list(list_a, list_b):
+    """
+    Zips 'list_a' items with 'list_b' items and multiplies them together
+    :param list_a: list of digits
+    :param list_b: list of digits
+    :return: list of digits
+    """
     return [x*y for x, y in zip(list_a, list_b)]
 
 
 def decimalToAlphabetical(index):
-    """Converts int to an alphabetical index. e.g.: 0 -> 'a', 1 -> 'b', 2 -> 'c', 'yama' -> 440414"""
-    assert isinstance(index, int)
+    """
+    Converts int to an alphabetical index. e.g.: 0 -> 'a', 1 -> 'b', 2 -> 'c', 'yama' -> 440414
+    :param index: int
+    :return: str
+    """
+    assert isinstance(index, int) and index >= 0
     from string import ascii_lowercase
     alphanum = ''
     index += 1  # because alphabet hase no 0 and starts with 'a'
@@ -20,7 +34,11 @@ def decimalToAlphabetical(index):
 
 
 def alpha_to_decimal(alpha):
-    """Converts str to an int index. e.g.: 'a' -> 0, 'b' -> 1, 'c' -> 2, 440414 -> 'yama'"""
+    """
+    Converts str to an int index. e.g.: 'a' -> 0, 'b' -> 1, 'c' -> 2, 440414 -> 'yama'
+    :param alpha: str
+    :return: int
+    """
     assert isinstance(alpha, str) and alpha
     from string import ascii_lowercase
     index = -1
