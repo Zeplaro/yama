@@ -5,7 +5,7 @@ def mult_list(list_a, list_b):
     return [x*y for x, y in zip(list_a, list_b)]
 
 
-def decimal_to_alpha_old(index):
+def decimalToAlpha_old(index):
     """Very Slow"""
     from string import ascii_lowercase
     alphanum = ['a']
@@ -28,12 +28,12 @@ def decimal_to_alpha_old(index):
     return result
 
 
-def decimal_to_alpha(index):
+def decimalToAlphabetical(index):
     from string import ascii_lowercase
     alphanum = ''
     index += 1  # because alphabet hase no 0 and starts with 'a'
     while index:
-        # v because alphabet has no 0 and 'a' is used as next step when reaching 'z': ..., 'y', 'z', 'aa', 'ab'...
+        # v alphabet has no 0 and 'a' needs to be used as next 'decimal' unit when reaching 'z':  'y', 'z', 'aa', 'ab'
         index -= 1
         reste = index % 26
         index = index // 26

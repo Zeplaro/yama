@@ -406,7 +406,9 @@ class DagNode(DependNode):
         Sets the node under the given parent or world if None.
         :return: DependNode or None
         """
-        if parent is None:
+        if self.parent is parent:
+            return
+        elif parent is None:
             cmds.parent(self.name, world=True)
         else:
             cmds.parent(self.name, parent)
@@ -545,6 +547,8 @@ class Shape(DagNode):
 
     @parent.setter
     def parent(self, parent):
+        if self.parent is parent:
+            return
         cmds.parent(self.name, parent, r=True, s=True)
 
 
