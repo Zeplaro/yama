@@ -5,37 +5,27 @@ def mult_list(list_a, list_b):
     return [x*y for x, y in zip(list_a, list_b)]
 
 
-def decimalToAlphabetical_old(index):
-    """Very Slow"""
-    from string import ascii_lowercase
-    alphanum = ['a']
-    reste = index
-    while reste:
-        for i, l in enumerate(alphanum[:]):
-            if l != 'z':
-                alpha_index = ascii_lowercase.index(l)
-                alphanum[i] = ascii_lowercase[alpha_index+1]
-                break
-            else:
-                alphanum[i] = 'a'
-            if i == len(alphanum)-1:
-                alphanum.append('a')
-        reste -= 1
-
-    result = ''
-    for i in alphanum[::-1]:
-        result += i
-    return result
-
-
 def decimalToAlphabetical(index):
+    """Converts int to an alphabetical index. e.g.: 0 -> 'a', 1 -> 'b', 2 -> 'c', 'yama' -> 440414"""
+    assert isinstance(index, int)
     from string import ascii_lowercase
     alphanum = ''
     index += 1  # because alphabet hase no 0 and starts with 'a'
     while index:
-        # v alphabet has no 0 and 'a' needs to be used as next 'decimal' unit when reaching 'z':  'y', 'z', 'aa', 'ab'
-        index -= 1
+        index -= 1  # 'a' needs to be used as next 'decimal' unit when reaching 'z':  ..., 'y', 'z', 'aa', 'ab', ...
         reste = index % 26
         index = index // 26
         alphanum = ascii_lowercase[reste] + alphanum
     return alphanum
+
+
+def alpha_to_decimal(alpha):
+    """Converts str to an int index. e.g.: 'a' -> 0, 'b' -> 1, 'c' -> 2, 440414 -> 'yama'"""
+    assert isinstance(alpha, str) and alpha
+    from string import ascii_lowercase
+    index = -1
+    steps = [(x, y) for x, y in enumerate(alpha[::-1])]
+    for step, letter in steps[::-1]:
+        letter_index = ascii_lowercase.index(letter)
+        index += (letter_index+1)*(26**step)
+    return index
