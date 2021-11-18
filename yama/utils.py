@@ -5,7 +5,7 @@ Contains non maya specific utils.
 """
 
 
-def mult_list(list_a, list_b):
+def multList(list_a, list_b):
     """
     Zips 'list_a' items with 'list_b' items and multiplies them together
     :param list_a: list of digits
@@ -33,7 +33,7 @@ def decimalToAlphabetical(index):
     return alphanum
 
 
-def alpha_to_decimal(alpha):
+def alphabeticalToDecimal(alpha):
     """
     Converts str to an int index. e.g.: 'a' -> 0, 'b' -> 1, 'c' -> 2, 440414 -> 'yama'
     :param alpha: str
@@ -49,7 +49,7 @@ def alpha_to_decimal(alpha):
     return index
 
 
-def decimal_to_roman(index):
+def decimalToRoman(index):
     """Converts an int to a roman numerical index"""
     assert isinstance(index, int) and index > 0
     roman = [(1000, 'M'), (900, 'CM'),

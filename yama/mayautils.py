@@ -339,13 +339,13 @@ def flipMap(deformer, attr, table):
 def mirrorPos(obj, table):
     for l_vtx in table:
         l_pos = obj.vtx[l_vtx].getPosition()
-        r_pos = utils.mult_list(l_pos, table.axis_mult)
+        r_pos = utils.multList(l_pos, table.axis_mult)
         obj.vtx[table[l_vtx]].setPosition(r_pos)
 
     mid_mult = table.axis_mult[:]
     mid_mult['xyz'.index(table.axis)] *= 0
     for mid in table.mids:
-        pos = utils.mult_list(obj.vtx[mid].getPosition(), mid_mult)
+        pos = utils.multList(obj.vtx[mid].getPosition(), mid_mult)
         obj.vtx[mid].setPosition(pos)
 
 
@@ -355,12 +355,12 @@ def flipPos(obj, table, reverse_face_normal=True):
         l_pos = obj.vtx[l_vtx].getPosition()
         r_pos = obj.vtx[table[l_vtx]].getPosition()
 
-        obj.vtx[l_vtx].setPosition(utils.mult_list(l_pos, table.axis_mult))
-        obj.vtx[table[l_vtx]].setPosition(utils.mult_list(r_pos, table.axis_mult))
+        obj.vtx[l_vtx].setPosition(utils.multList(l_pos, table.axis_mult))
+        obj.vtx[table[l_vtx]].setPosition(utils.multList(r_pos, table.axis_mult))
 
     for mid in table.mids:
         pos = obj.vtx[mid].getPosition()
-        pos = utils.mult_list(pos, table.axis_mult)
+        pos = utils.multList(pos, table.axis_mult)
         obj.vtx[mid].setPosition(pos)
 
     if reverse_face_normal:
