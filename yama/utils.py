@@ -47,3 +47,23 @@ def alpha_to_decimal(alpha):
         letter_index = ascii_lowercase.index(letter)
         index += (letter_index+1)*(26**step)
     return index
+
+
+def decimal_to_roman(index):
+    """Converts an int to a roman numerical index"""
+    assert isinstance(index, int) and index > 0
+    roman = [(1000, 'M'), (900, 'CM'),
+             (500, 'D'), (400, 'CD'),
+             (100, 'C'), (90, 'XC'),
+             (50, 'L'), (40, 'XL'),
+             (10, 'X'), (9, 'IX'),
+             (5, 'V'), (4, 'IV'),
+             (1, 'I')]
+    roman_num = ''
+    while index:
+        for value, num in roman:
+            if index >= value:
+                roman_num += num
+                index -= value
+                break
+    return roman_num
