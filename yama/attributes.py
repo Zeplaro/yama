@@ -7,7 +7,8 @@ Contains all the class and functions for maya attributes.
 import sys
 from maya import cmds
 import maya.api.OpenMaya as om
-from nodes import yams, Yam, DependNode, YamList
+import config
+import nodes
 import components
 
 # python 2 to 3 compatibility
@@ -43,7 +44,7 @@ def getAttribute(node, attr):
     return Attribute(node, attr)
 
 
-class Attribute(Yam):
+class Attribute(nodes.Yam):
     """
     A class for handling a node attribute and sub-attributes.
     """
@@ -54,7 +55,7 @@ class Attribute(Yam):
         :param attr (str):
         """
         super(Attribute, self).__init__()
-        assert isinstance(node, DependNode)
+        assert isinstance(node, nodes.DependNode)
         assert isinstance(attr, (basestring, Attribute))
         self.node = node
         self.attribute = attr
@@ -81,7 +82,7 @@ class Attribute(Yam):
         if item == '*':
             item = slice(None)
         if isinstance(item, slice):
-            return YamList(getAttribute(self.node, '{}[{}]'.format(self.attribute, i)) for i in range(len(self))[item])
+            return nodes.YamList(getAttribute(self.node, '{}[{}]'.format(self.attribute, i)) for i in range(len(self))[item])
         return getAttribute(self.node, '{}[{}]'.format(self.attribute, item))
 
     def __iter__(self):
@@ -176,7 +177,21 @@ class Attribute(Yam):
         """
         Gets the maya value.
         """
-        value = cmds.getAttr(self.name)
+        try:
+            return getAttr(self)
+        except:
+            pass
+        type = self.type()
+        if type == 'double3':
+            value = getAttr(self, type='double3')
+        elif type == 'matrix':
+            value = getAttr(self, type='matrix')
+        elif type == 'double2':
+            value = getAttr(self, type='double2')
+        elif type == 'string':
+            value = getAttr(self, type='string')
+        else:
+            value = getAttr(self)
         # checks if the values are in a list in a list as maya does sometimes
         if isinstance(value, list) and len(value) == 1:
             value = value[0]
@@ -187,17 +202,21 @@ class Attribute(Yam):
         """
         Sets the maya value.
         """
+        try:
+            setAttr(self, value)
+        except:
+            pass
         type = self.type()
         if type == 'double3':
-            cmds.setAttr(self.name, *value, type='double3')
+            setAttr(self.name, *value, type='double3')
         elif type == 'matrix':
-            cmds.setAttr(self.name, value, type='matrix')
+            setAttr(self.name, value, type='matrix')
         elif type == 'double2':
-            cmds.setAttr(self.name, *value, type='double2')
+            setAttr(self.name, *value, type='double2')
         elif type == 'string':
-            cmds.setAttr(self.name, value, type='string')
+            setAttr(self.name, value, type='string')
         else:
-            cmds.setAttr(self.name, value)
+            setAttr(self.name, value)
 
     def exists(self):
         return cmds.objExists(self.name)
@@ -241,7 +260,7 @@ class Attribute(Yam):
             kwargs['skipConversionNodes'] = True
         if 'p' not in kwargs and 'plugs' not in kwargs:
             kwargs['plugs'] = True
-        return yams(cmds.listConnections(self.name, **kwargs) or [])
+        return nodes.yams(cmds.listConnections(self.name, **kwargs) or [])
 
     def sourceConnection(self, **kwargs):
         connection = self.listConnections(destination=False, **kwargs)
@@ -385,7 +404,7 @@ class ArrayAttribute(Attribute):
                                                   or ArrayAttribute.
         :param index: The index of this attribute
         """
-        assert isinstance(node, DependNode) and isinstance(attr, basestring) and isinstance(index, int)
+        assert isinstance(node, nodes.DependNode) and isinstance(attr, basestring) and isinstance(index, int)
         super(ArrayAttribute, self).__init__(node, attr)
         self.attribute = attr + '[' + str(index) + ']'
         self.index = index
@@ -397,3 +416,102 @@ class ArrayAttribute(Attribute):
     @property
     def parent(self):
         return getAttribute(self.node, self.parentAttr)
+
+
+def getAttr(attr, **kwargs):
+    try:
+        plug = getMPlug(attr)
+        return getMPlugValue(plug)
+    except Exception as e:
+        print('failed to get plug or plug value: {}'.format(e))
+
+    return cmds.getAttr(str(attr), **kwargs)
+
+
+def setAttr(attr, value, **kwargs):
+    if not config.undoable:
+        try:
+            setMPlugValue(getMPlug(attr), value)
+            return
+        except Exception as e:
+            print("failed to get MPlug or set MPlug value: {}".format(e))
+
+    cmds.setAttr(str(attr), value, **kwargs)
+
+
+def getMPlug(plug):
+    if isinstance(plug, Attribute):
+        attrs = plug.attribute.split('.')
+        node = plug.node
+    else:
+        attrs = plug.split('.')
+        node = attrs.pop(0)
+    data = []
+    for attr in attrs:
+        index = None
+        if '[' in attr:
+            attr, index = attr.split('[')
+            index = int(index[:-1])
+        data.append((attr, index))
+    if not isinstance(node, nodes.DependNode):
+        sel = om.MSelectionList()
+        sel.add(node)
+        mObject = sel.getDependNode(0)
+        dep_node = om.MFnDependencyNode(mObject)
+    else:
+        dep_node = node.mFnDependencyNode
+    plug = dep_node.findPlug(data[-1][0], True)
+    for attr, index in data:
+        sub_plug = dep_node.findPlug(attr, True).attribute()
+        if index is not None:
+            plug.selectAncestorLogicalIndex(index, sub_plug)
+    return plug
+
+
+def getMPlugValue(mPlug):
+    attr_type = mPlug.attribute().apiTypeStr
+    if attr_type in ('kNumericAttribute', ):
+        return mPlug.asDouble()
+    elif attr_type in ('kDistance', ):
+        return mPlug.asMDistance().asUnits(om.MDistance.uiUnit())
+    elif attr_type in ('kAngle', ):
+        return mPlug.asMAngle().asUnits(om.MAngle.uiUnits())
+    elif attr_type in ('kTypedAttribute', ):
+        return mPlug.asString()
+    elif attr_type in ('kTimeAttribute', ):
+        return mPlug.asMTime().asUnits(om.MTime.uiUnits())
+    elif attr_type in ('kAttribute2Double', 'kAttribute3Double', 'kAttribute4Double', ):
+        values = []
+        for child_index in range(mPlug.numChildren()):
+            values.append(getMPlugValue(mPlug.chid(child_index)))
+        return values
+    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute', ):
+        data_handle = mPlug.MDataHandle()
+        if attr_type == 'kMatrixAttribute':
+            return data_handle.asMatrix()
+        elif attr_type == 'kFloatMatrixAttribute':
+            return data_handle.asFloatMatrix()
+
+
+def setMPlugValue(mPlug, plug_value):
+    attr_type = mPlug.attribute().apiTypeStr
+    if attr_type in ('kNumericAttribute', ):
+        mPlug.setDouble(plug_value)
+    elif attr_type in ('kDistance', ):
+        mPlug.setMDistance(om.MDistance(plug_value, om.MDistance.uiUnit()))
+    elif attr_type in ('kAngle', ):
+        mPlug.setMAngle(om.MAngle(plug_value, om.MAngle.uiUnits()))
+    elif attr_type in ('kTypedAttribute', ):
+        mPlug.setString(plug_value)
+    elif attr_type in ('kTimeAttribute', ):
+        mPlug.setMTime(om.MTime(plug_value, om.MTime.uiUnits()))
+    elif attr_type in ('kAttribute2Double', 'kAttribute3Double', 'kAttribute4Double', ):
+        for child_index in range(mPlug.numChildren()):
+            setMPlugValue(mPlug.chid(child_index, plug_value[child_index]))
+    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute', ):
+        data_handle = mPlug.MDataHandle()
+        if attr_type == 'kMatrixAttribute':
+            data_handle.setMMatrix(plug_value)
+        elif attr_type == 'kFloatMatrixAttribute':
+            data_handle.setMFloatMatrix(plug_value)
+        mPlug.setMDataHandle(data_handle)
