@@ -749,8 +749,8 @@ class WeightGeometryFilter(GeometryFilter):
 
     @property
     def weights(self):
-        weights = weightsdict.WeightsDict(self)
-        for i in self.geometry.get_components_index():
+        weights = weightsdict.WeightsDict()
+        for i in range(len(self.geometry)):
             weights[i] = self.weightsAttr(i).value
         return weights
 
@@ -804,10 +804,9 @@ class SkinCluster(GeometryFilter):
     @property
     def weights(self):
         weights = {}
-        for i in self.geometry.get_component_indexes():
-            weights[i] = weightsdict.WeightsDict()
-            for jnt, _ in enumerate(self.influences()):
-                weights[i][jnt] = self.weightList[i].weights[jnt].value
+        influences_len = len(self.influences())
+        for i in range(len(self.geometry)):
+            weights[i] = self.getVertexWeight(i, influences_len)
         return weights
 
     @weights.setter
@@ -815,6 +814,18 @@ class SkinCluster(GeometryFilter):
         for vtx in weights:
             for jnt in weights[vtx]:
                 self.weightList[vtx].weights[jnt].value = weights[vtx][jnt]
+
+    def getVertexWeight(self, index, influences_len=None):
+        if influences_len is None:
+            influences_len = len(self.influences())
+        weights = weightsdict.WeightsDict()
+        for jnt in range(influences_len):
+            weights[jnt] = self.weightList[index].weights[jnt].value
+        return weights
+
+    def setVertexWeight(self, index, values):
+        for jnt, value in values.items():
+            self.weightList[index].weights[jnt].value = value
 
     @property
     def dqWeights(self):
@@ -825,12 +836,8 @@ class SkinCluster(GeometryFilter):
 
     @dqWeights.setter
     def dqWeights(self, data):
-        data = weightsdict.WeightsDict(data)
         for vtx in data:
             self.blendWeights[vtx].value = data[vtx]
-        for i, vtx in enumerate(cmds.ls('{}.weightList[*]'.format(self))):
-            if i not in data:
-                self.blendWeights[i].value = 0
 
     def reskin(self):
         """
