@@ -801,20 +801,6 @@ class SkinCluster(GeometryFilter):
     def influences(self):
         return yams(cmds.skinCluster(self.name, q=True, inf=True)) or []
 
-    @property
-    def weights(self):
-        weights = {}
-        influences_len = len(self.influences())
-        for i in range(len(self.geometry)):
-            weights[i] = self.getVertexWeight(i, influences_len)
-        return weights
-
-    @weights.setter
-    def weights(self, weights):
-        for vtx in weights:
-            for jnt in weights[vtx]:
-                self.weightList[vtx].weights[jnt].value = weights[vtx][jnt]
-
     def getVertexWeight(self, index, influences_len=None):
         if influences_len is None:
             influences_len = len(self.influences())
@@ -826,6 +812,19 @@ class SkinCluster(GeometryFilter):
     def setVertexWeight(self, index, values):
         for jnt, value in values.items():
             self.weightList[index].weights[jnt].value = value
+
+    @property
+    def weights(self):
+        weights = {}
+        influences_len = len(self.influences())
+        for i in range(len(self.geometry)):
+            weights[i] = self.getVertexWeight(i, influences_len)
+        return weights
+
+    @weights.setter
+    def weights(self, weights):
+        for vtx in weights:
+            self.setVertexWeight(vtx, weights[vtx])
 
     @property
     def dqWeights(self):
