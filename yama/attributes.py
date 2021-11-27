@@ -428,7 +428,7 @@ def getAttr(attr):
         attr = nodes.yam(attr)
 
     try:
-        return getMPlugValue(attr.mPLug)
+        return getMPlugValue(attr.mPlug)
     except Exception as e:
         print('## failed to get MPlug value: {}'.format(e))
 
