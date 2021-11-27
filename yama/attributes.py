@@ -430,7 +430,7 @@ def getAttr(attr):
     try:
         return getMPlugValue(attr.mPLug)
     except Exception as e:
-        print('failed to get MPlug value: {}'.format(e))
+        print('## failed to get MPlug value: {}'.format(e))
 
     type = attr.type()
     if type in ['double3', 'matrix', 'double2', 'string']:
@@ -447,7 +447,7 @@ def setAttr(attr, value, **kwargs):
             setMPlugValue(attr.mPlug, value)
             return
         except Exception as e:
-            print("failed to set MPlug value: {}".format(e))
+            print("## failed to set MPlug value: {}".format(e))
 
     type = attr.type()
     if type in ['double3', 'double2']:
@@ -459,6 +459,8 @@ def setAttr(attr, value, **kwargs):
 
 
 def getMPlugValue(mPlug):
+    assert isinstance(mPlug, om.MPlug), ("'OpenMaya.MPlug' object expected, instead got : "
+                                         "'{}' of type '{}'".format(mPlug, type(mPlug).__name__))
     attr_type = mPlug.attribute().apiTypeStr
     if attr_type in ('kNumericAttribute', ):
         return mPlug.asDouble()
@@ -486,6 +488,8 @@ def getMPlugValue(mPlug):
 
 
 def setMPlugValue(mPlug, value):
+    assert isinstance(mPlug, om.MPlug), ("'OpenMaya.MPlug' object expected, instead got : "
+                                         "'{}' of type '{}'".format(mPlug, type(mPlug).__name__))
     attr_type = mPlug.attribute().apiTypeStr
     if attr_type in ('kNumericAttribute', ):
         mPlug.setDouble(value)
