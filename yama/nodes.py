@@ -330,7 +330,7 @@ class DependNode(Yam):
         :param kwargs: kwargs passed on to cmds.listAttr
         :return: list[Attribute, ...]
         """
-        return yams(cmds.listAttr(self.name, **kwargs) or [])
+        return YamList(self.attr(x) for x in cmds.listAttr(self.name, **kwargs) or [])
 
     def type(self):
         """
@@ -862,9 +862,10 @@ class BlendShape(GeometryFilter):
         self.getTargets()
 
     def getTargets(self):
-        targets_nodes = yams(cmds.blendShape(self.name, q=True, target=True)) or []
-        self._targets = [BlendshapeTarget(self, target_node, index) for index, target_node in enumerate(targets_nodes)]
-        self._targets_names = {target.target_node.name: target for target in self._targets}
+        import attributes
+        targets = cmds.listAttr(self.name+'.weight[:]')
+        self._targets = [attributes.BlendshapeTarget(self, target, index) for index, target in enumerate(targets)]
+        self._targets_names = {target.attribute: target for target in self._targets}
         return self._targets
 
     def targets(self, target):
@@ -889,48 +890,6 @@ class BlendShape(GeometryFilter):
     def weights(self, weights):
         for i, weight in weights.items():
             self.weightsAttr(i).value = weight
-
-
-class BlendshapeTarget(Yam):
-    def __init__(self, node, target_node, index):
-        super(BlendshapeTarget, self).__init__()
-        self.target_node = target_node
-        self.node = node
-        self.index = index
-        self.attribute = node.attr(target_node.name)
-
-    def __str__(self):
-        return self.name
-
-    def __repr__(self):
-        return "<class {}('{}', {}, {})>".format(self.__class__.__name__, self.node, self.target_node, self.index)
-
-    @property
-    def name(self):
-        return self.attribute.name
-
-    def weightsAttr(self, index):
-        return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights[index]
-
-    @property
-    def weights(self):
-        weights = weightsdict.WeightsDict()
-        for i in range(len(self.node.geometry)):
-            weights[i] = self.weightsAttr(i).value
-        return weights
-
-    @weights.setter
-    def weights(self, weights):
-        for i, weight in weights.items():
-            self.weightsAttr(i).value = weight
-
-    @property
-    def value(self):
-        return self.attribute.value
-
-    @value.setter
-    def value(self, value):
-        self.attribute.value = value
 
 
 # Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from

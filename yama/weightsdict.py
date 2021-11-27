@@ -44,7 +44,7 @@ class WeightsDict(dict):
 
     def __add__(self, other):
         if isinstance(other, (int, float)):
-            other = weightsdictFromFloat(other, len(self))
+            other = weightsdictFromLength(len(self), other)
         weights = WeightsDict()
         for i, j in zip(self, other):
             weights[i] = self[i] + other[j]
@@ -52,13 +52,13 @@ class WeightsDict(dict):
 
     def __iadd__(self, other):
         if isinstance(other, (int, float)):
-            other = weightsdictFromFloat(other, len(self))
+            other = weightsdictFromLength(len(self), other)
         for i, j in zip(self, other):
             self[i] += other[j]
 
     def __sub__(self, other):
         if isinstance(other, (int, float)):
-            other = weightsdictFromFloat(other, len(self))
+            other = weightsdictFromLength(len(self), other)
         weights = WeightsDict()
         for i, j in zip(self, other):
             weights[i] = self[i] - other[j]
@@ -66,13 +66,13 @@ class WeightsDict(dict):
 
     def __isub__(self, other):
         if isinstance(other, (int, float)):
-            other = weightsdictFromFloat(other, len(self))
+            other = weightsdictFromLength(len(self), other)
         for i, j in zip(self, other):
             self[i] -= other[j]
 
     def __mul__(self, other):
         if isinstance(other, (int, float)):
-            other = weightsdictFromFloat(other, len(self))
+            other = weightsdictFromLength(len(self), other)
         weights = WeightsDict()
         for i, j in zip(self, other):
             weights[i] = self[i] * other[j]
@@ -80,13 +80,13 @@ class WeightsDict(dict):
 
     def __imul__(self, other):
         if isinstance(other, (int, float)):
-            other = weightsdictFromFloat(other, len(self))
+            other = weightsdictFromLength(len(self), other)
         for i, j in zip(self, other):
             self[i] *= other[j]
 
     def __div__(self, other):
         if isinstance(other, (int, float)):
-            other = weightsdictFromFloat(other, len(self))
+            other = weightsdictFromLength(len(self), other)
         weights = WeightsDict()
         for i, j in zip(self, other):
             weights[i] = self[i] / other[j]
@@ -94,7 +94,7 @@ class WeightsDict(dict):
 
     def __idiv__(self, other):
         if isinstance(other, (int, float)):
-            other = weightsdictFromFloat(other, len(self))
+            other = weightsdictFromLength(len(self), other)
         for i, j in zip(self, other):
             self[i] /= other[j]
 
@@ -112,7 +112,7 @@ class WeightsDict(dict):
 
     def __eq__(self, other):
         if isinstance(other, (int, float)):
-            other = weightsdictFromFloat(other, len(self))
+            other = weightsdictFromLength(len(self), other)
         if len(self) != len(other):
             return False
         for i in self:
@@ -154,7 +154,7 @@ class WeightsDict(dict):
     def exportWeights(self, path):
         exportWeights(self, path)
 
-    def importWeigths(self, path, apply_data=True):
+    def importWeights(self, path, apply_data=True):
         data = importWeights(path)
         if apply_data:
             for i in self:
@@ -165,7 +165,7 @@ class WeightsDict(dict):
 def normalizeWeights(*weights):
     for i in weights:
         if not isinstance(i, WeightsDict):
-            raise ValueError("Weights must be of type 'WeightsDict' not '{}'".format(type(i).__name__))
+            raise ValueError("weights must be of type 'WeightsDict' not '{}'".format(type(i).__name__))
     dicts = [WeightsDict() for _ in range(len(weights))]
     for i in range(min(len(x) for x in weights)):
         mult = 1.0
@@ -177,7 +177,7 @@ def normalizeWeights(*weights):
     return dicts
 
 
-def weightsdictFromFloat(value, length):
+def weightsdictFromLength(length, value=0.0):
     return WeightsDict({i: value for i in range(length)})
 
 

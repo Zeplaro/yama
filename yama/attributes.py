@@ -10,6 +10,7 @@ import maya.api.OpenMaya as om
 import config
 import nodes
 import components
+import weightsdict
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]
@@ -56,9 +57,9 @@ class Attribute(nodes.Yam):
         """
         super(Attribute, self).__init__()
         assert isinstance(node, nodes.DependNode)
-        assert isinstance(attr, (basestring, Attribute))
+        assert isinstance(attr, basestring)
         self.node = node
-        self.attribute = attr
+        self._attribute = attr
         self._mPlug = None
 
     def __str__(self):
@@ -84,9 +85,6 @@ class Attribute(nodes.Yam):
         if isinstance(item, slice):
             return nodes.YamList(getAttribute(self.node, '{}[{}]'.format(self.attribute, i)) for i in range(len(self))[item])
         return getAttribute(self.node, '{}[{}]'.format(self.attribute, item))
-
-    def __iter__(self):
-        raise NotImplementedError("cannot iterate on '{}'".format(self.name))
 
     def __add__(self, other):
         """
@@ -173,50 +171,26 @@ class Attribute(nodes.Yam):
         return getAttribute(self.node, self.attribute + '.' + attr)
 
     @property
+    def attribute(self):
+        return self._attribute
+
+    @attribute.setter
+    def attribute(self, newname):
+        cmds.renameAttr(self.name, newname)
+
+    @property
     def value(self):
         """
         Gets the maya value.
         """
-        try:
-            return getAttr(self)
-        except:
-            pass
-        type = self.type()
-        if type == 'double3':
-            value = getAttr(self, type='double3')
-        elif type == 'matrix':
-            value = getAttr(self, type='matrix')
-        elif type == 'double2':
-            value = getAttr(self, type='double2')
-        elif type == 'string':
-            value = getAttr(self, type='string')
-        else:
-            value = getAttr(self)
-        # checks if the values are in a list in a list as maya does sometimes
-        if isinstance(value, list) and len(value) == 1:
-            value = value[0]
-        return value
+        return getAttr(self)
 
     @value.setter
     def value(self, value):
         """
         Sets the maya value.
         """
-        try:
-            setAttr(self, value)
-        except:
-            pass
-        type = self.type()
-        if type == 'double3':
-            setAttr(self.name, *value, type='double3')
-        elif type == 'matrix':
-            setAttr(self.name, value, type='matrix')
-        elif type == 'double2':
-            setAttr(self.name, *value, type='double2')
-        elif type == 'string':
-            setAttr(self.name, value, type='string')
-        else:
-            setAttr(self.name, value)
+        setAttr(self, value)
 
     def exists(self):
         return cmds.objExists(self.name)
@@ -392,6 +366,16 @@ class Attribute(nodes.Yam):
             cmds.setAttr(self.name, keyable=False)
             cmds.setAttr(self.name, channelBox=True)
 
+    @property
+    def niceName(self):
+        return cmds.attributeQuery(self.attribute, node=self.node, niceName=True)
+
+    @niceName.setter
+    def niceName(self, newname):
+        if newname is None:
+            newname = ''
+        cmds.addAttr(self.name, e=True, niceName=newname)
+
 
 class ArrayAttribute(Attribute):
     """
@@ -406,66 +390,72 @@ class ArrayAttribute(Attribute):
         """
         assert isinstance(node, nodes.DependNode) and isinstance(attr, basestring) and isinstance(index, int)
         super(ArrayAttribute, self).__init__(node, attr)
-        self.attribute = attr + '[' + str(index) + ']'
+        self._attribute = attr + '[' + str(index) + ']'
         self.index = index
         self.parentAttr = attr
 
     def __repr__(self):
-        return "<class {}('{}', '{}', {})>".format(self.__class__.__name__, self.node, self.parentAttr, self.index)
+        return "<class {}('{}', '{}', {}), {}>".format(self.__class__.__name__, self.node, self.parentAttr, self.index, "Exists" if self.exists() else "Doesn't Exists")
 
     @property
     def parent(self):
         return getAttribute(self.node, self.parentAttr)
 
 
-def getAttr(attr, **kwargs):
-    try:
-        plug = getMPlug(attr)
-        return getMPlugValue(plug)
-    except Exception as e:
-        print('failed to get plug or plug value: {}'.format(e))
+class BlendshapeTarget(Attribute):
+    def __init__(self, node, attr, index):
+        super(BlendshapeTarget, self).__init__(node, attr)
+        self.index = index
 
-    return cmds.getAttr(str(attr), **kwargs)
+    def weightsAttr(self, index):
+        return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights[index]
+
+    @property
+    def weights(self):
+        weights = weightsdict.WeightsDict()
+        for i in range(len(self.node.geometry)):
+            weights[i] = self.weightsAttr(i).value
+        return weights
+
+    @weights.setter
+    def weights(self, weights):
+        for i, weight in weights.items():
+            self.weightsAttr(i).value = weight
+
+
+def getAttr(attr):
+    if not isinstance(attr, Attribute):
+        attr = nodes.yam(attr)
+
+    try:
+        return getMPlugValue(attr.mPLug)
+    except Exception as e:
+        print('failed to get MPlug value: {}'.format(e))
+
+    type = cmds.getAttr(attr, type=True)
+    if type in ['double3', 'matrix', 'double2', 'string']:
+        return cmds.getAttr(attr, type=type)
+    return cmds.getAttr(attr)
 
 
 def setAttr(attr, value, **kwargs):
+    if not isinstance(attr, Attribute):
+        attr = nodes.yam(attr)
+
     if not config.undoable:
         try:
-            setMPlugValue(getMPlug(attr), value)
+            setMPlugValue(attr.mPlug, value)
             return
         except Exception as e:
-            print("failed to get MPlug or set MPlug value: {}".format(e))
+            print("failed to set MPlug value: {}".format(e))
 
-    cmds.setAttr(str(attr), value, **kwargs)
-
-
-def getMPlug(plug):
-    if isinstance(plug, Attribute):
-        attrs = plug.attribute.split('.')
-        node = plug.node
+    type = attr.type()
+    if type in ['double3', 'double2']:
+        cmds.setAttr(attr.name, *value, type=type)
+    elif type in ['matrix', 'string']:
+        cmds.setAttr(attr.name, value, type=type)
     else:
-        attrs = plug.split('.')
-        node = attrs.pop(0)
-    data = []
-    for attr in attrs:
-        index = None
-        if '[' in attr:
-            attr, index = attr.split('[')
-            index = int(index[:-1])
-        data.append((attr, index))
-    if not isinstance(node, nodes.DependNode):
-        sel = om.MSelectionList()
-        sel.add(node)
-        mObject = sel.getDependNode(0)
-        dep_node = om.MFnDependencyNode(mObject)
-    else:
-        dep_node = node.mFnDependencyNode
-    plug = dep_node.findPlug(data[-1][0], True)
-    for attr, index in data:
-        sub_plug = dep_node.findPlug(attr, True).attribute()
-        if index is not None:
-            plug.selectAncestorLogicalIndex(index, sub_plug)
-    return plug
+        cmds.setAttr(attr.name, value, **kwargs)
 
 
 def getMPlugValue(mPlug):
@@ -491,27 +481,31 @@ def getMPlugValue(mPlug):
             return data_handle.asMatrix()
         elif attr_type == 'kFloatMatrixAttribute':
             return data_handle.asFloatMatrix()
+    else:
+        raise TypeError("Attribute '{}' of type '{}' not supported".format(mPlug.name(), attr_type))
 
 
-def setMPlugValue(mPlug, plug_value):
+def setMPlugValue(mPlug, value):
     attr_type = mPlug.attribute().apiTypeStr
     if attr_type in ('kNumericAttribute', ):
-        mPlug.setDouble(plug_value)
+        mPlug.setDouble(value)
     elif attr_type in ('kDistance', ):
-        mPlug.setMDistance(om.MDistance(plug_value, om.MDistance.uiUnit()))
+        mPlug.setMDistance(om.MDistance(value, om.MDistance.uiUnit()))
     elif attr_type in ('kAngle', ):
-        mPlug.setMAngle(om.MAngle(plug_value, om.MAngle.uiUnits()))
+        mPlug.setMAngle(om.MAngle(value, om.MAngle.uiUnits()))
     elif attr_type in ('kTypedAttribute', ):
-        mPlug.setString(plug_value)
+        mPlug.setString(value)
     elif attr_type in ('kTimeAttribute', ):
-        mPlug.setMTime(om.MTime(plug_value, om.MTime.uiUnits()))
+        mPlug.setMTime(om.MTime(value, om.MTime.uiUnits()))
     elif attr_type in ('kAttribute2Double', 'kAttribute3Double', 'kAttribute4Double', ):
         for child_index in range(mPlug.numChildren()):
-            setMPlugValue(mPlug.chid(child_index, plug_value[child_index]))
+            setMPlugValue(mPlug.chid(child_index, value[child_index]))
     elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute', ):
         data_handle = mPlug.MDataHandle()
         if attr_type == 'kMatrixAttribute':
-            data_handle.setMMatrix(plug_value)
+            data_handle.setMMatrix(value)
         elif attr_type == 'kFloatMatrixAttribute':
-            data_handle.setMFloatMatrix(plug_value)
+            data_handle.setMFloatMatrix(value)
         mPlug.setMDataHandle(data_handle)
+    else:
+        raise TypeError("Attribute '{}' of type '{}' not supported".format(mPlug.name(), attr_type))

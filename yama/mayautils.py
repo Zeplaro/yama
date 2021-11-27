@@ -88,7 +88,7 @@ def skinAs(objs=None, master_namespace=None, slave_namespace=None):
             continue
         cmds.select(infs.names(), slave.name)
         slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave), **kwargs)[0])
-        cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint',
+        cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint', smooth=True,
                              ia=('oneToOne', 'label', 'closestJoint'))
         print(slave + ' skinned -> ' + slaveskn.name)
         done.append(slave)
@@ -388,3 +388,46 @@ def snapToCurve(objs=None, curve=None):
         x, y, z, _ = curve.mFnNurbsCurve.getPointAtParam(param, om.MSpace.kWorld)
         obj.setPosition([x, y, z], ws=True)
         len_step += step
+
+
+@decorators.keepsel
+def copyDeformerWeights(source_geo, destination_geo, source_deformer, destination_deformer):
+    source_geo, destination_geo, source_deformer, destination_deformer = nodes.yams((source_geo, destination_geo,
+                                                                                     source_deformer,
+                                                                                     destination_deformer))
+
+    temp_source_geo, temp_dest_geo = nodes.yams(cmds.duplicate(source_geo.name, destination_geo.name))
+    temp_source_geo.name = 'temp_source_geo'
+    temp_dest_geo.name = 'temp_dest_geo'
+    # Removing shapeOrig
+    cmds.delete([x.name for x in temp_source_geo.shapes(noIntermediate=False) if x.intermediateObject.value])
+    cmds.delete([x.name for x in temp_dest_geo.shapes(noIntermediate=False) if x.intermediateObject.value])
+
+    source_jnt = nodes.createNode('joint', name='temp_source_jnt')
+    nodes.select(source_jnt, temp_source_geo)
+    source_skn = nodes.yam(cmds.skinCluster(name='temp_source_skn', skinMethod=0, normalizeWeights=0,
+                                            obeyMaxInfluences=False, weightDistribution=0, includeHiddenSelections=True,
+                                            toSelectedBones=True)[0])
+    source_skn.envelope.value = 0
+
+    destination_jnt = nodes.createNode('joint', name='temp_destination_jnt')
+    nodes.select(destination_jnt, temp_dest_geo)
+    destination_skn = nodes.yam(cmds.skinCluster(name='temp_dest_skn', skinMethod=0, normalizeWeights=0,
+                                                 obeyMaxInfluences=False, weightDistribution=0,
+                                                 includeHiddenSelections=True, toSelectedBones=True)[0])
+    destination_skn.envelope.value = 0
+
+    source_weights = source_deformer.weights
+    source_skn.weights = {i: {0: source_weights[i]} for i in source_weights}
+
+    cmds.copySkinWeights(sourceSkin=source_skn.name, destinationSkin=destination_skn.name, noMirror=True,
+                         surfaceAssociation='closestPoint', influenceAssociation=('oneToOne', 'label', 'closestJoint'),
+                         smooth=True, normalize=False)
+
+    destination_skn_weights = destination_skn.weights
+    destination_deformer.weights = {i: destination_skn_weights[i][0] for i in destination_skn_weights}
+
+    cmds.delete(source_skn.name, destination_skn.name)
+    cmds.delete(source_jnt.name, destination_jnt.name)
+    cmds.delete(temp_source_geo.name, temp_dest_geo.name)
+

@@ -13,7 +13,8 @@ _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
 
-from nodes import Yam, Transform, ControlPoint, YamList
+import config
+import nodes
 
 
 def getComponent(node, attr):
@@ -60,7 +61,7 @@ def getComponent(node, attr):
             pass
 
 
-class Components(Yam):
+class Components(nodes.Yam):
     """
     todo : docstring
     """
@@ -68,9 +69,9 @@ class Components(Yam):
         if type(self) is Components:
             raise TypeError("'{}' should not be directly instantiated".format(self.__class__.__name__))
         super(Components, self).__init__()
-        if isinstance(node, Transform):
+        if isinstance(node, nodes.Transform):
             node = node.shape
-        assert isinstance(node, ControlPoint), "component node should be of type 'ControlPoint', " \
+        assert isinstance(node, nodes.ControlPoint), "component node should be of type 'ControlPoint', " \
                                                "instead node type is '{}'".format(type(node).__name__)
         self.node = node
         self.attribute_name = attribute_name
@@ -79,7 +80,7 @@ class Components(Yam):
         if item == '*':
             item = slice(None)
         if isinstance(item, slice):
-            return YamList(self.index(i) for i in range(len(self.node))[item])
+            return nodes.YamList(self.index(i) for i in range(len(self.node))[item])
         return self.index(item)
 
     def __len__(self):
@@ -137,14 +138,14 @@ class TripleIndexed(Components):
                     yield self.index(x, y, z)
 
 
-class Component(Yam):
+class Component(nodes.Yam):
     """
     todo : docstring
     """
 
     def __init__(self, node, components, index, second_index=None, third_index=None):
         super(Component, self).__init__()
-        if isinstance(node, Transform):
+        if isinstance(node, nodes.Transform):
             node = node.shape
         self.node = node
         self.components = components
@@ -222,6 +223,17 @@ class MeshVertex(Component):
         p = self.node.mFnMesh.getPoint(self.index, space)
         return [p.x, p.y, p.z]
 
+    def setPosition(self, value, ws=False):
+        if config.undoable:
+            super(MeshVertex, self).setPosition(value, ws)
+        else:
+            if ws:
+                space = om.MSpace.kWorld
+            else:
+                space = om.MSpace.kObject
+            point = om.MPoint(*value)
+            self.node.mFnMesh.setPoint(self.index, point, space)
+
 
 class CurveCV(Component):
     def __init__(self, *args, **kwargs):
@@ -234,6 +246,17 @@ class CurveCV(Component):
             space = om.MSpace.kObject
         p = self.node.mFnNurbsCurve.cvPosition(self.index, space)
         return [p.x, p.y, p.z]
+
+    def setPosition(self, value, ws=False):
+        if config.undoable:
+            super(CurveCV, self).setPosition(value, ws)
+        else:
+            if ws:
+                space = om.MSpace.kWorld
+            else:
+                space = om.MSpace.kObject
+            point = om.MPoint(*value)
+            self.node.mFnNurbsCurve.setCVPosition(self.index, point, space)
 
 
 supported_types = {'cv': Component,
