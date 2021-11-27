@@ -432,10 +432,10 @@ def getAttr(attr):
     except Exception as e:
         print('failed to get MPlug value: {}'.format(e))
 
-    type = cmds.getAttr(attr, type=True)
+    type = attr.type()
     if type in ['double3', 'matrix', 'double2', 'string']:
-        return cmds.getAttr(attr, type=type)
-    return cmds.getAttr(attr)
+        return cmds.getAttr(attr.name, type=type)
+    return cmds.getAttr(attr.name)
 
 
 def setAttr(attr, value, **kwargs):
