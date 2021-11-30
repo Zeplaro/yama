@@ -25,24 +25,44 @@ def getAttribute(node, attr):
     :param attr:
     :return:
     """
-    component = components.getComponent(node, attr)  # Trying to get component if one
-    if component is not None:
-        return component
+    if isinstance(attr, basestring):
+        try:
+            return components.getComponent(node, attr)  # Trying to get component if one
+        except (RuntimeError, TypeError):
+            pass
 
-    if attr.endswith(']'):  # Checking is index ArrayAttribute
-        split = attr.split('[')
-        index = split.pop(-1)[:-1]
-        if index == '*':  # if using the maya wildcard symbol
-            index = slice(None)
-        elif ':' in index:  # if using a slice to list multiple components
-            slice_args = [int(x) if x else None for x in
-                          index.split(':')]  # parsing the string into a proper slice
-            index = slice(*slice_args)
-        else:
-            index = int(index)
-        attr = '['.join(split)
-        return ArrayAttribute(node, attr, index)
+        attr = getMPlug(str(node)+'.'+attr)
+    assert isinstance(attr, om.MPlug)
     return Attribute(node, attr)
+
+
+def getMPlug(attr):
+    om_list = om.MSelectionList()
+    try:
+        om_list.add(str(attr))
+    except RuntimeError as e:
+        raise AttributeError("Attribute '{}' does not exist".format(attr))
+
+    # Fails to get plug on some compound attributes
+    try:
+        mPlug = om_list.getPlug(0)
+    except TypeError:
+        mObject = om_list.getDependNode(0)
+        mfn = om.MFnDependencyNode(mObject)
+        attrs = attr.split('.')[1:]
+        data = []
+        for attr in attrs:
+            index = None
+            if '[' in attr:
+                attr, index = attr.split('[')
+                index = int(index[:-1])
+            data.append((attr, index))
+        mPlug = mfn.findPlug(data[-1][0], True)
+        for attr, index in data:
+            sub_plug = mfn.findPlug(attr, True).attribute()
+            if index is not None:
+                mPlug.selectAncestorLogicalIndex(index, sub_plug)
+    return mPlug
 
 
 class Attribute(nodes.Yam):
@@ -50,23 +70,22 @@ class Attribute(nodes.Yam):
     A class for handling a node attribute and sub-attributes.
     """
 
-    def __init__(self, node, attr):
+    def __init__(self, node, mPlug):
         """
-        :param parent (Depend/Attribute): the node or attribute parent to attr.
-        :param attr (str):
+        :param node (Depend): the node of the attribute attr.
+        :param attr (OpenMaya.MPlug):
         """
         super(Attribute, self).__init__()
         assert isinstance(node, nodes.DependNode)
-        assert isinstance(attr, basestring)
+        assert isinstance(mPlug, om.MPlug)
         self.node = node
-        self._attribute = attr
-        self._mPlug = None
+        self.mPlug = mPlug
 
     def __str__(self):
         return self.name
 
     def __repr__(self):
-        return "<class {}('{}', '{}') {}>".format(self.__class__.__name__, self.node, self.attribute, "Exists" if self.exists() else "Doesn't Exists")
+        return "<class {}('{}.{}')>".format(self.__class__.__name__, self.node, self.attribute)
 
     def __getattr__(self, item):
         """
@@ -129,8 +148,6 @@ class Attribute(nodes.Yam):
         self.disconnect(other)
 
     def __call__(self, *args, **kwargs):
-        if not self.exists():
-            raise ValueError("No object matches name: {}".format(self.name))
         raise TypeError("'{}' object is not callable".format(self.__class__.__name__))
 
     def __len__(self):
@@ -146,13 +163,12 @@ class Attribute(nodes.Yam):
     def __nonzero__(self):
         return self.__bool__()
 
-    @property
-    def mPlug(self):
-        if self._mPlug is None:
-            m_list = om.MSelectionList()
-            m_list.add(self.name)
-            self._mPlug = m_list.getPlug(0)
-        return self._mPlug
+    def __iter__(self):
+        if self.mPlug.isArray:
+            for i in range(len(self)):
+                yield self.node.attr(self.mPlug.selectAncestorLogicalIndex(i))
+        else:
+            raise TypeError("'{}' is not iterable".format(self))
 
     @property
     def name(self):
@@ -160,7 +176,7 @@ class Attribute(nodes.Yam):
         The full node.attribute name.
         :return: str
         """
-        return self.node + '.' + self.attribute
+        return self.mPlug.name()
 
     def attr(self, attr):
         """
@@ -172,7 +188,7 @@ class Attribute(nodes.Yam):
 
     @property
     def attribute(self):
-        return self._attribute
+        return self.mPlug.partialName(useLongNames=True)
 
     @attribute.setter
     def attribute(self, newname):
@@ -194,6 +210,20 @@ class Attribute(nodes.Yam):
 
     def exists(self):
         return cmds.objExists(self.name)
+
+    @property
+    def index(self):
+        return self.mPlug.logocalIndex()
+
+    @property
+    def parent(self):
+        if self.mPlug.isElement:
+            parent_attr = self.attribute.split('[')
+            parent_attr = '['.join(parent_attr[:-1])
+            print(parent_attr)
+            return getAttribute(self.node, parent_attr)
+        else:
+            return Attribute(self.node, self.mPlug.parent())
 
     def settable(self):
         """
@@ -377,38 +407,17 @@ class Attribute(nodes.Yam):
         cmds.addAttr(self.name, e=True, niceName=newname)
 
 
-class ArrayAttribute(Attribute):
-    """
-    A sub-class to Attribute to handle attribute of type multi; for exemple a deformer weights attribute.
-    """
-
-    def __init__(self, node, attr, index):
-        """
-        :param parent (Attribute/ArrayAttribute): The parent attribute of this attribute; Needs to be of type Attribute
-                                                  or ArrayAttribute.
-        :param index: The index of this attribute
-        """
-        assert isinstance(node, nodes.DependNode) and isinstance(attr, basestring) and isinstance(index, int)
-        super(ArrayAttribute, self).__init__(node, attr)
-        self._attribute = attr + '[' + str(index) + ']'
-        self.index = index
-        self.parentAttr = attr
-
-    def __repr__(self):
-        return "<class {}('{}', '{}', {}), {}>".format(self.__class__.__name__, self.node, self.parentAttr, self.index, "Exists" if self.exists() else "Doesn't Exists")
-
-    @property
-    def parent(self):
-        return getAttribute(self.node, self.parentAttr)
-
-
 class BlendshapeTarget(Attribute):
-    def __init__(self, node, attr, index):
-        super(BlendshapeTarget, self).__init__(node, attr)
-        self.index = index
+    def __init__(self, node, mPlug, index):
+        super(BlendshapeTarget, self).__init__(node, mPlug)
+        self._index = index
 
     def weightsAttr(self, index):
         return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights[index]
+
+    @property
+    def index(self):
+        return self._index
 
     @property
     def weights(self):
@@ -432,9 +441,6 @@ def getAttr(attr):
     except Exception as e:
         print('## failed to get MPlug value: {}'.format(e))
 
-    type = attr.type()
-    if type in ['double3', 'matrix', 'double2', 'string']:
-        return cmds.getAttr(attr.name, type=type)
     return cmds.getAttr(attr.name)
 
 
@@ -462,7 +468,7 @@ def getMPlugValue(mPlug):
     assert isinstance(mPlug, om.MPlug), ("'OpenMaya.MPlug' object expected, instead got : "
                                          "'{}' of type '{}'".format(mPlug, type(mPlug).__name__))
     attr_type = mPlug.attribute().apiTypeStr
-    if attr_type in ('kNumericAttribute', ):
+    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute'):
         return mPlug.asDouble()
     elif attr_type in ('kDistance', ):
         return mPlug.asMDistance().asUnits(om.MDistance.uiUnit())
@@ -475,10 +481,10 @@ def getMPlugValue(mPlug):
     elif attr_type in ('kAttribute2Double', 'kAttribute3Double', 'kAttribute4Double', ):
         values = []
         for child_index in range(mPlug.numChildren()):
-            values.append(getMPlugValue(mPlug.chid(child_index)))
+            values.append(getMPlugValue(mPlug.child(child_index)))
         return values
     elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute', ):
-        data_handle = mPlug.MDataHandle()
+        data_handle = mPlug.asMDataHandle()
         if attr_type == 'kMatrixAttribute':
             return data_handle.asMatrix()
         elif attr_type == 'kFloatMatrixAttribute':
@@ -491,7 +497,7 @@ def setMPlugValue(mPlug, value):
     assert isinstance(mPlug, om.MPlug), ("'OpenMaya.MPlug' object expected, instead got : "
                                          "'{}' of type '{}'".format(mPlug, type(mPlug).__name__))
     attr_type = mPlug.attribute().apiTypeStr
-    if attr_type in ('kNumericAttribute', ):
+    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute'):
         mPlug.setDouble(value)
     elif attr_type in ('kDistance', ):
         mPlug.setMDistance(om.MDistance(value, om.MDistance.uiUnit()))
@@ -503,9 +509,9 @@ def setMPlugValue(mPlug, value):
         mPlug.setMTime(om.MTime(value, om.MTime.uiUnits()))
     elif attr_type in ('kAttribute2Double', 'kAttribute3Double', 'kAttribute4Double', ):
         for child_index in range(mPlug.numChildren()):
-            setMPlugValue(mPlug.chid(child_index, value[child_index]))
+            setMPlugValue(mPlug.child(child_index, value[child_index]))
     elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute', ):
-        data_handle = mPlug.MDataHandle()
+        data_handle = mPlug.asMDataHandle()
         if attr_type == 'kMatrixAttribute':
             data_handle.setMMatrix(value)
         elif attr_type == 'kFloatMatrixAttribute':

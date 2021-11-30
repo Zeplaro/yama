@@ -57,8 +57,8 @@ def getComponent(node, attr):
                 return component
             raise TypeError("attr '{}' of api type '{}' not in supported types".format(attr, api_type))
         except (RuntimeError, TypeError) as e:
-            # print("failed to get component '{}' on '{}': {}".format(attr, node, e))
-            pass
+            print("failed to get component '{}' on '{}': {}".format(attr, node, e))
+            raise e
 
 
 class Components(nodes.Yam):

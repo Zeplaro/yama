@@ -33,12 +33,9 @@ def yam(node):
     Attribute('pCube1.tz')
     """
 
-    attr = None
+    mPlug = None
+    component = None
     if isinstance(node, basestring):
-        if '.' in node:  # checking if an attribute was given with the node and splits it to call it later
-            split = node.split('.')
-            node = split.pop(0)
-            attr = '.'.join(split)
         # Getting the mObject associated with the given node uses 'try' in case the node does not exists or multiple
         # objects with the same name exists.
         mSelectionList = om.MSelectionList()
@@ -48,6 +45,13 @@ def yam(node):
             if cmds.objExists(node):
                 raise RuntimeError("more than one object called '{}'".format(node))
             raise RuntimeError("No '{}' object found in scene".format(node))
+
+        if '.' in node:  # checking if an attribute was given with the node
+            try:
+                mPlug = mSelectionList.getPlug(0)
+            except TypeError:
+                component = node.split('.')[-1]
+
         mObject = mSelectionList.getDependNode(0)
         mfn = om.MFnDependencyNode(mObject)
 
@@ -57,29 +61,43 @@ def yam(node):
     elif isinstance(node, om.MObject):
         mObject = node
         mfn = om.MFnDependencyNode(mObject)
-        node = mfn.name()
 
     elif isinstance(node, om.MDagPath):
         mObject = node.node()
         mfn = om.MFnDependencyNode(mObject)
-        node = mfn.name()
+
+    elif isinstance(node, om.Mplug):
+        mPlug = node
+        mObject = mPlug.node()
+        mfn = om.MFnDependencyNode(mObject)
 
     else:
-        raise TypeError("yam(): str, OpenMaya.MObject or OpenMaya.MDagPath expected,"
+        raise TypeError("yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected,"
                         " got {}.".format(node.__class__.__name__))
 
     # checking if node type has a supported class, if not defaults to DependNode
     assigned_class = supported_classes.get(mfn.typeName)  # skips the mc.nodeType if exact type is in supported_class
     if not assigned_class:
+        node = mfn.name()
         assigned_class = DependNode
         for node_type in cmds.nodeType(node, i=True)[::-1]:  # checks each inherited types for the node
             if node_type in supported_classes:
                 assigned_class = supported_classes[node_type]
                 break
 
-    if attr is not None:
-        return assigned_class(mObject, mfn).attr(attr)  # gets and returns an Attribute object if an attribute was given
-    return assigned_class(mObject, mfn)
+    yam_node = assigned_class(mObject, mfn)
+    if mPlug is not None:
+        import attributes
+        return attributes.Attribute(yam_node, mPlug)
+    elif component is not None:
+        import components
+        try:
+            return components.getComponent(yam_node, component, nofail=False)
+        except TypeError as e:
+            if cmds.objExists(node):
+                raise RuntimeError("No '{}' object found in scene".format(node))
+            raise e
+    return yam_node
 
 
 def yams(nodes):
@@ -862,10 +880,14 @@ class BlendShape(GeometryFilter):
         self.getTargets()
 
     def getTargets(self):
-        import attributes
-        targets = cmds.listAttr(self.name+'.weight[:]')
-        self._targets = [attributes.BlendshapeTarget(self, target, index) for index, target in enumerate(targets)]
-        self._targets_names = {target.attribute: target for target in self._targets}
+        import attributes as attrs
+        targets = cmds.listAttr(self.name + '.weight[:]')
+        self._targets = []
+        self._targets_names = {}
+        for index, target in enumerate(targets):
+            bs_target = attrs.BlendshapeTarget(self, attrs.getMPlug(self.name + '.' + target), index)
+            self._targets.append(bs_target)
+            self._targets_names[target] = bs_target
         return self._targets
 
     def targets(self, target):
