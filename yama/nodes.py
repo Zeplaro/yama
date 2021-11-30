@@ -66,7 +66,7 @@ def yam(node):
         mObject = node.node()
         mfn = om.MFnDependencyNode(mObject)
 
-    elif isinstance(node, om.Mplug):
+    elif isinstance(node, om.MPlug):
         mPlug = node
         mObject = mPlug.node()
         mfn = om.MFnDependencyNode(mObject)
@@ -280,14 +280,14 @@ class DependNode(Yam):
             self._mObject1 = mObject
         return self._mObject1
 
-    def rename(self, new_name):
+    def rename(self, newName):
         """
         Renames the node.
         Needs to use cmds to be undoable.
         :param new_name: str
         """
-        # self.mFnDependencyNode.setName(new_name)
-        cmds.rename(self.name, new_name)
+        # self.mFnDependencyNode.setName(newName)
+        cmds.rename(self.name, newName)
 
     @property
     def name(self):
@@ -304,7 +304,7 @@ class DependNode(Yam):
         :param attr: str
         :return: Attribute object
         """
-        assert attr
+        assert attr, ("No attribute given")
         import attributes
         return attributes.getAttribute(self, attr)
 
@@ -819,11 +819,11 @@ class SkinCluster(GeometryFilter):
     def influences(self):
         return yams(cmds.skinCluster(self.name, q=True, inf=True)) or []
 
-    def getVertexWeight(self, index, influences_len=None):
-        if influences_len is None:
-            influences_len = len(self.influences())
+    def getVertexWeight(self, index, numInfluences=None):
+        if numInfluences is None:
+            numInfluences = len(self.influences())
         weights = weightsdict.WeightsDict()
-        for jnt in range(influences_len):
+        for jnt in range(numInfluences):
             weights[jnt] = self.weightList[index].weights[jnt].value
         return weights
 
@@ -834,9 +834,9 @@ class SkinCluster(GeometryFilter):
     @property
     def weights(self):
         weights = {}
-        influences_len = len(self.influences())
+        numInfluences = len(self.influences())
         for i in range(len(self.geometry)):
-            weights[i] = self.getVertexWeight(i, influences_len)
+            weights[i] = self.getVertexWeight(i, numInfluences)
         return weights
 
     @weights.setter

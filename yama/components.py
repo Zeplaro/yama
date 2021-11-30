@@ -26,7 +26,7 @@ def getComponent(node, attr):
     """
     indices = []
     if '.' in attr:
-        return
+        raise TypeError("attr '{}' not in supported types".format(attr))
 
     split = []
     if '[' in attr:  # Checking if getting a specific index
@@ -59,13 +59,14 @@ def getComponent(node, attr):
         except (RuntimeError, TypeError) as e:
             print("failed to get component '{}' on '{}': {}".format(attr, node, e))
             raise e
+    raise TypeError("attr '{}' not in supported types".format(attr))
 
 
 class Components(nodes.Yam):
     """
     todo : docstring
     """
-    def __init__(self, node, attribute_name):
+    def __init__(self, node, componentName):
         if type(self) is Components:
             raise TypeError("'{}' should not be directly instantiated".format(self.__class__.__name__))
         super(Components, self).__init__()
@@ -74,7 +75,7 @@ class Components(nodes.Yam):
         assert isinstance(node, nodes.ControlPoint), "component node should be of type 'ControlPoint', " \
                                                "instead node type is '{}'".format(type(node).__name__)
         self.node = node
-        self.attribute_name = attribute_name
+        self.component_name = componentName
 
     def __getitem__(self, item):
         if item == '*':
@@ -90,14 +91,14 @@ class Components(nodes.Yam):
         return self.name
 
     def __repr__(self):
-        return "<class {}('{}', '{}')>".format(self.__class__.__name__, self.node.name, self.attribute_name)
+        return "<class {}('{}', '{}')>".format(self.__class__.__name__, self.node.name, self.component_name)
 
     @property
     def name(self):
-        return self.node + '.' + self.attribute_name
+        return self.node + '.' + self.component_name
 
-    def index(self, index, second_index=None, third_index=None):
-        return supported_types[self.attribute_name](self.node, self, index, second_index, third_index)
+    def index(self, index, secondIndex=None, thirdIndex=None):
+        return supported_types[self.component_name](self.node, self, index, secondIndex, thirdIndex)
 
     def getPositions(self, ws=False):
         return [x.getPosition(ws=ws) for x in self]
@@ -143,15 +144,15 @@ class Component(nodes.Yam):
     todo : docstring
     """
 
-    def __init__(self, node, components, index, second_index=None, third_index=None):
+    def __init__(self, node, components, index, secondIndex=None, thirdIndex=None):
         super(Component, self).__init__()
         if isinstance(node, nodes.Transform):
             node = node.shape
         self.node = node
         self.components = components
         self.index = index
-        self.second_index = second_index
-        self.third_index = third_index
+        self.second_index = secondIndex
+        self.third_index = thirdIndex
 
     def __str__(self):
         return self.name

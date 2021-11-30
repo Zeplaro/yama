@@ -18,7 +18,7 @@ if _pyversion == 3:
     basestring = str
 
 
-def getAttribute(node, attr):
+def getAttribute(node, attr, skipComponents=False):
     """
     todo
     :param node:
@@ -26,13 +26,14 @@ def getAttribute(node, attr):
     :return:
     """
     if isinstance(attr, basestring):
-        try:
-            return components.getComponent(node, attr)  # Trying to get component if one
-        except (RuntimeError, TypeError):
-            pass
+        if not skipComponents:
+            try:
+                return components.getComponent(node, attr)  # Trying to get component if one
+            except (RuntimeError, TypeError):
+                pass
 
         attr = getMPlug(str(node)+'.'+attr)
-    assert isinstance(attr, om.MPlug)
+    assert isinstance(attr, om.MPlug), ("'str' or 'OpenMaya.MPlug' expected, got '{}'".format(type(attr).__name__))
     return Attribute(node, attr)
 
 
@@ -102,8 +103,10 @@ class Attribute(nodes.Yam):
         if item == '*':
             item = slice(None)
         if isinstance(item, slice):
-            return nodes.YamList(getAttribute(self.node, '{}[{}]'.format(self.attribute, i)) for i in range(len(self))[item])
-        return getAttribute(self.node, '{}[{}]'.format(self.attribute, item))
+            return nodes.YamList(Attribute(self.node, self.mPlug.selectAncestorLogicalIndex(i))
+                                 for i in range(len(self))[item])
+
+        return Attribute(self.node, self.mPlug.selectAncestorLogicalIndex(item))
 
     def __add__(self, other):
         """
@@ -147,9 +150,6 @@ class Attribute(nodes.Yam):
         """
         self.disconnect(other)
 
-    def __call__(self, *args, **kwargs):
-        raise TypeError("'{}' object is not callable".format(self.__class__.__name__))
-
     def __len__(self):
         return self.mPlug.numElements()
 
@@ -184,15 +184,15 @@ class Attribute(nodes.Yam):
         :param attr: str
         :return: Attribute object
         """
-        return getAttribute(self.node, self.attribute + '.' + attr)
+        return getAttribute(self.node, self.attribute + '.' + attr, skipComponents=True)
 
     @property
     def attribute(self):
         return self.mPlug.partialName(useLongNames=True)
 
     @attribute.setter
-    def attribute(self, newname):
-        cmds.renameAttr(self.name, newname)
+    def attribute(self, newName):
+        cmds.renameAttr(self.name, newName)
 
     @property
     def value(self):
@@ -218,10 +218,7 @@ class Attribute(nodes.Yam):
     @property
     def parent(self):
         if self.mPlug.isElement:
-            parent_attr = self.attribute.split('[')
-            parent_attr = '['.join(parent_attr[:-1])
-            print(parent_attr)
-            return getAttribute(self.node, parent_attr)
+            return Attribute(self.node, self.mPlug.array())
         else:
             return Attribute(self.node, self.mPlug.parent())
 
@@ -401,10 +398,10 @@ class Attribute(nodes.Yam):
         return cmds.attributeQuery(self.attribute, node=self.node, niceName=True)
 
     @niceName.setter
-    def niceName(self, newname):
-        if newname is None:
-            newname = ''
-        cmds.addAttr(self.name, e=True, niceName=newname)
+    def niceName(self, newName):
+        if newName is None:
+            newName = ''
+        cmds.addAttr(self.name, e=True, niceName=newName)
 
 
 class BlendshapeTarget(Attribute):
