@@ -280,6 +280,9 @@ class Attribute(nodes.Yam):
             for c in self.destinationConnections():
                 self.disconnect(c)
 
+    def listAttr(self, **kwargs):
+        return nodes.listAttr(self, **kwargs)
+
     def type(self):
         """
         Returns the type of data currently in the attribute.

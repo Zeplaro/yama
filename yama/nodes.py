@@ -168,6 +168,50 @@ def select(*args, **kwargs):
     cmds.select(*sel, **kwargs)
 
 
+def listAttr(obj, **kwargs):
+    """
+    Returns the maya cmds.listAttr as Attribute objects.
+    If the attr returned by the cmds is part of an array attribute but the array attr has no index it will fail because
+    the child attribute doesn't really exists under the parent without index. This tries to fix that by adding a default
+    index of 0 to the parent array before returning the full attribute.
+    This workaround is not perfect and will only list attrs under the index 0 of array attrs
+    :param obj : DependNode or Attribute
+    :param kwargs: kwargs passed on to cmds.listAttr
+    :return: YamList([Attribute, ...])
+    """
+    obj = yam(obj)
+    import attributes
+    isAttr = False
+    if isinstance(obj, attributes.Attribute):
+        isAttr = True
+        if obj.mPlug.isArray:
+            obj = obj[0]
+    attrs = YamList()
+    for attr in cmds.listAttr(obj.name, **kwargs):
+        if isAttr:
+            # If obj is Attribute then removing the obj.attribute from the beginning of the listed attr
+            if kwargs.get('shortNames', False) or kwargs.get('sn', False):
+                attr = attr[len(obj.mPlug.partialName()):]
+            else:
+                attr = attr[len(obj.attribute):]
+        try:
+            attr = obj.attr(attr)
+            attrs.append(attr)
+        except AttributeError:
+            if '.' in attr:
+                try:
+                    split = attr.split('.')
+                    attr = obj.attr(split.pop(0))
+                    while split:
+                        if attr.mPlug.isArray:
+                            attr = attr[0]  # sets the array attr index to 0 to get a valid existing attribute 'child'
+                        attr = attr.attr(split.pop(0))
+                    attrs.append(attr)
+                except AttributeError as e:
+                    print("Failed to get atribute '{}' on '{}': {}".format(attr, obj, e))
+    return attrs
+
+
 class Yam(object):
     """
     todo : docstring
@@ -343,12 +387,16 @@ class DependNode(Yam):
         return self.listConnections(source=False, **kwargs)
 
     def listAttr(self, **kwargs):
-        """
-        Returns the maya cmds.listAttr as DependNode objects or Attribute objects.
-        :param kwargs: kwargs passed on to cmds.listAttr
-        :return: list[Attribute, ...]
-        """
-        return YamList(self.attr(x) for x in cmds.listAttr(self.name, **kwargs) or [])
+        return listAttr(self, **kwargs)
+
+    def listHistory(self, **kwargs):
+        type = None
+        if 'type' in kwargs:
+            type = kwargs.pop('type')
+        nodes = yams(cmds.listHistory(self.name, **kwargs))
+        if type:
+            nodes.keepType(type)
+        return nodes
 
     def type(self):
         """
