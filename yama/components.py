@@ -31,7 +31,7 @@ def getComponent(node, attr):
     split = []
     if '[' in attr:  # Checking if getting a specific index
         split = attr.split('[')
-        attr = split[0]
+        attr = split.pop(0)
 
     if attr in supported_types:
         try:
@@ -40,24 +40,24 @@ def getComponent(node, attr):
             dag, comp = ls.getComponent(0)
             api_type = comp.apiTypeStr
             if api_type in comp_MFn_id:
-                comp_class, attr_name = comp_MFn_id[api_type]
-                component = comp_class(node, attr_name)
-                for i in split[1:]:
-                    i = i[:-1]  # Removing the closing ']'
-                    if i == '*':  # if using the maya wildcard symbol
+                comp_name, comps_class, comp_class = comp_MFn_id[api_type]
+                component = comps_class(node, comp_name, comp_class)
+                for index in split:
+                    index = index[:-1]  # Removing the closing ']'
+                    if index == '*':  # if using the maya wildcard symbol
                         indices.append(slice(None))
-                    elif ':' in i:  # if using a slice to list multiple components
+                    elif ':' in index:  # if using a slice to list multiple components
                         slice_args = [int(x) if x else None for x in
-                                      i.split(':')]  # parsing the string into a proper slice
+                                      index.split(':')]  # parsing the string into a proper slice
                         indices.append(slice(*slice_args))
                     else:
-                        indices.append(int(i))
+                        indices.append(int(index))
                 while indices:
                     component = component[indices.pop(0)]
                 return component
             raise TypeError("attr '{}' of api type '{}' not in supported types".format(attr, api_type))
         except (RuntimeError, TypeError) as e:
-            print("## failed to get component '{}' on '{}': {}".format(attr, node, e))
+            # print("## failed to get component '{}' on '{}': {}".format(attr, node, e))
             raise e
     raise TypeError("attr '{}' not in supported types".format(attr))
 
@@ -66,7 +66,7 @@ class Components(nodes.Yam):
     """
     todo : docstring
     """
-    def __init__(self, node, componentName):
+    def __init__(self, node, componentName, componentClass):
         if type(self) is Components:
             raise TypeError("'{}' should not be directly instantiated".format(self.__class__.__name__))
         super(Components, self).__init__()
@@ -76,6 +76,7 @@ class Components(nodes.Yam):
                                                      "instead node type is '{}'".format(type(node).__name__)
         self.node = node
         self.component_name = componentName
+        self.component_class = componentClass
 
     def __getitem__(self, item):
         if item == '*':
@@ -98,7 +99,7 @@ class Components(nodes.Yam):
         return self.node + '.' + self.component_name
 
     def index(self, index, secondIndex=None, thirdIndex=None):
-        return supported_types[self.component_name](self.node, self, index, secondIndex, thirdIndex)
+        return self.component_class(self.node, self, index, secondIndex, thirdIndex)
 
     def getPositions(self, ws=False):
         return [x.getPosition(ws=ws) for x in self]
@@ -198,11 +199,11 @@ class Component(nodes.Yam):
 
     @property
     def attribute(self):
-        attribute = '{}[{}]'.format(self.components.component_name, self.index)
+        attribute = self.components.component_name + '[' + str(self.index) + ']'
         if self.second_index is not None:
-            attribute += '[{}]'.format(self.second_index)
+            attribute += '[' + str(self.second_index) + ']'
         if self.third_index is not None:
-            attribute += '[{}]'.format(self.third_index)
+            attribute += '[' + str(self.third_index) + ']'
         return attribute
 
     def getPosition(self, ws=False):
@@ -260,30 +261,19 @@ class CurveCV(Component):
             self.node.mFnNurbsCurve.setCVPosition(self.index, point, space)
 
 
-supported_types = {'cv': Component,
-                   'e': Component,
-                   'ep': Component,
-                   'f': Component,
-                   'map': Component,
-                   'pt': Component,
-                   'sf': Component,
-                   'u': Component,
-                   'v': Component,
-                   'vtx': MeshVertex,  # TODO: fix type assignment
-                   'vtxFace': Component,
-                   'cp': Component,
-                   }
+# Removed 'v' cause rarely used and similar to short name of 'visibility'
+supported_types = {'cv', 'e', 'ep', 'f', 'map', 'pt', 'sf', 'u', '#v', 'vtx', 'vtxFace', 'cp', }
 
-comp_MFn_id = {'kCurveCVComponent': (SingleIndexed, 'cv'),  # 533
-               'kCurveEPComponent': (SingleIndexed, 'ep'),  # 534
-               'kCurveParamComponent': (SingleIndexed, 'u'),  # 536
-               'kIsoparmComponent': (DoubleIndexed, 'v'),  # 537
-               'kSurfaceCVComponent': (DoubleIndexed, 'cv'),  # 539
-               'kLatticeComponent': (TripleIndexed, 'pt'),  # 543
-               'kMeshEdgeComponent': (SingleIndexed, 'e'),  # 548
-               'kMeshPolygonComponent': (SingleIndexed, 'f'),  # 549
-               'kMeshVertComponent': (SingleIndexed, 'vtx'),  # 551
-               'kCharacterMappingData': (SingleIndexed, 'vtxFace'),  # 741
-               'kSurfaceFaceComponent': (DoubleIndexed, 'sf'),  # 774
-               'kInt64ArrayData': (SingleIndexed, 'map'),  # 813
+comp_MFn_id = {'kCurveCVComponent': ('cv', SingleIndexed, CurveCV),  # 533
+               'kCurveEPComponent': ('ep', SingleIndexed, Component),  # 534
+               'kCurveParamComponent': ('u', SingleIndexed, Component),  # 536
+               'kIsoparmComponent': ('v', DoubleIndexed, Component),  # 537
+               'kSurfaceCVComponent': ('cv', DoubleIndexed, Component),  # 539
+               'kLatticeComponent': ('pt', TripleIndexed, Component),  # 543
+               'kMeshEdgeComponent': ('e', SingleIndexed, Component),  # 548
+               'kMeshPolygonComponent': ('f', SingleIndexed, Component),  # 549
+               'kMeshVertComponent': ('vtx', SingleIndexed, MeshVertex),  # 551
+               'kCharacterMappingData': ('vtxFace', SingleIndexed, Component),  # 741
+               'kSurfaceFaceComponent': ('sf', DoubleIndexed, Component),  # 774
+               'kInt64ArrayData': ('map', SingleIndexed, Component),  # 813
                }

@@ -9,7 +9,6 @@ from maya import cmds
 import maya.api.OpenMaya as om
 import config
 import nodes
-import components
 import weightsdict
 
 # python 2 to 3 compatibility
@@ -18,7 +17,7 @@ if _pyversion == 3:
     basestring = str
 
 
-def getAttribute(node, attr, skipComponents=False):
+def getAttribute(node, attr):
     """
     todo
     :param node:
@@ -26,13 +25,7 @@ def getAttribute(node, attr, skipComponents=False):
     :return:
     """
     if isinstance(attr, basestring):
-        if not skipComponents:
-            try:
-                return components.getComponent(node, attr)  # Trying to get component if one
-            except (RuntimeError, TypeError):
-                pass
-
-        attr = getMPlug(str(node)+'.'+attr)
+        attr = getMPlug(node + '.' + attr)
     assert isinstance(attr, om.MPlug), "'str' or 'OpenMaya.MPlug' expected, got '{}'".format(type(attr).__name__)
     return Attribute(node, attr)
 
@@ -40,13 +33,12 @@ def getAttribute(node, attr, skipComponents=False):
 def getMPlug(attr):
     om_list = om.MSelectionList()
     try:
-        om_list.add(str(attr))
+        om_list.add(attr)
     except RuntimeError as e:
         raise AttributeError("Attribute '{}' does not exist".format(attr))
 
-    # Fails to get plug on some compound attributes
     try:
-        mPlug = om_list.getPlug(0)
+        mPlug = om_list.getPlug(0)  # Fails to get plug on some compound attributes
     except TypeError:
         mObject = om_list.getDependNode(0)
         mfn = om.MFnDependencyNode(mObject)
@@ -106,7 +98,10 @@ class Attribute(nodes.Yam):
             return nodes.YamList(Attribute(self.node, self.mPlug.selectAncestorLogicalIndex(i))
                                  for i in range(len(self))[item])
 
-        return Attribute(self.node, self.mPlug.selectAncestorLogicalIndex(item))
+        try:
+            return Attribute(self.node, self.mPlug.selectAncestorLogicalIndex(item))
+        except RuntimeError:
+            raise RuntimeError("'{}' is not an array attribute and cannot use __getitem__".format(self))
 
     def __add__(self, other):
         """

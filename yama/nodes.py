@@ -208,7 +208,7 @@ def listAttr(obj, **kwargs):
                         attr = attr.attr(split.pop(0))
                     attrs.append(attr)
                 except AttributeError as e:
-                    print("Failed to get atribute '{}' on '{}': {}".format(attr, obj, e))
+                    print("Failed to get attribute '{}' on '{}': {}".format(attr, obj, e))
     return attrs
 
 
@@ -349,8 +349,13 @@ class DependNode(Yam):
         :return: Attribute object
         """
         assert attr, "No attribute given"
-        import attributes
-        return attributes.getAttribute(self, attr)
+
+        try:
+            import components
+            return components.getComponent(self, attr)  # Trying to get component if one
+        except (RuntimeError, TypeError):
+            import attributes
+            return attributes.getAttribute(self, attr)
 
     def listRelatives(self, **kwargs):
         """
