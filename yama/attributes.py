@@ -179,7 +179,7 @@ class Attribute(nodes.Yam):
         :param attr: str
         :return: Attribute object
         """
-        return getAttribute(self.node, self.attribute + '.' + attr, skipComponents=True)
+        return getAttribute(self.node, self.attribute + '.' + attr)
 
     @property
     def attribute(self):
