@@ -92,9 +92,9 @@ def yam(node):
     elif component is not None:
         import components
         try:
-            return components.getComponent(yam_node, component, nofail=False)
+            return components.getComponent(yam_node, component)
         except TypeError as e:
-            if cmds.objExists(node):
+            if not cmds.objExists(node):
                 raise RuntimeError("No '{}' object found in scene".format(node))
             raise e
     return yam_node
@@ -348,7 +348,7 @@ class DependNode(Yam):
         :param attr: str
         :return: Attribute object
         """
-        assert attr, ("No attribute given")
+        assert attr, "No attribute given"
         import attributes
         return attributes.getAttribute(self, attr)
 

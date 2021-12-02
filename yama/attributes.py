@@ -33,7 +33,7 @@ def getAttribute(node, attr, skipComponents=False):
                 pass
 
         attr = getMPlug(str(node)+'.'+attr)
-    assert isinstance(attr, om.MPlug), ("'str' or 'OpenMaya.MPlug' expected, got '{}'".format(type(attr).__name__))
+    assert isinstance(attr, om.MPlug), "'str' or 'OpenMaya.MPlug' expected, got '{}'".format(type(attr).__name__)
     return Attribute(node, attr)
 
 
@@ -465,8 +465,8 @@ def setAttr(attr, value, **kwargs):
 
 
 def getMPlugValue(mPlug):
-    assert isinstance(mPlug, om.MPlug), ("'OpenMaya.MPlug' object expected, instead got : "
-                                         "'{}' of type '{}'".format(mPlug, type(mPlug).__name__))
+    assert isinstance(mPlug, om.MPlug), "'OpenMaya.MPlug' object expected, " \
+                                        "instead got : '{}' of type '{}'".format(mPlug, type(mPlug).__name__)
     attr_type = mPlug.attribute().apiTypeStr
     if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute'):
         return mPlug.asDouble()
@@ -494,8 +494,8 @@ def getMPlugValue(mPlug):
 
 
 def setMPlugValue(mPlug, value):
-    assert isinstance(mPlug, om.MPlug), ("'OpenMaya.MPlug' object expected, instead got : "
-                                         "'{}' of type '{}'".format(mPlug, type(mPlug).__name__))
+    assert isinstance(mPlug, om.MPlug), "'OpenMaya.MPlug' object expected, instead got : " \
+                                        "'{}' of type '{}'".format(mPlug, type(mPlug).__name__)
     attr_type = mPlug.attribute().apiTypeStr
     if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute'):
         mPlug.setDouble(value)

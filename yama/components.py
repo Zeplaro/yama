@@ -57,7 +57,7 @@ def getComponent(node, attr):
                 return component
             raise TypeError("attr '{}' of api type '{}' not in supported types".format(attr, api_type))
         except (RuntimeError, TypeError) as e:
-            print("failed to get component '{}' on '{}': {}".format(attr, node, e))
+            print("## failed to get component '{}' on '{}': {}".format(attr, node, e))
             raise e
     raise TypeError("attr '{}' not in supported types".format(attr))
 
@@ -73,7 +73,7 @@ class Components(nodes.Yam):
         if isinstance(node, nodes.Transform):
             node = node.shape
         assert isinstance(node, nodes.ControlPoint), "component node should be of type 'ControlPoint', " \
-                                               "instead node type is '{}'".format(type(node).__name__)
+                                                     "instead node type is '{}'".format(type(node).__name__)
         self.node = node
         self.component_name = componentName
 
@@ -160,14 +160,14 @@ class Component(nodes.Yam):
     def __repr__(self):
         if self.third_index is not None:
             return "<class {}('{}', '{}', {}, {}, {})>".format(self.__class__.__name__, self.node,
-                                                               self.components.attribute_name, self.index,
+                                                               self.components.component_name, self.index,
                                                                self.second_index, self.third_index)
         elif self.second_index is not None:
             return "<class {}('{}', '{}', {}, {})>".format(self.__class__.__name__, self.node,
-                                                           self.components.attribute_name, self.index, self.second_index)
+                                                           self.components.component_name, self.index, self.second_index)
         else:
             return "<class {}('{}', '{}', {})>".format(self.__class__.__name__, self.node,
-                                                       self.components.attribute_name, self.index)
+                                                       self.components.component_name, self.index)
 
     def __getitem__(self, item):
         """
@@ -198,7 +198,7 @@ class Component(nodes.Yam):
 
     @property
     def attribute(self):
-        attribute = '{}[{}]'.format(self.components.attribute_name, self.index)
+        attribute = '{}[{}]'.format(self.components.component_name, self.index)
         if self.second_index is not None:
             attribute += '[{}]'.format(self.second_index)
         if self.third_index is not None:
@@ -269,7 +269,7 @@ supported_types = {'cv': Component,
                    'sf': Component,
                    'u': Component,
                    'v': Component,
-                   'vtx': MeshVertex,
+                   'vtx': MeshVertex,  # TODO: fix type assignment
                    'vtxFace': Component,
                    'cp': Component,
                    }

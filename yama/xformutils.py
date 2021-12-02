@@ -46,7 +46,7 @@ def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene',
     """
     if not objs:
         objs = nodes.selected()
-    assert objs and len(objs) > 1, 'Not enough object selected'
+    assert objs and len(objs) > 1, "Not enough object selected"
     objs = nodes.yams(objs)
     poses = [x.getXform(t=True, ws=True) for x in objs]
     nulls = nodes.YamList(nodes.createNode('transform') for _ in objs)
@@ -74,7 +74,7 @@ def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene',
 def match(objs=None, t=True, r=True, s=False):
     if not objs:
         objs = nodes.selected()
-    assert objs > 1, 'Less than 2 objects selected'
+    assert objs > 1, "Less than 2 objects selected"
     objs = nodes.yams(objs)
 
     master, slaves = objs[0], objs[1:]
@@ -101,3 +101,19 @@ def match(objs=None, t=True, r=True, s=False):
                 slave.setPosition(pos, ws=True)
         else:
             print("Cannot match '{}' of type '{}'".format(slave, type(slave).__name__))
+
+
+def getCenter(objs):
+    objs = nodes.yams(objs)
+    assert objs, "No objects given"
+    poses = [x.getPosition(ws=True) for x in objs]
+    xs = [x for x, y, z in poses]
+    ys = [y for x, y, z in poses]
+    zs = [z for x, y, z in poses]
+    minx, maxx = min(xs), max(xs)
+    miny, maxy = min(ys), max(ys)
+    minz, maxz = min(zs), max(zs)
+    x = (minx + maxx) / 2
+    y = (miny + maxy) / 2
+    z = (minz + maxz) / 2
+    return [x, y, z]
