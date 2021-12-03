@@ -183,7 +183,7 @@ class Attribute(nodes.Yam):
 
     @property
     def attribute(self):
-        return self.mPlug.partialName(useLongNames=True)
+        return self.mPlug.partialName(useLongNames=True, includeInstancedIndices=True)
 
     @attribute.setter
     def attribute(self, newName):
