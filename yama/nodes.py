@@ -17,7 +17,7 @@ _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
 
-import weightsdict as wdt
+import weightsdict
 
 
 def yam(node):
@@ -33,12 +33,9 @@ def yam(node):
     Attribute('pCube1.tz')
     """
 
-    attr = None
+    mPlug = None
+    component = None
     if isinstance(node, basestring):
-        if '.' in node:  # checking if an attribute was given with the node and splits it to call it later
-            split = node.split('.')
-            node = split.pop(0)
-            attr = '.'.join(split)
         # Getting the mObject associated with the given node uses 'try' in case the node does not exists or multiple
         # objects with the same name exists.
         mSelectionList = om.MSelectionList()
@@ -48,6 +45,13 @@ def yam(node):
             if cmds.objExists(node):
                 raise RuntimeError("more than one object called '{}'".format(node))
             raise RuntimeError("No '{}' object found in scene".format(node))
+
+        if '.' in node:  # checking if an attribute was given with the node
+            try:
+                mPlug = mSelectionList.getPlug(0)
+            except TypeError:
+                component = node.split('.')[-1]
+
         mObject = mSelectionList.getDependNode(0)
         mfn = om.MFnDependencyNode(mObject)
 
@@ -57,29 +61,43 @@ def yam(node):
     elif isinstance(node, om.MObject):
         mObject = node
         mfn = om.MFnDependencyNode(mObject)
-        node = mfn.name()
 
     elif isinstance(node, om.MDagPath):
         mObject = node.node()
         mfn = om.MFnDependencyNode(mObject)
-        node = mfn.name()
+
+    elif isinstance(node, om.MPlug):
+        mPlug = node
+        mObject = mPlug.node()
+        mfn = om.MFnDependencyNode(mObject)
 
     else:
-        raise TypeError("yam(): str, OpenMaya.MObject or OpenMaya.MDagPath expected,"
+        raise TypeError("yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected,"
                         " got {}.".format(node.__class__.__name__))
 
     # checking if node type has a supported class, if not defaults to DependNode
     assigned_class = supported_classes.get(mfn.typeName)  # skips the mc.nodeType if exact type is in supported_class
     if not assigned_class:
+        node = mfn.name()
         assigned_class = DependNode
         for node_type in cmds.nodeType(node, i=True)[::-1]:  # checks each inherited types for the node
             if node_type in supported_classes:
                 assigned_class = supported_classes[node_type]
                 break
 
-    if attr is not None:
-        return assigned_class(mObject, mfn).attr(attr)  # gets and returns an Attribute object if an attribute was given
-    return assigned_class(mObject, mfn)
+    yam_node = assigned_class(mObject, mfn)
+    if mPlug is not None:
+        import attributes
+        return attributes.Attribute(yam_node, mPlug)
+    elif component is not None:
+        import components
+        try:
+            return components.getComponent(yam_node, component)
+        except TypeError as e:
+            if not cmds.objExists(node):
+                raise RuntimeError("No '{}' object found in scene".format(node))
+            raise e
+    return yam_node
 
 
 def yams(nodes):
@@ -101,18 +119,111 @@ def createNode(*args, **kwargs):
     return yam(cmds.createNode(*args, **kwargs))
 
 
+def spaceLocator(name, pos=(0, 0, 0), rot=(0, 0, 0), parent=None, ws=False):
+    """
+    Creates a locator.
+    :param name: str, the locator name
+    :param pos: list(float, float, float), the locator position after being parented
+    :param rot: list(float, float, float), the locator rotation after being parented
+    :param parent: the locator parent
+    :param ws: if true sets the pos and rot values in world space
+    :return: the locator Transform node object
+    """
+    loc = yam(cmds.spaceLocator(name=name)[0])
+    loc.parent = parent
+    loc.setXform(t=pos, ro=rot, ws=ws)
+    return loc
+
+
 def ls(*args, **kwargs):
+    """Wrapper for 'maya.cmds.ls' but returning yam objects."""
     if 'fl' not in kwargs and 'flatten' not in kwargs:
         kwargs['fl'] = True
     return yams(cmds.ls(*args, **kwargs))
 
 
 def selected(**kwargs):
+    """Returns current scene selection as yam objects; kwargs are passed on to 'ls'."""
     return ls(os=True, **kwargs)
 
 
+def select(*args, **kwargs):
+    """Set current scene selection with given args and kwargs. Allows to pass yam object into the select function."""
+    sel = []
+    for arg in args:
+        if isinstance(arg, YamList):
+            sel.append(arg.names())
+        elif isinstance(arg, Yam):
+            sel.append(str(arg))
+        elif isinstance(arg, (list, tuple, dict, set)):
+            new = []
+            for arg_ in arg:
+                if isinstance(arg_, Yam):
+                    new.append(str(arg_))
+                else:
+                    new.append(arg_)
+            sel.append(new)
+        else:
+            sel.append(arg)
+    cmds.select(*sel, **kwargs)
+
+
+def listAttr(obj, **kwargs):
+    """
+    Returns the maya cmds.listAttr as Attribute objects.
+    If the attr returned by the cmds is part of an array attribute but the array attr has no index it will fail because
+    the child attribute doesn't really exists under the parent without index. This tries to fix that by adding a default
+    index of 0 to the parent array before returning the full attribute.
+    This workaround is not perfect and will only list attrs under the index 0 of array attrs
+    :param obj : DependNode or Attribute
+    :param kwargs: kwargs passed on to cmds.listAttr
+    :return: YamList([Attribute, ...])
+    """
+    obj = yam(obj)
+    import attributes
+    isAttr = False
+    if isinstance(obj, attributes.Attribute):
+        isAttr = True
+        if obj.mPlug.isArray:
+            obj = obj[0]
+    attrs = YamList()
+    for attr in cmds.listAttr(obj.name, **kwargs):
+        if isAttr:
+            # If obj is Attribute then removing the obj.attribute from the beginning of the listed attr
+            if kwargs.get('shortNames', False) or kwargs.get('sn', False):
+                attr = attr[len(obj.mPlug.partialName()):]
+            else:
+                attr = attr[len(obj.attribute):]
+        try:
+            attr = obj.attr(attr)
+            attrs.append(attr)
+        except AttributeError:
+            if '.' in attr:
+                try:
+                    split = attr.split('.')
+                    attr = obj.attr(split.pop(0))
+                    while split:
+                        if attr.mPlug.isArray:
+                            attr = attr[0]  # sets the array attr index to 0 to get a valid existing attribute 'child'
+                        attr = attr.attr(split.pop(0))
+                    attrs.append(attr)
+                except AttributeError as e:
+                    print("Failed to get attribute '{}' on '{}': {}".format(attr, obj, e))
+    return attrs
+
+
 class Yam(object):
-    pass
+    """
+    todo : docstring
+    """
+
+    def __eq__(self, other):
+        if str(self) == str(other):
+            return True
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 class DependNode(Yam):
@@ -133,6 +244,7 @@ class DependNode(Yam):
         :param mObject: maya api MObject
         :param mFnDependencyNode:
         """
+        super(DependNode, self).__init__()
         assert isinstance(mObject, om.MObject)
         self.mObject = mObject
         self._mObject1 = None
@@ -167,6 +279,9 @@ class DependNode(Yam):
         """
         return self.name + other
 
+    def __iadd__(self, other):
+        self.rename(self.name + str(other))
+
     def __radd__(self, other):
         """
         Adds the node's name and returns a str.
@@ -185,13 +300,15 @@ class DependNode(Yam):
             other = yam(other)
         return self.mObject == other.mObject
 
-    def __apiobject__(self):
+    def __bool__(self):
         """
-        Gets the maya api 1.0 MObject for this object.
-        Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
+        Needed for Truth testing since __len__ is defined but does not work on non array attributes.
+        :return: True
         """
-        print('calling __apiobject__ for ' + self.name)
-        return self.mObject1
+        return True
+
+    def __nonzero__(self):
+        return self.__bool__()
 
     @property
     def mObject1(self):
@@ -207,14 +324,14 @@ class DependNode(Yam):
             self._mObject1 = mObject
         return self._mObject1
 
-    def rename(self, new_name):
+    def rename(self, newName):
         """
         Renames the node.
         Needs to use cmds to be undoable.
         :param new_name: str
         """
-        # self.mFnDependencyNode.setName(new_name)
-        cmds.rename(self.name, new_name)
+        # self.mFnDependencyNode.setName(newName)
+        cmds.rename(self.name, newName)
 
     @property
     def name(self):
@@ -231,9 +348,14 @@ class DependNode(Yam):
         :param attr: str
         :return: Attribute object
         """
-        assert attr
-        import attributes
-        return attributes.getAttribute(self, attr)
+        assert attr, "No attribute given"
+
+        try:
+            import components
+            return components.getComponent(self, attr)  # Trying to get component if one
+        except (RuntimeError, TypeError):
+            import attributes
+            return attributes.getAttribute(self, attr)
 
     def listRelatives(self, **kwargs):
         """
@@ -270,12 +392,16 @@ class DependNode(Yam):
         return self.listConnections(source=False, **kwargs)
 
     def listAttr(self, **kwargs):
-        """
-        Returns the maya cmds.listAttr as DependNode objects or Attribute objects.
-        :param kwargs: kwargs passed on to cmds.listAttr
-        :return: list[Attribute, ...]
-        """
-        return yams(cmds.listAttr(self.name, **kwargs) or [])
+        return listAttr(self, **kwargs)
+
+    def listHistory(self, **kwargs):
+        type = None
+        if 'type' in kwargs:
+            type = kwargs.pop('type')
+        nodes = yams(cmds.listHistory(self.name, **kwargs))
+        if type:
+            nodes.keepType(type)
+        return nodes
 
     def type(self):
         """
@@ -285,6 +411,11 @@ class DependNode(Yam):
         return self.mFnDependencyNode.typeName
 
     def inheritedTypes(self):
+        """
+        Lists the inherited maya types.
+        e.g.: for a joint -> ['']
+        :return:
+        """
         return cmds.nodeType(self.name, inherited=True)
 
 
@@ -298,14 +429,6 @@ class DagNode(DependNode):
         self._mDagPath = None
         self._mDagPath1 = None
         self._mFnDagNode = None
-
-    def __contains__(self, item):
-        """
-        Checks if the item is a children of self.
-        """
-        if not isinstance(item, DependNode):
-            item = yam(item)
-        return item.longname().startswith(self.longname())
 
     @property
     def mDagPath(self):
@@ -326,14 +449,6 @@ class DagNode(DependNode):
         if self._mDagPath1 is None:
             self._mDagPath1 = om1.MDagPath.getApAthTo(self.mObject1)
         return self._mDagPath1
-
-    def __apiobject__(self):
-        """
-        Gets the maya api 1.0 MDagPath for this object
-        Seems needed for reasons I did not explore yet. And it's implemented like that in pymel so...
-        """
-        print('calling __apiobject__ from dagNode for ' + self.name)
-        return self.mDagPath1
 
     @property
     def mFnDagNode(self):
@@ -358,7 +473,13 @@ class DagNode(DependNode):
 
     @parent.setter
     def parent(self, parent):
-        if parent is None:
+        """
+        Sets the node under the given parent or world if None.
+        :return: DependNode or None
+        """
+        if self.parent is parent:
+            return
+        elif parent is None:
             cmds.parent(self.name, world=True)
         else:
             cmds.parent(self.name, parent)
@@ -375,21 +496,38 @@ class DagNode(DependNode):
         """
         Property setter needed again even if defined in parent class.
         """
-        super(DagNode, self).name = value
+        self.rename(value)
 
-    def longname(self):
+    def longName(self):
         """
         Gets the full path name of the object including the leading |.
         :return: str
         """
         return self.mDagPath.fullPathName()
 
-    fullPath = longname
+    fullPath = longName
 
 
 class Transform(DagNode):
     def __init__(self, mObject, mFnDependencyNode):
         super(Transform, self).__init__(mObject, mFnDependencyNode)
+
+    def __len__(self):
+        shape = self.shape
+        if shape:
+            return len(shape)
+        raise TypeError("object has no shape and type '{}' has no len()".format(self.__class__.__name__))
+
+    def __contains__(self, item):
+        """
+        Checks if the item is a children of self.
+        """
+        if not isinstance(item, DependNode):
+            try:
+                item = yam(item)
+            except RuntimeError:
+                raise RuntimeError("in '{}.__contains__('{}')'. No '{}' object found in scene".format(self, item, item))
+        return item.longName().startswith(self.longName())
 
     def children(self, type=None, noIntermediate=True):
         """
@@ -480,6 +618,8 @@ class Shape(DagNode):
 
     @parent.setter
     def parent(self, parent):
+        if self.parent is parent:
+            return
         cmds.parent(self.name, parent, r=True, s=True)
 
 
@@ -487,8 +627,19 @@ class ControlPoint(Shape):
     """
     Handles shape that have control point; e.g.: Mesh, NurbsCurve, NurbsSurface, Lattice
     """
+
     def __init__(self, mObject, mFnDependencyNode):
         super(ControlPoint, self).__init__(mObject, mFnDependencyNode)
+
+    def __len__(self):
+        return len(cmds.ls(self.name+'.cp[*]', fl=True))
+
+    def getPositions(self, ws=False):
+        return [cp.getPosition(ws=ws) for cp in self.cp]
+
+    def setPositions(self, data, ws=False):
+        for cp, pos in zip(self.cp, data):
+            cp.setPosition(pos, ws=ws)
 
 
 class Mesh(ControlPoint):
@@ -506,22 +657,38 @@ class Mesh(ControlPoint):
     @property
     def mFnMesh(self):
         if self._mFnMesh is None:
-            self._mFnMesh = om.MFnMesh(self.mObject)
+            self._mFnMesh = om.MFnMesh(self.mDagPath)
         return self._mFnMesh
 
-    def getVtxPosition(self, ws=False):
-        import utils
-        pos = []
-        os = not ws
-        for vtx in utils.componentRange(self, 'vtx', len(self)):
-            pos.append(cmds.xform(vtx, q=True, t=True, ws=ws, os=os))
-        return pos
+    def shells(self):
+        polygon_counts, polygon_connects = self.mFnMesh.getVertices()
+        faces_vtxs = []
+        i = 0
+        for poly_count in polygon_counts:
+            faces_vtxs.append(polygon_connects[i:poly_count + i])
+            i += poly_count
 
-    def setVtxPosition(self, data, ws=False):
-        import utils
-        os = not ws
-        for vtx, pos in zip(utils.componentRange(self, 'vtx', len(self)), data):
-            cmds.xform(vtx, t=pos, ws=ws, os=os)
+        shells = []
+        finished = False
+        while not finished:
+            finished = True
+            for face_vtxs in faces_vtxs:
+                added = False
+                for shell in shells:
+                    for vtx in face_vtxs:
+                        if vtx in shell:
+                            shell.update(face_vtxs)
+                            added = True
+                            finished = False
+                            break
+                    if added:
+                        break
+                if not added:
+                    shells.append(set(face_vtxs))
+            if not finished:
+                faces_vtxs = shells
+                shells = []
+        return shells
 
 
 class NurbsCurve(ControlPoint):
@@ -549,50 +716,25 @@ class NurbsCurve(ControlPoint):
     @property
     def mFnNurbsCurve(self):
         if self._mFnNurbsCurve is None:
-            self._mFnNurbsCurve = om.MFnNurbsCurve(self.mObject)
+            self._mFnNurbsCurve = om.MFnNurbsCurve(self.mDagPath)
         return self._mFnNurbsCurve
 
-    def getCvsPosition(self, ws=False):
-        import utils
-        pos = []
-        os = not ws
-        for cv in utils.componentRange(self, 'cv', len(self)):
-            pos.append(cmds.xform(cv, q=True, t=True, ws=ws, os=os))
-        return pos
-
-    def setCvsPosition(self, data, ws=False):
-        import utils
-        os = not ws
-        for cv, pos in zip(utils.componentRange(self, 'cv', len(self)), data):
-            cmds.xform(cv, t=pos, ws=ws, os=os)
-
-    @staticmethod
-    def getControlPointPosition(controls):
-        # todo: copied form old node work, needs cleanup
-        return [cmds.xform(x, q=True, os=True, t=True) for x in controls]
-
-    @staticmethod
-    def setControlPointPosition(controls, positions):
-        # todo: copied form old node work, needs cleanup
-        [cmds.xform(control, os=True, t=position) for control in controls for position in positions]
-
-    @property
-    def arclen(self, os=False):
+    def arclen(self, ws=False):
         """
         Gets the world space or object space arc length of the curve.
-        :param os: if True return the objectSpace length.
+        :param ws: if False return the objectSpace length.
         :return: float
         """
-        if os:
+        if not ws:
             return self.mFnNurbsCurve.length()
         return cmds.arclen(self.name)
 
     @property
     def data(self):
         data = {'cvs': self.mFnNurbsCurve.cvPositions(),
-                'knots': self.mFnNurbsCurve.knots(),
-                'degree': self.mFnNurbsCurve.degree,
-                'form': self.mFnNurbsCurve.form,
+                'knots': self.knots(),
+                'degree': self.degree(),
+                'form': self.form(),
                 }
         return data
 
@@ -602,39 +744,59 @@ class NurbsCurve(ControlPoint):
         for d in data:
             setattr(d, data[d])
 
-    @property
     def knots(self):
-        # todo: copied form old node work, needs cleanup
-        nb_knots = len(self) + self.degree.value - 1
-        print('Nb of knots: {}'.format(nb_knots))
+        return list(self.mFnNurbsCurve.knots())
 
-        if self.form.value == 0:
-            knots = list(range(nb_knots - (self.degree.value - 1) * 2))
-            for i in range(self.degree.value - 1):
-                knots = knots[:1] + knots
-                knots += knots[-1:]
-        else:
-            knots = list(range(nb_knots - (self.degree.value - 1)))
-            for i in range(self.degree.value - 1):
-                knots.insert(0, knots[0] - 1)
+    def degree(self):
+        return self.mFnNurbsCurve.degree
 
-        if self.type == 'bezierCurve':
-            knots = []
-            for i in range(nb_knots / 3):
-                for j in range(3):
-                    knots.append(i)
-        knots = [float(x) for x in knots]
-        return knots
+    def form(self):
+        return self.mFnNurbsCurve.form
 
 
 class NurbsSurface(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
         super(NurbsSurface, self).__init__(mObject, mFnDependencyNode)
+        self._mFnNurbsSurface = None
+
+    def __len__(self):
+        return self.lenU() * self.lenV()
+
+    @property
+    def mFnNurbsSurface(self):
+        if self._mFnNurbsSurface is None:
+            self._mFnNurbsSurface = om.MFnNurbsSurface(self.mDagPath)
+        return self._mFnNurbsSurface
+
+    def lenUV(self):
+        return [self.lenU(), self.lenV()]
+
+    def lenU(self):
+        return self.mFnNurbsSurface.numCVsInU
+
+    def lenV(self):
+        return self.mFnNurbsSurface.numCVsInV
 
 
 class Lattice(ControlPoint):
     def __init__(self, mObject, mFnDependencyNode):
         super(Lattice, self).__init__(mObject, mFnDependencyNode)
+
+    def __len__(self):
+        x, y, z = self.lenXYZ()
+        return x * y * z
+
+    def lenXYZ(self):
+        return cmds.lattice(self.name, divisions=True, q=True)
+
+    def lenX(self):
+        return self.lenXYZ()[0]
+
+    def lenY(self):
+        return self.lenXYZ()[1]
+
+    def lenZ(self):
+        return self.lenXYZ()[2]
 
 
 class Locator(Shape):
@@ -658,8 +820,8 @@ class WeightGeometryFilter(GeometryFilter):
 
     @property
     def weights(self):
-        weights = wdt.WeightsDict(self)
-        for i in self.geometry.get_components_index():
+        weights = weightsdict.WeightsDict()
+        for i in range(len(self.geometry)):
             weights[i] = self.weightsAttr(i).value
         return weights
 
@@ -710,36 +872,42 @@ class SkinCluster(GeometryFilter):
     def influences(self):
         return yams(cmds.skinCluster(self.name, q=True, inf=True)) or []
 
+    def getVertexWeight(self, index, numInfluences=None):
+        if numInfluences is None:
+            numInfluences = len(self.influences())
+        weights = weightsdict.WeightsDict()
+        for jnt in range(numInfluences):
+            weights[jnt] = self.weightList[index].weights[jnt].value
+        return weights
+
+    def setVertexWeight(self, index, values):
+        for jnt, value in values.items():
+            self.weightList[index].weights[jnt].value = value
+
     @property
     def weights(self):
         weights = {}
-        for i in self.geometry.get_component_indexes():
-            weights[i] = wdt.WeightsDict()
-            for jnt, _ in enumerate(self.influences()):
-                weights[i][jnt] = self.weightList[i].weights[jnt].value
+        numInfluences = len(self.influences())
+        for i in range(len(self.geometry)):
+            weights[i] = self.getVertexWeight(i, numInfluences)
         return weights
 
     @weights.setter
     def weights(self, weights):
         for vtx in weights:
-            for jnt in weights[vtx]:
-                self.weightList[vtx].weights[jnt].value = weights[vtx][jnt]
+            self.setVertexWeight(vtx, weights[vtx])
 
     @property
     def dqWeights(self):
-        dq_weights = wdt.WeightsDict()
+        dq_weights = weightsdict.WeightsDict()
         for i in range(len(self.geometry)):
             dq_weights[i] = self.blendWeights[i].value
         return dq_weights
 
     @dqWeights.setter
     def dqWeights(self, data):
-        data = wdt.WeightsDict(data)
         for vtx in data:
             self.blendWeights[vtx].value = data[vtx]
-        for i, vtx in enumerate(cmds.ls('{}.weightList[*]'.format(self))):
-            if i not in data:
-                self.blendWeights[i].value = 0
 
     def reskin(self):
         """
@@ -765,9 +933,14 @@ class BlendShape(GeometryFilter):
         self.getTargets()
 
     def getTargets(self):
-        targets_nodes = yams(cmds.blendShape(self.name, q=True, target=True)) or []
-        self._targets = [BlendshapeTarget(self, target_node, index) for index, target_node in enumerate(targets_nodes)]
-        self._targets_names = {target.target_node.name: target for target in self._targets}
+        import attributes as attrs
+        targets = cmds.listAttr(self.name + '.weight[:]')
+        self._targets = []
+        self._targets_names = {}
+        for index, target in enumerate(targets):
+            bs_target = attrs.BlendshapeTarget(self, attrs.getMPlug(self.name + '.' + target), index)
+            self._targets.append(bs_target)
+            self._targets_names[target] = bs_target
         return self._targets
 
     def targets(self, target):
@@ -783,7 +956,7 @@ class BlendShape(GeometryFilter):
 
     @property
     def weights(self):
-        weights = wdt.WeightsDict()
+        weights = weightsdict.WeightsDict()
         for index in range(len(self.geometry)):
             weights[index] = self.weightsAttr(index).value
         return weights
@@ -794,71 +967,41 @@ class BlendShape(GeometryFilter):
             self.weightsAttr(i).value = weight
 
 
-class BlendshapeTarget(object):
-    def __init__(self, node, target_node, index):
-        self.target_node = target_node
-        self.node = node
-        self.index = index
-        self.attribute = node.attr(target_node.name)
-
-    def __str__(self):
-        return self.attribute.name
-
-    def __repr__(self):
-        return "Target({}, {}, {})".format(self.node, self.target_node, self.index)
-
-    def weightsAttr(self, index):
-        return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights[index]
-
-    @property
-    def weights(self):
-        weights = wdt.WeightsDict()
-        for i in range(len(self.node.geometry)):
-            weights[i] = self.weightsAttr(i).value
-        return weights
-
-    @weights.setter
-    def weights(self, weights):
-        for i, weight in weights.items():
-            self.weightsAttr(i).value = weight
-
-    @property
-    def value(self):
-        return self.attribute.value
-
-    @value.setter
-    def value(self, value):
-        self.attribute.value = value
-
-
 # Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from
 # the yam method. Follow this syntax -> 'mayaType': class)
-supported_classes = {'skinCluster': SkinCluster,
+supported_classes = {'dagNode': DagNode,
+                     'transform': Transform,
+                     'joint': Joint,
+                     'constraint': Constraint,
                      'shape': Shape,
+                     'controlPoint': ControlPoint,
                      'mesh': Mesh,
                      'nurbsCurve': NurbsCurve,
                      'nurbsSurface': NurbsSurface,
-                     'locator': Locator,
                      'lattice': Lattice,
+                     'locator': Locator,
                      'geometryFilter': GeometryFilter,
                      'weightGeometryFilter': WeightGeometryFilter,
                      'cluster': Cluster,
+                     'skinCluster': SkinCluster,
                      'blendShape': BlendShape,
-                     'transform': Transform,
-                     'joint': Joint,
                      }
 
 
 class YamList(list):
+    """
+    todo : docstring
+    """
+
     def __init__(self, *arg):
         super(YamList, self).__init__(*arg)
         self._check()
 
     def __repr__(self):
-        return "<YamList({})>".format(list(self))
+        return "<class {}({})>".format(self.__class__.__name__, list(self))
 
     def __str__(self):
-        return "YamList({})".format(self.names())
+        return "{}({})".format(self.__class__.__name__, self.names())
 
     def _check(self, item=None):
         if item is not None:
@@ -908,22 +1051,35 @@ class YamList(list):
             return [getattr(x, attr)() for x in self]
         return [getattr(x, attr) for x in self]
 
-    def removeType(self, type=None, inherited=True):
-        assert type and isinstance(type, basestring)
+    def keepType(self, type, inherited=True):
+        if isinstance(type, basestring):
+            type = [type]
+        assert all(isinstance(x, basestring) for x in type), "arg 'type' expected : 'str' or 'list(str, ...)' but " \
+                                                             "was given '{}'".format(type)
         for i, item in reversed(list(enumerate(self))):
-            if inherited:
-                if type in item.inheritedTypes():
-                    self.pop(i)
-            else:
-                if type == item.type():
-                    self.pop(i)
+            for type_ in type:
+                if inherited:
+                    if type_ not in item.inheritedTypes():
+                        self.pop(i)
+                else:
+                    if type_ != item.type():
+                        self.pop(i)
 
-    def keepType(self, type=None, inherited=True):
-        assert type and isinstance(type, basestring)
+    def popType(self, type, inherited=True):
+        popped = YamList()
+        if isinstance(type, basestring):
+            type = [type]
+        assert all(isinstance(x, basestring) for x in type), "arg 'type' expected : 'str' or 'list(str, ...)' but " \
+                                                             "was given '{}'".format(type)
         for i, item in reversed(list(enumerate(self))):
-            if inherited:
-                if type not in item.inheritedTypes():
-                    self.pop(i)
-            else:
-                if type != item.type():
-                    self.pop(i)
+            for type_ in type:
+                if inherited:
+                    if type_ in item.inheritedTypes():
+                        popped.append(self.pop(i))
+                else:
+                    if type_ == item.type():
+                        popped.append(self.pop(i))
+        return popped
+
+    def copy(self):
+        return YamList(self)

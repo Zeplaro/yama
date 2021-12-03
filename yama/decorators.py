@@ -1,6 +1,5 @@
 # encoding: utf8
 
-
 from functools import wraps
 from maya import cmds
 
@@ -22,4 +21,12 @@ def keepsel(func):
         result = func(*args, **kwargs)
         cmds.select(sel)
         return result
+    return wrapper
+
+
+def verbose(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        print("---- Calling '{}' -args: '{}' --kwargs: '{}'".format(func.__name__, args, kwargs))
+        return func(*args, **kwargs)
     return wrapper

@@ -1,237 +1,69 @@
 # encoding: utf8
 
-import sys
-from maya import cmds, mel
-import nodes
-import xformutils
-
-# python 2 to 3 compatibility
-_pyversion = sys.version_info[0]
-if _pyversion == 3:
-    basestring = str
+"""
+Contains non maya specific utils.
+"""
 
 
-def createHook(node, suffix_name='hook', parent=None):
-    if cmds.objExists('{}_{}'.format(node.name, suffix_name)):
-        suffix_name += '#'
-    hook = cmds.group(em=True, n='{}_{}'.format(node, suffix_name))
-    mmx = cmds.createNode('multMatrix', n='mmx_{}_{}'.format(node, suffix_name))
-    dmx = cmds.createNode('decomposeMatrix', n='dmx_{}_{}'.format(node, suffix_name))
-    cmds.connectAttr('{}.worldMatrix[0]'.format(node), '{}.matrixIn[1]'.format(mmx), f=True)
-    cmds.connectAttr('{}.parentInverseMatrix[0]'.format(hook), '{}.matrixIn[2]'.format(mmx), f=True)
-    cmds.connectAttr('{}.matrixSum'.format(mmx), '{}.inputMatrix'.format(dmx), f=True)
-    cmds.connectAttr('{}.outputShear'.format(dmx), '{}.shear'.format(hook), f=True)
-    cmds.connectAttr('{}.outputTranslate'.format(dmx), '{}.translate'.format(hook), f=True)
-    cmds.connectAttr('{}.outputScale'.format(dmx), '{}.scale'.format(hook), f=True)
-    cmds.connectAttr('{}.outputRotate'.format(dmx), '{}.rotate'.format(hook), f=True)
-    if parent and cmds.objExists(parent):
-        cmds.parent(hook, parent)
-    return hook
-
-
-def componentRange(node, comp, *args):
+def multList(list_a, list_b):
     """
-    Returns a generator to iterate over a length of vertices full name.
-    :param node: str or Yam object; the node containing the vertices.
-    :param comp: str; the component string; e.g.: 'vtx', 'cv', etc...
-    :param args: int, int, int; start, stop and step as needed, passed on to 'range' function.
-    :return: generator
+    Zips 'list_a' items with 'list_b' items and multiplies them together
+    :param list_a: list of digits
+    :param list_b: list of digits
+    :return: list of digits
     """
-    assert isinstance(comp, basestring)
-    vtx_string = str(node)+'.'+comp+'[{}]'
-    for i in range(*args):
-        yield vtx_string.format(i)
+    return [x*y for x, y in zip(list_a, list_b)]
 
 
-def getSkinCluster(obj):
-    # todo: find a better way than 'mel.eval'
-    skn = mel.eval('findRelatedSkinCluster {}'.format(obj))
-    return nodes.yam(skn) if skn else None
-
-
-def getSkinClusters(objs):
-    return nodes.YamList([getSkinCluster(obj) for obj in objs])
-
-
-def skinAs(master=None, slaves=None, master_namespace=None, slave_namespace=None):
-    if not master or not slaves:
-        objs = nodes.ls(sl=True, tr=True, fl=True)
-        if len(objs) < 2:
-            cmds.warning('Please select at least two objects')
-            return
-
-        def getSkinnable(objs_):
-            skinnable = nodes.YamList()
-            for obj in objs_:
-                if obj.shapes(type='controlPoint'):
-                    skinnable.append(obj)
-                else:
-                    skinnable.extend(getSkinnable(obj.children(type='transform')))
-            return skinnable
-
-        master = objs[0]
-        slaves = getSkinnable(objs[1:])
-    else:
-        master = nodes.yam(master)
-        slaves = nodes.yams(slaves)
-    slaves = hierarchize(slaves, reverse=True)
-
-    masterskn = getSkinCluster(master)
-    if not masterskn:
-        cmds.warning('First object as no skinCluster attached')
-        return
-    infs = masterskn.influences()
-
-    if slave_namespace is not None:
-        if master_namespace:
-            infs = nodes.yams([inf.name.replace(master_namespace + ':', slave_namespace + ':') for inf in infs])
-        else:
-            infs = nodes.yams([slave_namespace + ':' + inf.name for inf in infs])
-    done = []
-    kwargs = {'skinMethod': masterskn.skinningMethod.value,
-              'maximumInfluences': masterskn.maxInfluences.value,
-              'normalizeWeights': masterskn.normalizeWeights.value,
-              'obeyMaxInfluences': masterskn.maintainMaxInfluences.value,
-              'weightDistribution': masterskn.weightDistribution.value,
-              'includeHiddenSelections': True,
-              'toSelectedBones': True,
-              }
-    for slave in slaves:
-        if getSkinCluster(slave):
-            print(slave + ' already has a skinCluster attached')
-            continue
-        cmds.select(infs.names(), slave.name)
-        slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave), **kwargs)[0])
-        cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint',
-                             ia=('oneToOne', 'label', 'closestJoint'))
-        print(slave + ' skinned -> ' + slaveskn.name)
-        done.append(slave)
-    return done
-
-
-def hierarchize(objs, reverse=False):
-    objs = nodes.yams(objs)
-    objs = {obj.longname(): obj for obj in objs}
-    longnames = list(objs)
-    done = False
-    while not done:
-        done = True
-        for i in range(len(longnames) - 1):
-            if longnames[i].startswith(longnames[i + 1]):
-                longnames.insert(i, longnames.pop(i + 1))
-                done = False
-    ordered = nodes.YamList([objs[x] for x in longnames])
-    if reverse:
-        ordered.reverse()
-    return ordered
-
-
-def mxConstraint(master=None, slave=None):
-    if not master or not slave:
-        sel = nodes.selected(type='transform')
-        if len(sel) != 2:
-            raise RuntimeError("two 'transform' needed; {} given".format(len(sel)))
-        master, slave = sel
-    else:
-        master, slave = nodes.yams([master, slave])
-        
-    mmx = nodes.createNode('multMatrix', n='{}_mmx'.format(master))
-    dmx = nodes.createNode('decomposeMatrix', n='{}_dmx'.format(master))
-    cmx = nodes.createNode('composeMatrix', n='{}_cmx'.format(master))
-    cmx.outputMatrix.connectTo(mmx.matrixIn[0], f=True)
-    master.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
-    slave.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
-    mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
-
-    master_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(master))
-    slave_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(slave))
-    xformutils.match([master, master_tmp])
-    xformutils.match([slave, slave_tmp])
-    slave_tmp.parent = master_tmp
-
-    cmx.inputTranslate.value = slave_tmp.translate.value
-    cmx.inputRotate.value = slave_tmp.rotate.value
-    cmx.inputScale.value = slave_tmp.scale.value
-    cmx.inputShear.value = slave_tmp.shear.value
-
-    dmx.outputTranslate.connectTo(slave.translate, f=True)
-    dmx.outputRotate.connectTo(slave.rotate, f=True)
-    dmx.outputScale.connectTo(slave.scale, f=True)
-    dmx.outputShear.connectTo(slave.shear, f=True)
-
-    cmds.delete(master_tmp.name, slave_tmp.name)
-
-
-def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
+def decimalToAlphabetical(index):
     """
-    Resets the objs translate, rotate, scale, visibility and/or user defined attributes to their default values.
-    :param objs: list of objects to reset the attributes on. If None then the selected objects are reset.
-    :param t: if True resets the translate value to 0
-    :param r: if True resets the rotate value to 0
-    :param s: if True resets the scale value to 1
-    :param v: if True resets the visibility value to 1
-    :param user: if True resets the user attributes values to their respective default values.
+    Converts int to an alphabetical index. e.g.: 0 -> 'a', 1 -> 'b', 2 -> 'c', 'yama' -> 440414
+    :param index: int
+    :return: str
     """
-    if not objs:
-        objs = nodes.selected(type='transform')
-        if not objs:
-            raise RuntimeError("No object given and no 'transform' selected")
-    objs = nodes.yams(objs)
-
-    tr = ''
-    if t:
-        tr += 't'
-    if r:
-        tr += 'r'
-    for obj in objs:
-        for axe in 'xyz':
-            for tr_ in tr:
-                if obj.attr(tr_+axe).settable():
-                    obj.attr(tr_+axe).value = 0
-            if s:
-                if obj.attr('s'+axe).settable():
-                    obj.attr('s'+axe).value = 1
-        if v:
-            if obj.v.settable():
-                obj.v.value = True
-        if user:
-            attrs = obj.listAttr(ud=True, scalar=True, visible=True)
-            for attr in attrs:
-                if not attr.settable():
-                    continue
-                attr.value = attr.defaultValue
+    assert isinstance(index, int) and index >= 0
+    from string import ascii_lowercase
+    alphanum = ''
+    index += 1  # because alphabet hase no 0 and starts with 'a'
+    while index:
+        index -= 1  # 'a' needs to be used as next 'decimal' unit when reaching 'z':  ..., 'y', 'z', 'aa', 'ab', ...
+        reste = index % 26
+        index = index // 26
+        alphanum = ascii_lowercase[reste] + alphanum
+    return alphanum
 
 
-def reskin(objs=None):
-    if not objs:
-        objs = nodes.selected()
-        if not objs:
-            raise RuntimeError("No object given and no object selected")
-    objs = nodes.yams(objs)
-    for skn in getSkinClusters(objs):
-        skn.reskin()
+def alphabeticalToDecimal(alpha):
+    """
+    Converts str to an int index. e.g.: 'a' -> 0, 'b' -> 1, 'c' -> 2, 440414 -> 'yama'
+    :param alpha: str
+    :return: int
+    """
+    assert isinstance(alpha, str) and alpha
+    from string import ascii_lowercase
+    index = -1
+    steps = [(x, y) for x, y in enumerate(alpha[::-1])]
+    for step, letter in steps[::-1]:
+        letter_index = ascii_lowercase.index(letter)
+        index += (letter_index+1)*(26**step)
+    return index
 
 
-def insertGroup(obj=None, suffix='GRP'):
-    assert obj, "No obj given; Use 'insertGroups' to work on selection"
-    obj = nodes.yam(obj)
-    grp = nodes.createNode('transform', name='{}_{}'.format(obj, suffix))
-    world_matrix = obj.getXform(m=True, ws=True)
-    parent = obj.parent
-    if parent:
-        grp.parent = parent
-    grp.setXform(m=world_matrix, ws=True)
-    obj.parent = grp
-    return grp
-
-
-def insertGroups(objs=None, suffix='GRP'):
-    if not objs:
-        objs = nodes.selected(type='transform')
-        if not objs:
-            raise RuntimeError("No object given and no 'transform' selected")
-    objs = nodes.yams(nodes)
-    grps = nodes.YamList()
-    for obj in objs:
-        grps.append(insertGroup(obj, suffix=suffix))
-    return grps
+def decimalToRoman(index):
+    """Converts an int to a roman numerical index"""
+    assert isinstance(index, int) and index > 0
+    roman = [(1000, 'M'), (900, 'CM'),
+             (500, 'D'), (400, 'CD'),
+             (100, 'C'), (90, 'XC'),
+             (50, 'L'), (40, 'XL'),
+             (10, 'X'), (9, 'IX'),
+             (5, 'V'), (4, 'IV'),
+             (1, 'I')]
+    roman_num = ''
+    while index:
+        for value, num in roman:
+            if index >= value:
+                roman_num += num
+                index -= value
+                break
+    return roman_num
