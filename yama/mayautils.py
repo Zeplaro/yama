@@ -86,7 +86,7 @@ def skinAs(objs=None, master_namespace=None, slave_namespace=None):
         if getSkinCluster(slave):
             print(slave + ' already has a skinCluster attached')
             continue
-        cmds.select(infs.names(), slave.name)
+        cmds.select(infs.names, slave.name)
         slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave), **kwargs)[0])
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint', smooth=True,
                              ia=('oneToOne', 'label', 'closestJoint'))

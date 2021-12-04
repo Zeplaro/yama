@@ -152,7 +152,7 @@ def select(*args, **kwargs):
     sel = []
     for arg in args:
         if isinstance(arg, YamList):
-            sel.append(arg.names())
+            sel.append(arg.names)
         elif isinstance(arg, Yam):
             sel.append(str(arg))
         elif isinstance(arg, (list, tuple, dict, set)):
@@ -214,7 +214,8 @@ def listAttr(obj, **kwargs):
 
 class Yam(object):
     """
-    todo : docstring
+    Abstract class for all objects related to maya nodes, attributes and other components. Used to
+    Should not be instantiated by itself.
     """
 
     def __eq__(self, other):
@@ -738,12 +739,6 @@ class NurbsCurve(ControlPoint):
                 }
         return data
 
-    @data.setter
-    def data(self, data):
-        # todo: copied form old node work, needs cleanup
-        for d in data:
-            setattr(d, data[d])
-
     def knots(self):
         return list(self.mFnNurbsCurve.knots())
 
@@ -844,7 +839,11 @@ class Cluster(WeightGeometryFilter):
         super(Cluster, self).__init__(mObject, mFnDependencyNode)
 
     def convertToRoot(self):
-        # todo
+        """
+        Adds a 'root' node as parent of the cluster. The root can be moved around without the cluster having an
+        influence on the deformed shape.
+        :return: the new root node of the cluster.
+        """
         handle_shape = self.handleShape
         if not handle_shape:
             raise RuntimeError('No clusterHandle found connected to ' + self.name)
@@ -858,6 +857,7 @@ class Cluster(WeightGeometryFilter):
         root_grp.worldInverseMatrix[0].connectTo(self.preMatrix, force=True)
         self.clusterXforms.breakConnections()
         cmds.delete(handle_shape)
+        return root_grp
 
     @property
     def handleShape(self):
@@ -990,7 +990,11 @@ supported_classes = {'dagNode': DagNode,
 
 class YamList(list):
     """
-    todo : docstring
+    A list like class to contain any Yam objects and facilitate their handling.
+    A YamList can only contain objects that inherits from the Yam class.
+
+    Mainly used to call .names on the YamList to return a list of str object names that can be passed to cmds commands.
+    Can be used to keep a type of node or remove a type of node from the list using .keepType and .popType
     """
 
     def __init__(self, *arg):
@@ -1001,7 +1005,7 @@ class YamList(list):
         return "<class {}({})>".format(self.__class__.__name__, list(self))
 
     def __str__(self):
-        return "{}({})".format(self.__class__.__name__, self.names())
+        return "{}({})".format(self.__class__.__name__, self.names)
 
     def _check(self, item=None):
         if item is not None:
@@ -1040,6 +1044,7 @@ class YamList(list):
             return [x.attr(attr).value for x in self]
         return [x.value for x in self]
 
+    @property
     def names(self):
         return [x.name for x in self]
 

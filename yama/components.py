@@ -40,8 +40,8 @@ def getComponent(node, attr):
             dag, comp = ls.getComponent(0)
             api_type = comp.apiTypeStr
             if api_type in comp_MFn_id:
-                comp_name, comps_class, comp_class = comp_MFn_id[api_type]
-                component = comps_class(node, comp_name, comp_class)
+                comp_class = comp_MFn_id[api_type][1]
+                component = comp_class(node, api_type)
                 for index in split:
                     index = index[:-1]  # Removing the closing ']'
                     if index == '*':  # if using the maya wildcard symbol
@@ -66,7 +66,7 @@ class Components(nodes.Yam):
     """
     todo : docstring
     """
-    def __init__(self, node, componentName, componentClass):
+    def __init__(self, node, apiType):
         if type(self) is Components:
             raise TypeError("'{}' should not be directly instantiated".format(self.__class__.__name__))
         super(Components, self).__init__()
@@ -75,8 +75,9 @@ class Components(nodes.Yam):
         assert isinstance(node, nodes.ControlPoint), "component node should be of type 'ControlPoint', " \
                                                      "instead node type is '{}'".format(type(node).__name__)
         self.node = node
-        self.component_name = componentName
-        self.component_class = componentClass
+        self.api_type = apiType
+        self.component_name = comp_MFn_id[apiType][0]
+        self.component_class = comp_MFn_id[apiType][2]
 
     def __getitem__(self, item):
         if item == '*':
@@ -96,7 +97,7 @@ class Components(nodes.Yam):
 
     @property
     def name(self):
-        return self.node + '.' + self.component_name
+        return self.node + '.' + self.component_name + '[:]'
 
     def index(self, index, secondIndex=None, thirdIndex=None):
         return self.component_class(self.node, self, index, secondIndex, thirdIndex)
@@ -107,6 +108,12 @@ class Components(nodes.Yam):
     def setPositions(self, values, ws=False):
         for x, value in zip(self, values):
             x.setPosition(value, ws=ws)
+
+    def type(self):
+        return self.api_type
+
+    def inheritedTypes(self):
+        return ['component', self.api_type]
 
 
 class SingleIndexed(Components):
@@ -154,6 +161,9 @@ class Component(nodes.Yam):
         self.index = index
         self.second_index = secondIndex
         self.third_index = thirdIndex
+
+        self.type = components.type
+        self.inheritedTypes = components.inheritedTypes
 
     def __str__(self):
         return self.name
@@ -261,7 +271,7 @@ class CurveCV(Component):
             self.node.mFnNurbsCurve.setCVPosition(self.index, point, space)
 
 
-# Removed 'v' cause rarely used and similar to short name of 'visibility'
+# Removed 'v' because rarely used and similar to short name for 'visibility'
 supported_types = {'cv', 'e', 'ep', 'f', 'map', 'pt', 'sf', 'u', '#v', 'vtx', 'vtxFace', 'cp', }
 
 comp_MFn_id = {'kCurveCVComponent': ('cv', SingleIndexed, CurveCV),  # 533

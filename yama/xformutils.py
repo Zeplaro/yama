@@ -64,11 +64,11 @@ def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene',
             cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector, worldUpType='object',
                                            worldUpObject=worldUpObject, mo=False))
         else:
-            cmds.delet(nulls.names(), world_null.name)
+            cmds.delet(nulls.names, world_null.name)
             raise NotImplementedError
 
     objs[-1].setXform(t=poses[-1], ro=objs[-2].getXform(ro=True, ws=True), ws=True)
-    cmds.delete(world_null.name, nulls.names())
+    cmds.delete(world_null.name, nulls.names)
 
 
 def match(objs=None, t=True, r=True, s=False):
