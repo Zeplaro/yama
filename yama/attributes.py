@@ -19,10 +19,10 @@ if _pyversion == 3:
 
 def getAttribute(node, attr):
     """
-    todo
-    :param node:
-    :param attr:
-    :return:
+    Gets the given attribute from the given node.
+    :param node: DependNode
+    :param attr: str or OpenMaya.MPlug
+    :return: Attribute
     """
     if isinstance(attr, basestring):
         attr = getMPlug(node + '.' + attr)
@@ -90,7 +90,8 @@ class Attribute(nodes.Yam):
 
     def __getitem__(self, item):
         """
-        todo
+        Gets the element of the array attribute at the given index.
+        Returns a list of attribute if given a slice.
         """
         if item == '*':
             item = slice(None)
@@ -407,8 +408,9 @@ class BlendshapeTarget(Attribute):
         super(BlendshapeTarget, self).__init__(node, mPlug)
         self._index = index
 
-    def weightsAttr(self, index):
-        return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights[index]
+    @property
+    def weightsAttr(self):
+        return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights
 
     @property
     def index(self):
@@ -417,14 +419,16 @@ class BlendshapeTarget(Attribute):
     @property
     def weights(self):
         weights = weightsdict.WeightsDict()
+        weightsAttr = self.weightsAttr
         for i in range(len(self.node.geometry)):
-            weights[i] = self.weightsAttr(i).value
+            weights[i] = weightsAttr[i].value
         return weights
 
     @weights.setter
     def weights(self, weights):
+        weightsAttr = self.weightsAttr
         for i, weight in weights.items():
-            self.weightsAttr(i).value = weight
+            weightsAttr[i].value = weight
 
 
 def getAttr(attr):

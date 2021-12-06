@@ -18,6 +18,7 @@ if _pyversion == 3:
     basestring = str
 
 import weightsdict
+import config
 
 
 def yam(node):
@@ -331,7 +332,8 @@ class DependNode(Yam):
         Needs to use cmds to be undoable.
         :param new_name: str
         """
-        # self.mFnDependencyNode.setName(newName)
+        if not config.undoable:
+            self.mFnDependencyNode.setName(newName)
         cmds.rename(self.name, newName)
 
     @property
@@ -344,7 +346,7 @@ class DependNode(Yam):
 
     def attr(self, attr):
         """
-        Gets an Attribute object for the given attr.
+        Gets an Attribute or Component object for the given attr.
         This function should be use in case the attr conflicts with a function or attribute of the class.
         :param attr: str
         :return: Attribute object
@@ -369,7 +371,7 @@ class DependNode(Yam):
 
     def listConnections(self, **kwargs):
         """
-        Returns the maya cmds.listConnections as DependNode objects or Attribute objects.
+        Returns the maya cmds.listConnections as DependNode, Attribute or Component objects.
         By default if not in kwargs, 'skipConversionNodes' is passed as True.
         :param kwargs: kwargs passed on to cmds.listConnections
         :return: list[Attribute, ...]
@@ -396,6 +398,14 @@ class DependNode(Yam):
         return listAttr(self, **kwargs)
 
     def listHistory(self, **kwargs):
+        """
+        Returns the maya cmds.listHistory as DependNode, Attribute or Component objects.
+        Allows the kwarg 'type' (unlike cmds.listHistory) to only return objects of given type.
+        :param kwargs: kwargs passed on to cmds.listConnections
+        :return: list[Attribute, ...]
+        :param kwargs:
+        :return:
+        """
         type = None
         if 'type' in kwargs:
             type = kwargs.pop('type')
@@ -572,30 +582,54 @@ class Transform(DagNode):
         return self.listRelatives(allDescendents=True)
 
     def getXform(self, **kwargs):
+        """
+        Wraps the query of cmds.xform, the kwarg query=True is not needed and will be set to True.
+        :param kwargs: any kwargs queryable from cmds.xform
+        :return: the queried value/s
+        """
         kwargs['q'] = True
         return cmds.xform(self.name, **kwargs)
 
     def setXform(self, **kwargs):
+        """
+        Wraps the of cmds.xform, the kwarg query=True cannot be used.
+        :param kwargs: any kwargs settable with cmds.xform
+        :return: the queried value/s
+        """
         if 'q' in kwargs or 'query' in kwargs:
             raise RuntimeError("setXform kwargs cannot contain 'q' or 'query'")
         cmds.xform(self.name, **kwargs)
 
     def getPosition(self, ws=False):
+        """
+        Gets the translate position of the node.
+        :param ws: If True returns the world space position of the node
+        :return: [float, float, float]
+        """
         return self.getXform(t=True, ws=ws, os=not ws)
 
     def setPosition(self, value, ws=False):
+        """
+        Sets the translate position of the node.
+        :param value: [float, float, float]
+        :param ws: If True sets the world space position of the node
+        """
         self.setXform(t=value, ws=ws, os=not ws)
 
     def distance(self, obj):
-        if isinstance(obj, Transform):
-            wt = obj.worldTranslation
-        elif isinstance(obj, basestring):
-            wt = yam(obj).worldTranslation
-        else:
-            raise AttributeError("wrong type given, expected : 'Transform' or 'str', "
+        """
+        Gets the distance between self and given obj
+        :param obj: Transform, Component or str
+        :return: float
+        """
+        if isinstance(obj, basestring):
+            obj = yam(obj)
+        import components
+        if not isinstance(obj, (Transform, components.Component)):
+            raise AttributeError("wrong type given, expected : 'Transform', 'Component' or 'str', "
                                  "got : {}".format(obj.__class__.__name__))
-        node_wt = self.worldTranslation
-        dist = sqrt(pow(node_wt[0] - wt[0], 2) + pow(node_wt[1] - wt[1], 2) + pow(node_wt[2] - wt[2], 2))
+        pos, obj_pos = self.getPosition(ws=True), obj.getPosition(ws=True)
+        dist = sqrt(pow(pos[0] - obj_pos[0], 2) + pow(pos[1] - obj_pos[1], 2) + pow(pos[2] - obj_pos[2], 2))
         return dist
 
 
@@ -764,12 +798,24 @@ class NurbsSurface(ControlPoint):
         return self._mFnNurbsSurface
 
     def lenUV(self):
+        """
+        Gets the number of cvs in U and V
+        :return: [int, int]
+        """
         return [self.lenU(), self.lenV()]
 
     def lenU(self):
+        """
+        Gets the number of cvs in U
+        :return: int
+        """
         return self.mFnNurbsSurface.numCVsInU
 
     def lenV(self):
+        """
+        Gets the number of cvs in V
+        :return: int
+        """
         return self.mFnNurbsSurface.numCVsInV
 
 
@@ -778,19 +824,39 @@ class Lattice(ControlPoint):
         super(Lattice, self).__init__(mObject, mFnDependencyNode)
 
     def __len__(self):
+        """
+        Returns the number of points in the lattice
+        :return:
+        """
         x, y, z = self.lenXYZ()
         return x * y * z
 
     def lenXYZ(self):
+        """
+        Returns the number of points in X, Y and Z
+        :return: [int, int, int]
+        """
         return cmds.lattice(self.name, divisions=True, q=True)
 
     def lenX(self):
+        """
+        Returns the number of points in X
+        :return: int
+        """
         return self.lenXYZ()[0]
 
     def lenY(self):
+        """
+        Returns the number of points in Y
+        :return: int
+        """
         return self.lenXYZ()[1]
 
     def lenZ(self):
+        """
+        Returns the number of points in Z
+        :return: int
+        """
         return self.lenXYZ()[2]
 
 
@@ -816,22 +882,24 @@ class WeightGeometryFilter(GeometryFilter):
     @property
     def weights(self):
         weights = weightsdict.WeightsDict()
+        weightsAttr = self.weightsAttr
         for i in range(len(self.geometry)):
-            weights[i] = self.weightsAttr(i).value
+            weights[i] = weightsAttr[i].value
         return weights
 
     @weights.setter
     def weights(self, weights):
+        weightsAttr = self.weightsAttr
         for i, weight in weights.items():
-            self.weightsAttr(i).value = weight
+            weightsAttr[i].value = weight
 
-    def weightsAttr(self, index):
+    @property
+    def weightsAttr(self):
         """
-        Gets the standard deformer weight attribute at the given index
-        :param index:
-        :return:
+        Gets an easy access to the standard deformer weight attribute
+        :return: Attribute
         """
-        return self.weightList[0].weights[index]
+        return self.weightList[0].weights
 
 
 class Cluster(WeightGeometryFilter):
@@ -876,13 +944,15 @@ class SkinCluster(GeometryFilter):
         if numInfluences is None:
             numInfluences = len(self.influences())
         weights = weightsdict.WeightsDict()
+        weightsAttr = self.weightList[index].weights
         for jnt in range(numInfluences):
-            weights[jnt] = self.weightList[index].weights[jnt].value
+            weights[jnt] = weightsAttr[jnt].value
         return weights
 
     def setVertexWeight(self, index, values):
+        weightsAttr = self.weightList[index].weights
         for jnt, value in values.items():
-            self.weightList[index].weights[jnt].value = value
+            weightsAttr[jnt].value = value
 
     @property
     def weights(self):
@@ -900,14 +970,16 @@ class SkinCluster(GeometryFilter):
     @property
     def dqWeights(self):
         dq_weights = weightsdict.WeightsDict()
+        weightsAttr = self.blendWeights
         for i in range(len(self.geometry)):
-            dq_weights[i] = self.blendWeights[i].value
+            dq_weights[i] = weightsAttr[i].value
         return dq_weights
 
     @dqWeights.setter
     def dqWeights(self, data):
+        weightsAttr = self.blendWeights
         for vtx in data:
-            self.blendWeights[vtx].value = data[vtx]
+            weightsAttr[vtx].value = data[vtx]
 
     def reskin(self):
         """
@@ -951,20 +1023,23 @@ class BlendShape(GeometryFilter):
         else:
             raise KeyError(target)
 
-    def weightsAttr(self, index):
-        return self.inputTarget[0].baseWeights[index]
+    @property
+    def weightsAttr(self):
+        return self.inputTarget[0].baseWeights
 
     @property
     def weights(self):
         weights = weightsdict.WeightsDict()
+        weightsAttr = self.weightsAttr
         for index in range(len(self.geometry)):
-            weights[index] = self.weightsAttr(index).value
+            weights[index] = weightsAttr[index].value
         return weights
 
     @weights.setter
     def weights(self, weights):
+        weightsAttr = self.weightsAttr
         for i, weight in weights.items():
-            self.weightsAttr(i).value = weight
+            weightsAttr[i].value = weight
 
 
 # Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from
