@@ -322,17 +322,15 @@ class SymTable(dict):
         return "SymTable({})".format('{'+str_[:-2]+'}')
 
 
-def mirrorWeights(deformer, table):
+def mirrorWeights(weights, table):
     # TODO : Average mid vtxs
-    weights = deformer.weights
     mir_weights = weights.copy()
     for l_cp in table:
         mir_weights[table[l_cp]] = weights[l_cp]
     return mir_weights
 
 
-def flipWeights(deformer, table):
-    weights = deformer.weights
+def flipWeights(weights, table):
     flip_weights = weights.copy()
     for l_cp in table:
         flip_weights[l_cp] = weights[table[l_cp]]
