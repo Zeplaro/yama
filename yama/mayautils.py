@@ -200,7 +200,7 @@ def reskin(objs=None):
         skn.reskin()
 
 
-def insertGroup(obj=None, suffix='GRP'):
+def insertGroup(obj, suffix='GRP'):
     assert obj, "No obj given; Use 'insertGroups' to work on selection"
     obj = nodes.yam(obj)
     grp = nodes.createNode('transform', name='{}_{}'.format(obj, suffix))
@@ -269,6 +269,7 @@ def matrixRowToMaya(matrix):
 
 @decorators.keepsel
 def getSymmetryTable(obj=None, axis='x'):
+    """TODO"""
     def selected():
         return cmds.ls(os=True, fl=True)
 
@@ -302,6 +303,7 @@ def getSymmetryTable(obj=None, axis='x'):
 
 
 class SymTable(dict):
+    """TODO"""
     def __init__(self, axis='x'):
         assert axis in ('x', 'y', 'z')
         super(SymTable, self).__init__()
@@ -320,59 +322,67 @@ class SymTable(dict):
         return "SymTable({})".format('{'+str_[:-2]+'}')
 
 
-def mirrorMap(deformer, attr, table):
+def mirrorWeights(deformer, table):
     # TODO : Average mid vtxs
-    for l_vtx in table:
-        l_weight = deformer.attr(attr.format(l_vtx)).value
-        deformer.attr(attr.format(table[l_vtx])).value = l_weight
+    weights = deformer.weights
+    mir_weights = weights.copy()
+    for l_cp in table:
+        mir_weights[table[l_cp]] = weights[l_cp]
+    return mir_weights
 
 
-def flipMap(deformer, attr, table):
-    for l_vtx in table:
-        r_vtx = table[l_vtx]
-        l_weight = deformer.attr(attr.format(l_vtx)).value
-        r_weight = deformer.attr(attr.format(r_vtx)).value
-        deformer.attr(attr.format(table[l_vtx])).value = r_weight
-        deformer.attr(attr.format(table[r_vtx])).value = l_weight
+def flipWeights(deformer, table):
+    weights = deformer.weights
+    flip_weights = weights.copy()
+    for l_cp in table:
+        flip_weights[l_cp] = weights[table[l_cp]]
+        flip_weights[table[l_cp]] = weights[l_cp]
+    return flip_weights
 
 
 def mirrorPos(obj, table):
-    for l_vtx in table:
-        l_pos = obj.vtx[l_vtx].getPosition()
+    for l_cp in table:
+        l_pos = obj.cp[l_cp].getPosition()
         r_pos = utils.multList(l_pos, table.axis_mult)
-        obj.vtx[table[l_vtx]].setPosition(r_pos)
+        obj.cp[table[l_cp]].setPosition(r_pos)
 
     mid_mult = table.axis_mult[:]
     mid_mult['xyz'.index(table.axis)] *= 0
     for mid in table.mids:
-        pos = utils.multList(obj.vtx[mid].getPosition(), mid_mult)
-        obj.vtx[mid].setPosition(pos)
+        pos = utils.multList(obj.cp[mid].getPosition(), mid_mult)
+        obj.cp[mid].setPosition(pos)
 
 
 @decorators.keepsel
 def flipPos(obj, table, reverse_face_normal=True):
-    for l_vtx in table:
-        l_pos = obj.vtx[l_vtx].getPosition()
-        r_pos = obj.vtx[table[l_vtx]].getPosition()
+    for l_cp in table:
+        l_pos = obj.cp[l_cp].getPosition()
+        r_pos = obj.cp[table[l_cp]].getPosition()
 
-        obj.vtx[l_vtx].setPosition(utils.multList(l_pos, table.axis_mult))
-        obj.vtx[table[l_vtx]].setPosition(utils.multList(r_pos, table.axis_mult))
+        obj.cp[l_cp].setPosition(utils.multList(l_pos, table.axis_mult))
+        obj.cp[table[l_cp]].setPosition(utils.multList(r_pos, table.axis_mult))
 
     for mid in table.mids:
-        pos = obj.vtx[mid].getPosition()
+        pos = obj.cp[mid].getPosition()
         pos = utils.multList(pos, table.axis_mult)
-        obj.vtx[mid].setPosition(pos)
+        obj.cp[mid].setPosition(pos)
 
     if reverse_face_normal:
-        cmds.polyNormal(obj.name, normalMode=3, constructionHistory=False)
+        cmds.polyNormal(obj.name, normalMode=3, constructionHistory=False)  # Flipping the face normals
 
 
-def snapToCurve(objs=None, curve=None):
+def snapAlongCurve(curve=None, objs=None):
+    """
+    Snaps given objs along given curve.
+    If no objs or no curve is given then selection is used, the curve needs to be first in selection.
+    :param curve: str, a nurbsCurve or transform containing a nurbsCurve
+    :param objs: list of transform objects
+    """
     if not objs or not curve:
         objs = nodes.selected()
         if not objs:
             raise RuntimeError("No object given and object selected")
-        if len(objs) < 3:
+        if len(objs) < 2:
             raise RuntimeError("Not enough object given or selected")
         curve = objs.pop(0)
 
@@ -391,12 +401,22 @@ def snapToCurve(objs=None, curve=None):
 
 
 @decorators.keepsel
-def copyDeformerWeights(source_geo, destination_geo, source_deformer, destination_deformer):
-    source_geo, destination_geo, source_deformer, destination_deformer = nodes.yams((source_geo, destination_geo,
-                                                                                     source_deformer,
-                                                                                     destination_deformer))
+def copyDeformerWeights(sourceGeo, destinationGeo, sourceDeformer, destinationDeformer):
+    """
+    For two geometries with diffferent topologies, copies a given deformer weight to another given deformer.
+    :param sourceGeo: the geo on which the sourceDeformer is applied
+    :param destinationGeo: the geo on which the destinationDeformer is applied
+    :param sourceDeformer: the deformer to copy the weights from, the given object needs to have a weights attribute
+    :param destinationDeformer: the deformer to copy the weights on, the given object needs to have a weights attribute
+    """
+    sourceGeo, destinationGeo, sourceDeformer, destinationDeformer = nodes.yams((sourceGeo, destinationGeo,
+                                                                                 sourceDeformer, destinationDeformer))
+    assert hasattr(sourceDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
+                                               "".format(sourceDeformer, type(sourceDeformer).__name__)
+    assert hasattr(destinationDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
+                                                    "".format(destinationDeformer, type(destinationDeformer).__name__)
 
-    temp_source_geo, temp_dest_geo = nodes.yams(cmds.duplicate(source_geo.name, destination_geo.name))
+    temp_source_geo, temp_dest_geo = nodes.yams(cmds.duplicate(sourceGeo.name, destinationGeo.name))
     temp_source_geo.name = 'temp_source_geo'
     temp_dest_geo.name = 'temp_dest_geo'
     # Removing shapeOrig
@@ -417,7 +437,7 @@ def copyDeformerWeights(source_geo, destination_geo, source_deformer, destinatio
                                                  includeHiddenSelections=True, toSelectedBones=True)[0])
     destination_skn.envelope.value = 0
 
-    source_weights = source_deformer.weights
+    source_weights = sourceDeformer.weights
     source_skn.weights = {i: {0: source_weights[i]} for i in source_weights}
 
     cmds.copySkinWeights(sourceSkin=source_skn.name, destinationSkin=destination_skn.name, noMirror=True,
@@ -425,9 +445,8 @@ def copyDeformerWeights(source_geo, destination_geo, source_deformer, destinatio
                          smooth=True, normalize=False)
 
     destination_skn_weights = destination_skn.weights
-    destination_deformer.weights = {i: destination_skn_weights[i][0] for i in destination_skn_weights}
+    destinationDeformer.weights = {i: destination_skn_weights[i][0] for i in destination_skn_weights}
 
     cmds.delete(source_skn.name, destination_skn.name)
     cmds.delete(source_jnt.name, destination_jnt.name)
     cmds.delete(temp_source_geo.name, temp_dest_geo.name)
-

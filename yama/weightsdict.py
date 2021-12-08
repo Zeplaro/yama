@@ -113,12 +113,7 @@ class WeightsDict(dict):
     def __eq__(self, other):
         if isinstance(other, (int, float)):
             other = weightsdictFromLength(len(self), other)
-        if len(self) != len(other):
-            return False
-        for i in self:
-            if not self[i] == other.get(i, None):
-                return False
-        return True
+        return super(WeightsDict, self).__eq__(other)
 
     def __ne__(self, other):
         return not self.__eq__(other)
