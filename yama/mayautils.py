@@ -14,21 +14,27 @@ if _pyversion == 3:
     basestring = str
 
 
-def createHook(node, suffix_name='hook', parent=None):
-    if cmds.objExists('{}_{}'.format(node.name, suffix_name)):
-        suffix_name += '#'
-    hook = cmds.group(em=True, n='{}_{}'.format(node, suffix_name))
-    mmx = cmds.createNode('multMatrix', n='mmx_{}_{}'.format(node, suffix_name))
-    dmx = cmds.createNode('decomposeMatrix', n='dmx_{}_{}'.format(node, suffix_name))
-    cmds.connectAttr('{}.worldMatrix[0]'.format(node), '{}.matrixIn[1]'.format(mmx), f=True)
-    cmds.connectAttr('{}.parentInverseMatrix[0]'.format(hook), '{}.matrixIn[2]'.format(mmx), f=True)
-    cmds.connectAttr('{}.matrixSum'.format(mmx), '{}.inputMatrix'.format(dmx), f=True)
-    cmds.connectAttr('{}.outputShear'.format(dmx), '{}.shear'.format(hook), f=True)
-    cmds.connectAttr('{}.outputTranslate'.format(dmx), '{}.translate'.format(hook), f=True)
-    cmds.connectAttr('{}.outputScale'.format(dmx), '{}.scale'.format(hook), f=True)
-    cmds.connectAttr('{}.outputRotate'.format(dmx), '{}.rotate'.format(hook), f=True)
-    if parent and cmds.objExists(parent):
-        cmds.parent(hook, parent)
+def createHook(node, parent=None, suffix='hook'):
+    """
+    Creates a transform that moves and behaves the same as the given node no mather its parenting.
+    Usefull to separate parts of a rig that would otherwise be buried in the hierarchy.
+    :param node: a transform node
+    :param suffix: the suffix for the new hook name
+    :param parent: the parent for the hook
+    :return: the hook node
+    """
+    node = nodes.yam(node)
+    hook = nodes.createNode('transform', name='{}_{}'.format(node, suffix))
+    mmx = nodes.createNode('multMatrix', n='mmx_{}_{}'.format(node, suffix))
+    dmx = nodes.createNode('decomposeMatrix', n='dmx_{}_{}'.format(node, suffix))
+    node.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
+    hook.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
+    mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
+    dmx.outputShear.connectTo(hook.shear, f=True)
+    dmx.outputTranslate.connectTo(hook.translate, f=True)
+    dmx.outputScale.connectTo(hook.scale, f=True)
+    dmx.outputRotate.connectTo(hook.rotate, f=True)
+    hook.parent = parent
     return hook
 
 
@@ -42,7 +48,22 @@ def getSkinClusters(objs):
     return nodes.YamList([getSkinCluster(obj) for obj in objs])
 
 
-def skinAs(objs=None, master_namespace=None, slave_namespace=None):
+def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamespace=False):
+    """
+    Copies the skinning and skinCLuster settings of one skinned object to any other objects with a different topology.
+    First object given in objs is the skinned object to copy from and the rest being the objects to copy the skin to, if
+    no objects are given then this works on current scene selection.
+    
+    If the first object influences have a namespace and the other objects influences have a different namespace or don't
+    have one then you can use masterNamespace to remove from the original influences, and/or slaveNamespace to add to
+    the new influences. To get the namespace from the list of objects then set useObjectNamespace to True, in this case
+    the masterNamespace and slaveNamespace are ignored and the namespace to remove from the original influences and to
+    add to the new influences is determined per each object namespace.
+    :param objs: list
+    :param masterNamespace: str
+    :param slaveNamespace: str
+    :param useObjectNamespace: bool
+    """
     if not objs:
         objs = nodes.ls(sl=True, tr=True, fl=True)
 
@@ -66,13 +87,20 @@ def skinAs(objs=None, master_namespace=None, slave_namespace=None):
     if not masterskn:
         cmds.warning('First object as no skinCluster attached')
         return
-    infs = masterskn.influences()
+    master_infs = masterskn.influences()
+    slave_infs = master_infs
 
-    if slave_namespace is not None:
-        if master_namespace:
-            infs = nodes.yams([inf.name.replace(master_namespace + ':', slave_namespace + ':') for inf in infs])
+    if useObjectNamespace:
+        masterNamespace = ':'.join(master.name.split(':')[:-1])
+    elif masterNamespace or slaveNamespace:
+        if masterNamespace:
+            replace_args = [masterNamespace + ':', '']
+            if slaveNamespace:
+                replace_args[1] = slaveNamespace + ':'
+            slave_infs = nodes.yams(inf.name.replace(*replace_args) for inf in master_infs)
         else:
-            infs = nodes.yams([slave_namespace + ':' + inf.name for inf in infs])
+            slave_infs = nodes.yams(slaveNamespace + ':' + inf for inf in master_infs)
+
     done = []
     kwargs = {'skinMethod': masterskn.skinningMethod.value,
               'maximumInfluences': masterskn.maxInfluences.value,
@@ -83,10 +111,27 @@ def skinAs(objs=None, master_namespace=None, slave_namespace=None):
               'toSelectedBones': True,
               }
     for slave in slaves:
+
         if getSkinCluster(slave):
             print(slave + ' already has a skinCluster attached')
             continue
-        cmds.select(infs.names, slave.name)
+
+        if useObjectNamespace:  # getting slave influences namespace per slave
+            print('using objectnamspace')
+            slaveNamespace = ':'.join(slave.name.split(':')[:-1])
+            print('slavenamspace : ', slaveNamespace)
+            if masterNamespace:
+                replace_args = [masterNamespace + ':', '']
+                if slaveNamespace:
+                    replace_args[1] = slaveNamespace + ':'
+                slave_infs = nodes.yams(inf.name.replace(*replace_args) for inf in master_infs)
+            elif slaveNamespace:
+                slave_infs = nodes.yams(slaveNamespace + ':' + inf for inf in master_infs)
+            else:
+                slave_infs = master_infs
+
+        print(slave_infs)
+        nodes.select(slave_infs, slave)
         slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave), **kwargs)[0])
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint', smooth=True,
                              ia=('oneToOne', 'label', 'closestJoint'))
@@ -96,6 +141,7 @@ def skinAs(objs=None, master_namespace=None, slave_namespace=None):
 
 
 def hierarchize(objs, reverse=False):
+    """Returns a list of objects ordered by their hierarchy in the scene"""
     objs = {obj.longName(): obj for obj in nodes.yams(objs)}
     longnames = list(objs)
     done = False
@@ -257,10 +303,12 @@ def wrapMesh(objs=None, ws=True):
 
 
 def matrixMayaToRow(matrix):
+    """Converts maya matrix (all values in a single list) to row matrix (list of list of values)"""
     return [matrix[0:4], matrix[4:8], matrix[8:12], matrix[12:16]]
 
 
 def matrixRowToMaya(matrix):
+    """Converts row matrix (list of list of values) to maya matrix (all values in a single list)"""
     maya_matrix = []
     for m in matrix:
         maya_matrix += m
