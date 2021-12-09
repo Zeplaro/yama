@@ -467,8 +467,10 @@ def getMPlugValue(mPlug):
     assert isinstance(mPlug, om.MPlug), "'OpenMaya.MPlug' object expected, " \
                                         "instead got : '{}' of type '{}'".format(mPlug, type(mPlug).__name__)
     attr_type = mPlug.attribute().apiTypeStr
-    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute'):
+    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
         return mPlug.asDouble()
+    elif attr_type in ('kEnumAttribute', ):
+        return mPlug.asInt()
     elif attr_type in ('kDistance', ):
         return mPlug.asMDistance().asUnits(om.MDistance.uiUnit())
     elif attr_type in ('kAngle', ):
@@ -496,8 +498,10 @@ def setMPlugValue(mPlug, value):
     assert isinstance(mPlug, om.MPlug), "'OpenMaya.MPlug' object expected, instead got : " \
                                         "'{}' of type '{}'".format(mPlug, type(mPlug).__name__)
     attr_type = mPlug.attribute().apiTypeStr
-    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute'):
+    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
         mPlug.setDouble(value)
+    elif attr_type in ('kEnumAttribute', ):
+        return mPlug.setInt(value)
     elif attr_type in ('kDistance', ):
         mPlug.setMDistance(om.MDistance(value, om.MDistance.uiUnit()))
     elif attr_type in ('kAngle', ):
