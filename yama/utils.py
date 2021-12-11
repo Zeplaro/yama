@@ -42,8 +42,7 @@ def alphabeticalToDecimal(alpha):
     assert isinstance(alpha, str) and alpha
     from string import ascii_lowercase
     index = -1
-    steps = [(x, y) for x, y in enumerate(alpha[::-1])]
-    for step, letter in steps[::-1]:
+    for step, letter in reversed(list(enumerate(reversed(alpha)))):
         letter_index = ascii_lowercase.index(letter)
         index += (letter_index+1)*(26**step)
     return index
