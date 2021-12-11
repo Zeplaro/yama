@@ -6,6 +6,7 @@ The main functions used would be createNode to create a new node and get it init
 yam or yams to initialize existing objects into their proper class type.
 """
 
+from abc import ABCMeta, abstractproperty, abstractmethod
 import sys
 from math import sqrt
 from maya import cmds
@@ -77,11 +78,13 @@ def yam(node):
                         " got {}.".format(node.__class__.__name__))
 
     # checking if node type has a supported class, if not defaults to DependNode
-    assigned_class = supported_classes.get(mfn.typeName)  # skips the mc.nodeType if exact type is in supported_class
-    if not assigned_class:
+    type_name = mfn.typeName
+    if type_name in supported_classes:
+        assigned_class = supported_classes[type_name]  # skips the mc.nodeType if exact type is in supported_class
+    else:
         node = mfn.name()
         assigned_class = DependNode
-        for node_type in cmds.nodeType(node, i=True)[::-1]:  # checks each inherited types for the node
+        for node_type in reversed(cmds.nodeType(node, i=True)):  # checks each inherited types for the node
             if node_type in supported_classes:
                 assigned_class = supported_classes[node_type]
                 break
@@ -215,9 +218,20 @@ def listAttr(obj, **kwargs):
 
 class Yam(object):
     """
-    Abstract class for all objects related to maya nodes, attributes and other components. Used to
+    Abstract class for all objects related to maya nodes, attributes and other components.
     Should not be instantiated by itself.
     """
+    __metaclass__ = ABCMeta
+
+    if _pyversion == 2:  # if python 2, using use abstractproperty
+        @abstractproperty
+        def name(self):
+            pass
+    else:  # else use the preferred property on abstractmethod
+        @property
+        @abstractmethod
+        def name(self):
+            pass
 
     def __eq__(self, other):
         if str(self) == str(other):
@@ -247,7 +261,6 @@ class DependNode(Yam):
         :param mFnDependencyNode:
         """
         super(DependNode, self).__init__()
-        assert isinstance(mObject, om.MObject)
         self.mObject = mObject
         self._mObject1 = None
         self.mFnDependencyNode = mFnDependencyNode
