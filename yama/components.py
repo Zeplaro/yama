@@ -4,6 +4,7 @@
 Contains all the class and functions for maya components.
 """
 
+from abc import ABCMeta, abstractmethod
 import sys
 from maya import cmds
 import maya.api.OpenMaya as om
@@ -66,9 +67,9 @@ class Components(nodes.Yam):
     """
     todo : docstring
     """
+    __metaclass__ = ABCMeta
+
     def __init__(self, node, apiType):
-        if type(self) is Components:
-            raise TypeError("'{}' should not be directly instantiated".format(self.__class__.__name__))
         super(Components, self).__init__()
         if isinstance(node, nodes.Transform):
             node = node.shape
@@ -94,6 +95,10 @@ class Components(nodes.Yam):
 
     def __repr__(self):
         return "<class {}('{}', '{}')>".format(self.__class__.__name__, self.node.name, self.component_name)
+
+    @abstractmethod
+    def __iter__(self):
+        pass
 
     @property
     def name(self):
