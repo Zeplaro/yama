@@ -296,7 +296,7 @@ class Attribute(nodes.Yam):
 
     @property
     def hasMinValue(self):
-        return cmds.attributeQuery(self.name, node=self.obj, minExists=True)
+        return cmds.attributeQuery(self.attribute, node=self.node.name, minExists=True)
 
     @hasMinValue.setter
     def hasMinValue(self, value):
@@ -309,7 +309,7 @@ class Attribute(nodes.Yam):
 
     @property
     def minValue(self):
-        return cmds.attributeQuery(self.attribute, node=self.obj, minimum=True)[0]
+        return cmds.attributeQuery(self.attribute, node=self.node.name, minimum=True)[0]
 
     @minValue.setter
     def minValue(self, value):
@@ -317,7 +317,7 @@ class Attribute(nodes.Yam):
 
     @property
     def hasMaxValue(self):
-        return cmds.attributeQuery(self.attribute, node=self.obj, maxExists=True)
+        return cmds.attributeQuery(self.attribute, node=self.node.name, maxExists=True)
 
     @hasMaxValue.setter
     def hasMaxValue(self, value):
@@ -330,7 +330,7 @@ class Attribute(nodes.Yam):
 
     @property
     def maxValue(self):
-        return cmds.attributeQuery(self.attribute, node=self.obj, maximum=True)[0]
+        return cmds.attributeQuery(self.attribute, node=self.node.name, maximum=True)[0]
 
     @maxValue.setter
     def maxValue(self, value):
