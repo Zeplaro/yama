@@ -357,6 +357,11 @@ class DependNode(Yam):
     def name(self, value):
         self.rename(value)
 
+    @property
+    def shortName(self):
+        """Returns the node name only, without any '|' and 'parent' in case other nodes have the same name"""
+        return self.mFnDependencyNode.name()
+
     def attr(self, attr):
         """
         Gets an Attribute or Component object for the given attr.
