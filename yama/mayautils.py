@@ -117,9 +117,7 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
             continue
 
         if useObjectNamespace:  # getting slave influences namespace per slave
-            print('using objectnamspace')
             slaveNamespace = ':'.join(slave.name.split(':')[:-1])
-            print('slavenamspace : ', slaveNamespace)
             if masterNamespace:
                 replace_args = [masterNamespace + ':', '']
                 if slaveNamespace:
@@ -130,9 +128,8 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
             else:
                 slave_infs = master_infs
 
-        print(slave_infs)
         nodes.select(slave_infs, slave)
-        slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave), **kwargs)[0])
+        slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave.shortName), **kwargs)[0])
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint', smooth=True,
                              ia=('oneToOne', 'label', 'closestJoint'))
         print(slave + ' skinned -> ' + slaveskn.name)
