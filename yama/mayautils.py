@@ -24,9 +24,9 @@ def createHook(node, parent=None, suffix='hook'):
     :return: the hook node
     """
     node = nodes.yam(node)
-    hook = nodes.createNode('transform', name='{}_{}'.format(node, suffix))
-    mmx = nodes.createNode('multMatrix', n='mmx_{}_{}'.format(node, suffix))
-    dmx = nodes.createNode('decomposeMatrix', n='dmx_{}_{}'.format(node, suffix))
+    hook = nodes.createNode('transform', name='{}_{}'.format(node.shortName, suffix))
+    mmx = nodes.createNode('multMatrix', n='mmx_{}_{}'.format(node.shortName, suffix))
+    dmx = nodes.createNode('decomposeMatrix', n='dmx_{}_{}'.format(node.shortName, suffix))
     node.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
     hook.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
     mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
@@ -163,16 +163,16 @@ def mxConstraint(master=None, slave=None):
     else:
         master, slave = nodes.yams([master, slave])
 
-    mmx = nodes.createNode('multMatrix', n='{}_mmx'.format(master))
-    dmx = nodes.createNode('decomposeMatrix', n='{}_dmx'.format(master))
-    cmx = nodes.createNode('composeMatrix', n='{}_cmx'.format(master))
+    mmx = nodes.createNode('multMatrix', n='{}_mmx'.format(master.shortName))
+    dmx = nodes.createNode('decomposeMatrix', n='{}_dmx'.format(master.shortName))
+    cmx = nodes.createNode('composeMatrix', n='{}_cmx'.format(master.shortName))
     cmx.outputMatrix.connectTo(mmx.matrixIn[0], f=True)
     master.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
     slave.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
     mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
 
-    master_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(master))
-    slave_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(slave))
+    master_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(master.shortName))
+    slave_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(slave.shortName))
     xformutils.match([master, master_tmp])
     xformutils.match([slave, slave_tmp])
     slave_tmp.parent = master_tmp
@@ -246,7 +246,7 @@ def reskin(objs=None):
 def insertGroup(obj, suffix='GRP'):
     assert obj, "No obj given; Use 'insertGroups' to work on selection"
     obj = nodes.yam(obj)
-    grp = nodes.createNode('transform', name='{}_{}'.format(obj, suffix))
+    grp = nodes.createNode('transform', name='{}_{}'.format(obj.shortName, suffix))
     world_matrix = obj.getXform(m=True, ws=True)
     parent = obj.parent
     if parent:
