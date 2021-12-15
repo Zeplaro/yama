@@ -934,8 +934,8 @@ class Cluster(WeightGeometryFilter):
         if not handle_shape:
             raise RuntimeError('No clusterHandle found connected to ' + self.name)
 
-        root_grp = createNode('transform', name=self.name+'_clusterRoot')
-        cluster_grp = createNode('transform', name=self.name+'_cluster')
+        root_grp = createNode('transform', name=self.shortName + '_clusterRoot')
+        cluster_grp = createNode('transform', name=self.shortName + '_cluster')
 
         cluster_grp.worldMatrix[0].connectTo(self.matrix, force=True)
         cluster_grp.matrix.connectTo(self.weightedMatrix, force=True)
