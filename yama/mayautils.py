@@ -139,7 +139,7 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
 
 def hierarchize(objs, reverse=False):
     """Returns a list of objects ordered by their hierarchy in the scene"""
-    objs = {obj.longName(): obj for obj in nodes.yams(objs)}
+    objs = {obj.longName: obj for obj in nodes.yams(objs)}
     longnames = list(objs)
     done = False
     while not done:

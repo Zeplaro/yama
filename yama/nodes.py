@@ -527,6 +527,7 @@ class DagNode(DependNode):
         """
         self.rename(value)
 
+    @property
     def longName(self):
         """
         Gets the full path name of the object including the leading |.
@@ -534,7 +535,9 @@ class DagNode(DependNode):
         """
         return self.mDagPath.fullPathName()
 
-    fullPath = longName
+    @property
+    def fullPath(self):
+        return self.longName
 
 
 class Transform(DagNode):
@@ -554,9 +557,9 @@ class Transform(DagNode):
         if not isinstance(item, DependNode):
             try:
                 item = yam(item)
-            except RuntimeError:
-                raise RuntimeError("in '{}.__contains__('{}')'. No '{}' object found in scene".format(self, item, item))
-        return item.longName().startswith(self.longName())
+            except Exception as e:
+                raise RuntimeError("in '{}.__contains__('{}')'; {}".format(self, item, e))
+        return item.longName.startswith(self.longName)
 
     def children(self, type=None, noIntermediate=True):
         """
