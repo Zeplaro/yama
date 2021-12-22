@@ -166,6 +166,21 @@ class Attribute(nodes.Yam):
         else:
             raise TypeError("'{}' is not iterable".format(self))
 
+    def __eq__(self, other):
+        if hasattr(other, 'mPlug'):
+            return self.mPlug == other.mPlug
+        else:
+            try:
+                return self.mPlug == nodes.yam(other).mPlug
+            except Exception:
+                return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash((self.node.uuid(), self.attribute))
+
     @property
     def name(self):
         """
