@@ -53,7 +53,7 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
     Copies the skinning and skinCLuster settings of one skinned object to any other objects with a different topology.
     First object given in objs is the skinned object to copy from and the rest being the objects to copy the skin to, if
     no objects are given then this works on current scene selection.
-    
+
     If the first object influences have a namespace and the other objects influences have a different namespace or don't
     have one then you can use masterNamespace to remove from the original influences, and/or slaveNamespace to add to
     the new influences. To get the namespace from the list of objects then set useObjectNamespace to True, in this case
@@ -78,8 +78,8 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
 
         objs = [objs[0]] + getSkinnable(objs[1:])
     if len(objs) < 2:
-            cmds.warning('Please select at least two objects')
-            return
+        cmds.warning("Please select at least two objects")
+        return
     master = nodes.yam(objs[0])
     slaves = hierarchize(objs[1:], reverse=True)
 
@@ -315,6 +315,7 @@ def matrixRowToMaya(matrix):
 @decorators.keepsel
 def getSymmetryTable(obj=None, axis='x'):
     """TODO"""
+
     def selected():
         return cmds.ls(os=True, fl=True)
 
@@ -349,6 +350,7 @@ def getSymmetryTable(obj=None, axis='x'):
 
 class SymTable(dict):
     """TODO"""
+
     def __init__(self, axis='x'):
         assert axis in ('x', 'y', 'z')
         super(SymTable, self).__init__()
@@ -364,7 +366,7 @@ class SymTable(dict):
         str_ = ''
         for key, value in self.items():
             str_ += '{}: {}, '.format(key, value)
-        return "SymTable({})".format('{'+str_[:-2]+'}')
+        return "SymTable({})".format('{' + str_[:-2] + '}')
 
 
 def mirrorWeights(weights, table):
@@ -493,3 +495,37 @@ def copyDeformerWeights(sourceGeo, destinationGeo, sourceDeformer, destinationDe
     cmds.delete(source_skn.name, destination_skn.name)
     cmds.delete(source_jnt.name, destination_jnt.name)
     cmds.delete(temp_source_geo.name, temp_dest_geo.name)
+
+
+@decorators.keepsel
+def hammerShells(vertices=None, reverse=False):
+    """
+    Hammer weights on the selected or given vertices even if they're part of different shells or mesh.
+    :param vertices: list of MeshVertex components. If None, uses selected vertices.
+    :param reverse: By default False, hammer weigths on the selected vertices. If True hammer weights on all other not
+                    selected vertices per shell.
+    """
+    if not vertices:
+        vertices = nodes.selected()
+    data = {}
+    for vtx in vertices:
+        node = vtx.node.name  # Uses name as dict key instead of node itself for performance.
+        if node in data:
+            data[node].append(vtx)
+        else:
+            data[node] = [vtx]
+
+    for node, vtxs in data.items():
+        node = nodes.yam(node)
+        shells = node.shells(indexOnly=True)  # Uses indexOnly for 'index in/not in shell' for much faster performance
+        for shell in shells:
+            if reverse:
+                vtxs_indexes = {vtx.index for vtx in vtxs}
+                shell_vtxs = [node.vtx[index] for index in shell if index not in vtxs_indexes]
+                if len(shell) == len(shell_vtxs):
+                    continue
+            else:
+                shell_vtxs = [vtx for vtx in vtxs if vtx.index in shell]
+            if shell_vtxs:
+                nodes.select(shell_vtxs)
+                cmds.WeightHammer()
