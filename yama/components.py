@@ -100,6 +100,21 @@ class Components(nodes.Yam):
     def __iter__(self):
         pass
 
+    def __eq__(self, other):
+        if isinstance(other, Component):
+            return self.__hash__() == hash(other)
+        else:
+            try:
+                return self == nodes.yam(other)
+            except Exception:
+                return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash((self.node.uuid(), self.api_type))
+
     @property
     def name(self):
         return self.node + '.' + self.component_name + '[:]'
@@ -167,9 +182,6 @@ class Component(nodes.Yam):
         self.second_index = secondIndex
         self.third_index = thirdIndex
 
-        self.type = components.type
-        self.inheritedTypes = components.inheritedTypes
-
     def __str__(self):
         return self.name
 
@@ -205,6 +217,15 @@ class Component(nodes.Yam):
                 raise IndexError("'{}' is a double index component and cannot get a third index".format(self))
         raise IndexError("'{}' cannot get four index")
 
+    def __eq__(self, other):
+        return self.__hash__() == hash(other)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash((self.node.uuid(), self.type(), self.indexes()))
+
     def exists(self):
         return cmds.objExists(self.name)
 
@@ -221,11 +242,20 @@ class Component(nodes.Yam):
             attribute += '[' + str(self.third_index) + ']'
         return attribute
 
+    def indexes(self):
+        return self.index, self.second_index, self.third_index
+
     def getPosition(self, ws=False):
         return cmds.xform(self.name, q=True, t=True, ws=ws, os=not ws)
 
     def setPosition(self, value, ws=False):
         cmds.xform(self.name, t=value, ws=ws, os=not ws)
+
+    def type(self):
+        return self.components.api_type
+
+    def inheritedTypes(self):
+        return ['component', self.components.api_type]
 
 
 class MeshVertex(Component):
