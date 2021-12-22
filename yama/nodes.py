@@ -233,14 +233,6 @@ class Yam(object):
         def name(self):
             pass
 
-    def __eq__(self, other):
-        if str(self) == str(other):
-            return True
-        return False
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
 
 class DependNode(Yam):
     """
@@ -311,9 +303,16 @@ class DependNode(Yam):
         :param other:
         :return:
         """
-        if not isinstance(other, DependNode):
-            other = yam(other)
-        return self.mObject == other.mObject
+        if hasattr(other, 'mObject'):
+            return self.mObject == other.mObject
+        else:
+            try:
+                return self.mObject == yam(other).mObject
+            except (RuntimeError, TypeError):
+                return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def __bool__(self):
         """
@@ -324,6 +323,9 @@ class DependNode(Yam):
 
     def __nonzero__(self):
         return self.__bool__()
+
+    def __hash__(self):
+        return hash(self.mFnDependencyNode.uuid().asString())
 
     @property
     def mObject1(self):
@@ -343,7 +345,7 @@ class DependNode(Yam):
         """
         Renames the node.
         Needs to use cmds to be undoable.
-        :param new_name: str
+        :param newName: str
         """
         if not config.undoable:
             self.mFnDependencyNode.setName(newName)
@@ -446,6 +448,11 @@ class DependNode(Yam):
         :return:
         """
         return cmds.nodeType(self.name, inherited=True)
+
+    def uuid(self, asString=True):
+        if asString:
+            return self.mFnDependencyNode.uuid().asString()
+        return self.mFnDependencyNode.uuid()
 
 
 class DagNode(DependNode):
@@ -716,7 +723,7 @@ class Mesh(ControlPoint):
             self._mFnMesh = om.MFnMesh(self.mDagPath)
         return self._mFnMesh
 
-    def shells(self):
+    def shells(self, indexOnly=False):
         polygon_counts, polygon_connects = self.mFnMesh.getVertices()
         faces_vtxs = []
         i = 0
@@ -744,7 +751,12 @@ class Mesh(ControlPoint):
             if not finished:
                 faces_vtxs = shells
                 shells = []
-        return shells
+        if indexOnly:
+            return shells
+        vtxs = []
+        for shell in shells:
+            vtxs.append(YamList(self.vtx[x] for x in shell))
+        return vtxs
 
 
 class NurbsCurve(ControlPoint):
@@ -1102,6 +1114,14 @@ class YamList(list):
 
     def __str__(self):
         return "{}({})".format(self.__class__.__name__, self.names)
+
+    def __eq__(self, other):
+        if isinstance(other, YamList):
+            return str(list(self)) == str(list(other))
+        return str(list(self)) == str(other)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def _check(self, item=None):
         if item is not None:
