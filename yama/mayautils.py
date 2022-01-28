@@ -36,9 +36,9 @@ def createHook(node, parent=None, suffix='hook'):
 
 
 def getSkinCluster(obj):
-    # todo: find a better way than 'mel.eval'
-    skn = mel.eval('findRelatedSkinCluster {}'.format(obj))
-    return nodes.yam(skn) if skn else None
+    skn = cmds.listHistory(str(obj), pdo=True)
+    skn = cmds.ls(skn, type='skinCluster')
+    return nodes.yam(skn[0]) if skn else None
 
 
 def getSkinClusters(objs):
@@ -61,6 +61,9 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
     :param slaveNamespace: str
     :param useObjectNamespace: bool
     """
+    if isinstance(objs, basestring):
+        raise RuntimeError("first arg objs='{}' is of type {} "
+                           "instead of expected type: list".format(objs, type(objs).__name__))
     if not objs:
         objs = nodes.ls(sl=True, tr=True, fl=True)
 
