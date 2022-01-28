@@ -7,9 +7,7 @@ Contains all the class and functions for maya attributes.
 import sys
 from maya import cmds
 import maya.api.OpenMaya as om
-import config
-import nodes
-import weightsdict
+from . import config, nodes, weightsdict
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]

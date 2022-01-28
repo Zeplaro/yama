@@ -3,10 +3,7 @@
 import sys
 from maya import cmds, mel
 import maya.api.OpenMaya as om
-import nodes
-import xformutils
-import utils
-import decorators
+from . import nodes, xformutils, utils, decorators
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]

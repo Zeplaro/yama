@@ -1,7 +1,5 @@
 from maya import cmds
-import nodes
-import components
-import decorators
+from . import nodes, components, decorators
 
 
 def align(objs=None, t=True, r=True):

@@ -14,8 +14,7 @@ _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
 
-import config
-import nodes
+from . import config, nodes
 
 
 def getComponent(node, attr):

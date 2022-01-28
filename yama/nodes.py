@@ -18,8 +18,7 @@ _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
 
-import weightsdict
-import config
+from . import weightsdict, config
 
 
 def yam(node):
