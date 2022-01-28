@@ -70,9 +70,10 @@ def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene',
 
 
 def match(objs=None, t=True, r=True, s=False):
+    """ TODO """
     if not objs:
         objs = nodes.selected()
-    assert objs > 1, "Less than 2 objects selected"
+    assert len(objs) > 1, "Less than 2 objects selected"
     objs = nodes.yams(objs)
 
     master, slaves = objs[0], objs[1:]
