@@ -90,10 +90,10 @@ def yam(node):
 
     yam_node = assigned_class(mObject, mfn)
     if mPlug is not None:
-        import attributes
+        from . import attributes
         return attributes.Attribute(yam_node, mPlug)
     elif component is not None:
-        import components
+        from . import components
         try:
             return components.getComponent(yam_node, component)
         except TypeError as e:
@@ -183,7 +183,7 @@ def listAttr(obj, **kwargs):
     :return: YamList([Attribute, ...])
     """
     obj = yam(obj)
-    import attributes
+    from . import attributes
     isAttr = False
     if isinstance(obj, attributes.Attribute):
         isAttr = True
@@ -373,10 +373,10 @@ class DependNode(Yam):
         assert attr, "No attribute given"
 
         try:
-            import components
+            from . import components
             return components.getComponent(self, attr)  # Trying to get component if one
         except (RuntimeError, TypeError):
-            import attributes
+            from . import attributes
             return attributes.getAttribute(self, attr)
 
     def listRelatives(self, **kwargs):
@@ -651,7 +651,7 @@ class Transform(DagNode):
         """
         if isinstance(obj, basestring):
             obj = yam(obj)
-        import components
+        from . import components
         if not isinstance(obj, (Transform, components.Component)):
             raise AttributeError("wrong type given, expected : 'Transform', 'Component' or 'str', "
                                  "got : {}".format(obj.__class__.__name__))
@@ -1037,7 +1037,7 @@ class BlendShape(GeometryFilter):
         self.getTargets()
 
     def getTargets(self):
-        import attributes as attrs
+        from . import attributes as attrs
         targets = cmds.listAttr(self.name + '.weight[:]')
         self._targets = []
         self._targets_names = {}
