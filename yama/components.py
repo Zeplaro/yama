@@ -26,40 +26,53 @@ def getComponent(node, attr):
     """
     indices = []
     if '.' in attr:
-        raise TypeError("attr '{}' not in supported types".format(attr))
+        raise TypeError("component '{}' not in supported types".format(attr))
 
     split = []
     if '[' in attr:  # Checking if getting a specific index
         split = attr.split('[')
         attr = split.pop(0)
 
-    if attr in supported_types:
+    if attr not in supported_types:
+        raise TypeError("component '{}' not in supported types".format(attr))
+
+    # Changing node to its shape if given a transform
+    if isinstance(node, nodes.Transform):
+        shape = node.shape
+        if not shape:
+            raise RuntimeError("node '{}' has no shape to get component on".format(node))
+        node = shape
+
+    if attr == 'cp':
+        attr = shape_component.get(type(node), 'cp')
+    api_type = component_shape_MFnid.get((attr, type(node)))
+    if api_type is None:
         try:
-            ls = om.MSelectionList()
-            ls.add(node.name + '.' + attr + '[0]')
-            dag, comp = ls.getComponent(0)
+            om_list = om.MSelectionList()
+            om_list.add(node.name + '.' + attr + '[0]')
+            dag, comp = om_list.getComponent(0)
             api_type = comp.apiTypeStr
-            if api_type in comp_MFn_id:
-                comp_class = comp_MFn_id[api_type][1]
-                component = comp_class(node, api_type)
-                for index in split:
-                    index = index[:-1]  # Removing the closing ']'
-                    if index == '*':  # if using the maya wildcard symbol
-                        indices.append(slice(None))
-                    elif ':' in index:  # if using a slice to list multiple components
-                        slice_args = [int(x) if x else None for x in
-                                      index.split(':')]  # parsing the string into a proper slice
-                        indices.append(slice(*slice_args))
-                    else:
-                        indices.append(int(index))
-                while indices:
-                    component = component[indices.pop(0)]
-                return component
-            raise TypeError("attr '{}' of api type '{}' not in supported types".format(attr, api_type))
         except (RuntimeError, TypeError) as e:
-            # print("## failed to get component '{}' on '{}': {}".format(attr, node, e))
             raise e
-    raise TypeError("attr '{}' not in supported types".format(attr))
+
+    if api_type not in mFnid_component_class:
+        raise TypeError("component '{}' of api type '{}' not in supported types".format(attr, api_type))
+
+    comp_class = mFnid_component_class[api_type][1]
+    component = comp_class(node, api_type)
+    for index in split:
+        index = index[:-1]  # Removing the closing ']'
+        if index == '*':  # if using the maya wildcard symbol
+            indices.append(slice(None))
+        elif ':' in index:  # if using a slice to list multiple components
+            slice_args = [int(x) if x else None for x in
+                          index.split(':')]  # parsing the string into a proper slice
+            indices.append(slice(*slice_args))
+        else:
+            indices.append(int(index))
+    while indices:
+        component = component[indices.pop(0)]
+    return component
 
 
 class Components(nodes.Yam):
@@ -76,8 +89,8 @@ class Components(nodes.Yam):
                                                      "instead node type is '{}'".format(type(node).__name__)
         self.node = node
         self.api_type = apiType
-        self.component_name = comp_MFn_id[apiType][0]
-        self.component_class = comp_MFn_id[apiType][2]
+        self.component_name = mFnid_component_class[apiType][0]
+        self.component_class = mFnid_component_class[apiType][2]
 
     def __getitem__(self, item):
         if item == '*':
@@ -142,6 +155,50 @@ class SingleIndexed(Components):
     def __iter__(self):
         for i in range(len(self)):
             yield self.index(i)
+
+
+class MeshVertices(SingleIndexed):
+    def __init__(self, *args, **kwargs):
+        super(MeshVertices, self).__init__(*args, **kwargs)
+        if not config.undoable:
+            self.setPositions = self.setPositionsOM
+
+    def getPositions(self, ws=False):
+        if ws:
+            space = om.MSpace.kWorld
+        else:
+            space = om.MSpace.kObject
+        return [[p.x, p.y, p.z] for p in self.node.mFnMesh.getPoints(space)]
+
+    def setPositionsOM(self, values, ws=False):
+        if ws:
+            space = om.MSpace.kWorld
+        else:
+            space = om.MSpace.kObject
+        mps = [om.MPoint(x) for x in values]
+        self.node.mFnMesh.setPoints(mps, space)
+
+
+class CurveCVs(SingleIndexed):
+    def __init__(self, *args, **kwargs):
+        super(CurveCVs, self).__init__(*args, **kwargs)
+        if not config.undoable:
+            self.setPositions = self.setPositionsOM
+
+    def getPositions(self, ws=False):
+        if ws:
+            space = om.MSpace.kWorld
+        else:
+            space = om.MSpace.kObject
+        return [[p.x, p.y, p.z] for p in self.node.MFnNurbsCurve.cvPositions(space)]
+
+    def setPositionsOM(self, values, ws=False):
+        if ws:
+            space = om.MSpace.kWorld
+        else:
+            space = om.MSpace.kObject
+        mps = [om.MPoint(x) for x in values]
+        self.node.mFnNurbsCurve.setCVPositions(mps, space)
 
 
 class DoubleIndexed(Components):
@@ -260,6 +317,8 @@ class Component(nodes.Yam):
 class MeshVertex(Component):
     def __init__(self, *args, **kwargs):
         super(MeshVertex, self).__init__(*args, **kwargs)
+        if not config.undoable:
+            self.setPosition = self.setPositionOM
 
     def getPosition(self, ws=False):
         if ws:
@@ -269,21 +328,20 @@ class MeshVertex(Component):
         p = self.node.mFnMesh.getPoint(self.index, space)
         return [p.x, p.y, p.z]
 
-    def setPosition(self, value, ws=False):
-        if config.undoable:
-            super(MeshVertex, self).setPosition(value, ws)
+    def setPositionOM(self, value, ws=False):
+        if ws:
+            space = om.MSpace.kWorld
         else:
-            if ws:
-                space = om.MSpace.kWorld
-            else:
-                space = om.MSpace.kObject
-            point = om.MPoint(*value)
-            self.node.mFnMesh.setPoint(self.index, point, space)
+            space = om.MSpace.kObject
+        point = om.MPoint(value)
+        self.node.mFnMesh.setPoint(self.index, point, space)
 
 
 class CurveCV(Component):
     def __init__(self, *args, **kwargs):
         super(CurveCV, self).__init__(*args, **kwargs)
+        if not config.undoable:
+            self.setPosition = self.setPositionOM
 
     def getPosition(self, ws=False):
         if ws:
@@ -293,31 +351,49 @@ class CurveCV(Component):
         p = self.node.mFnNurbsCurve.cvPosition(self.index, space)
         return [p.x, p.y, p.z]
 
-    def setPosition(self, value, ws=False):
-        if config.undoable:
-            super(CurveCV, self).setPosition(value, ws)
+    def setPositionOM(self, value, ws=False):
+        if ws:
+            space = om.MSpace.kWorld
         else:
-            if ws:
-                space = om.MSpace.kWorld
-            else:
-                space = om.MSpace.kObject
-            point = om.MPoint(*value)
-            self.node.mFnNurbsCurve.setCVPosition(self.index, point, space)
+            space = om.MSpace.kObject
+        point = om.MPoint(*value)
+        self.node.mFnNurbsCurve.setCVPosition(self.index, point, space)
 
 
 # Removed 'v' because rarely used and similar to short name for 'visibility'
 supported_types = {'cv', 'e', 'ep', 'f', 'map', 'pt', 'sf', 'u', '#v', 'vtx', 'vtxFace', 'cp', }
 
-comp_MFn_id = {'kCurveCVComponent': ('cv', SingleIndexed, CurveCV),  # 533
-               'kCurveEPComponent': ('ep', SingleIndexed, Component),  # 534
-               'kCurveParamComponent': ('u', SingleIndexed, Component),  # 536
-               'kIsoparmComponent': ('v', DoubleIndexed, Component),  # 537
-               'kSurfaceCVComponent': ('cv', DoubleIndexed, Component),  # 539
-               'kLatticeComponent': ('pt', TripleIndexed, Component),  # 543
-               'kMeshEdgeComponent': ('e', SingleIndexed, Component),  # 548
-               'kMeshPolygonComponent': ('f', SingleIndexed, Component),  # 549
-               'kMeshVertComponent': ('vtx', SingleIndexed, MeshVertex),  # 551
-               'kCharacterMappingData': ('vtxFace', SingleIndexed, Component),  # 741
-               'kSurfaceFaceComponent': ('sf', DoubleIndexed, Component),  # 774
-               'kInt64ArrayData': ('map', SingleIndexed, Component),  # 813
-               }
+mFnid_component_class = {'kCurveCVComponent': ('cv', CurveCVs, CurveCV),  # 533
+                         'kCurveEPComponent': ('ep', SingleIndexed, Component),  # 534
+                         'kCurveParamComponent': ('u', SingleIndexed, Component),  # 536
+                         'kIsoparmComponent': ('v', DoubleIndexed, Component),  # 537
+                         'kSurfaceCVComponent': ('cv', DoubleIndexed, Component),  # 539
+                         'kLatticeComponent': ('pt', TripleIndexed, Component),  # 543
+                         'kMeshEdgeComponent': ('e', SingleIndexed, Component),  # 548
+                         'kMeshPolygonComponent': ('f', SingleIndexed, Component),  # 549
+                         'kMeshVertComponent': ('vtx', MeshVertices, MeshVertex),  # 551
+                         'kCharacterMappingData': ('vtxFace', SingleIndexed, Component),  # 741
+                         'kSurfaceFaceComponent': ('sf', DoubleIndexed, Component),  # 774
+                         'kMeshMapComponent': ('map', SingleIndexed, Component),  # 813
+                         }
+
+component_shape_MFnid = {('cv', nodes.NurbsCurve): 'kCurveCVComponent',
+                         ('cv', nodes.NurbsSurface): 'kSurfaceCVComponent',
+                         ('e', nodes.Mesh): 'kMeshEdgeComponent',
+                         ('ep', nodes.NurbsCurve): 'kCurveEPComponent',
+                         ('f', nodes.Mesh): 'kMeshPolygonComponent',
+                         ('map', nodes.Mesh): 'kMeshMapComponent',
+                         ('pt', nodes.Lattice): 'kLatticeComponent',
+                         ('sf', nodes.NurbsSurface): 'kSurfaceFaceComponent',
+                         ('u', nodes.NurbsCurve): 'kCurveParamComponent',
+                         ('u', nodes.NurbsSurface): 'kIsoparmComponent',
+                         ('v', nodes.NurbsSurface): 'kIsoparmComponent',
+                         ('vtx', nodes.Mesh): 'kMeshVertComponent',
+                         ('vtxFace', nodes.Mesh): 'kCharacterMappingData',
+                         }
+
+shape_component = {nodes.Mesh: 'vtx',
+                   nodes.NurbsCurve: 'cv',
+                   nodes.NurbsSurface: 'cv',
+                   nodes.Lattice: 'pt',
+                   }
