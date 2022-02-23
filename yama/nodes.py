@@ -147,7 +147,9 @@ def ls(*args, **kwargs):
 
 def selected(**kwargs):
     """Returns current scene selection as yam objects; kwargs are passed on to 'ls'."""
-    return ls(os=True, **kwargs)
+    if 'os' not in kwargs and 'sl' not in kwargs:
+        kwargs['os'] = True
+    return ls(**kwargs)
 
 
 def select(*args, **kwargs):
@@ -1106,7 +1108,7 @@ class YamList(list):
 
     def __init__(self, *arg):
         super(YamList, self).__init__(*arg)
-        self._check()
+        self._check_all()
 
     def __repr__(self):
         return "<class {}({})>".format(self.__class__.__name__, list(self))
@@ -1122,14 +1124,15 @@ class YamList(list):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def _check(self, item=None):
-        if item is not None:
+    @staticmethod
+    def _check(item):
+        if not isinstance(item, Yam):
+            raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
+
+    def _check_all(self):
+        for item in self:
             if not isinstance(item, Yam):
                 raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
-        else:
-            for i in self:
-                if not isinstance(i, Yam):
-                    raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(i, type(i).__name__))
 
     def append(self, item):
         self._check(item)
