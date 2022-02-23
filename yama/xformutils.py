@@ -69,7 +69,7 @@ def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene',
     cmds.delete(world_null.name, nulls.names)
 
 
-def match(objs=None, t=True, r=True, s=False):
+def match(objs=None, t=True, r=True, s=False, ws=True):
     """ TODO """
     if not objs:
         objs = nodes.selected()
@@ -77,29 +77,43 @@ def match(objs=None, t=True, r=True, s=False):
     objs = nodes.yams(objs)
 
     master, slaves = objs[0], objs[1:]
-    pos = master.getPosition(ws=True)
+    pos = master.getPosition(ws=ws)
     if isinstance(master, components.Component):
         r = False
         s = False
     else:
         if r:
-            rot = master.getXform(ro=True, ws=True)
+            rot = master.getXform(ro=True, ws=ws)
         if s:
-            scale = master.getXform(s=True, ws=True)
+            scale = master.getXform(s=True, ws=ws)
 
     for slave in slaves:
         if isinstance(slave, nodes.Transform):
             if t:
-                slave.setXform(t=pos, ws=True)
+                slave.setXform(t=pos, ws=ws)
             if r:
-                slave.setXform(ro=rot, ws=True)
+                slave.setXform(ro=rot, ws=ws)
             if s:
-                slave.setXform(s=scale, ws=True)
+                slave.setXform(s=scale, ws=ws)
         elif isinstance(slave, components.Component):
             if t:
-                slave.setPosition(pos, ws=True)
+                slave.setPosition(pos, ws=ws)
         else:
             print("Cannot match '{}' of type '{}'".format(slave, type(slave).__name__))
+
+
+@decorators.keepsel
+def matchComponents(comps=None, slave=None, ws=False):
+    """ TODO """
+    if not comps or not slave:
+        comps = nodes.selected(fl=False)
+        slave = comps.pop(-1)
+    else:
+        comps = nodes.yams(comps)
+        slave = nodes.yam(slave)
+
+    for comp in comps:
+        slave.cp[comp.index].setPosition(comp.getPosition(ws=ws), ws=ws)
 
 
 def getCenter(objs):
