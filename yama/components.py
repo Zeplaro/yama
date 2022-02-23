@@ -93,6 +93,8 @@ class Components(nodes.Yam):
         if item == '*':
             item = slice(None)
         if isinstance(item, slice):
+            # Maya component slice includes the stop index, e.g.: mesh.vtx[2:12] <-- includes vertex #12
+            item = slice(item.start, item.stop+1, item.step)
             return ComponentsSlice(self.node, self, item)
         return self.index(item)
 
@@ -359,6 +361,9 @@ class CurveCV(Component):
 
 
 class ComponentsSlice(nodes.Yam):
+    """
+    todo : docstring
+    """
     def __init__(self, node, components, components_slice):
         super(ComponentsSlice, self).__init__()
         self.node = node
@@ -404,6 +409,10 @@ class ComponentsSlice(nodes.Yam):
         start_stop = [str(s) if s is not None else '' for s in (self.slice.start, self.slice.stop)]
         return self.node + '.' + self.components.component_name + '[' + ':'.join(start_stop) + ']'
 
+    @property
+    def index(self):
+        return self.slice
+
     def indices(self):
         return self._indices
 
@@ -419,6 +428,12 @@ class ComponentsSlice(nodes.Yam):
     def setPositions(self, values, ws=False):
         for x, value in zip(self, values):
             x.setPosition(value, ws=ws)
+
+    def getPosition(self, ws=False):
+        return self.getPositions(ws=ws)
+
+    def setPosition(self, value, ws=False):
+        self.setPositions(value, ws=ws)
 
 
 # Removed 'v' because rarely used and similar to short name for 'visibility'
