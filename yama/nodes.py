@@ -81,7 +81,10 @@ def yam(node):
     if type_name in supported_classes:
         assigned_class = supported_classes[type_name]  # skips the mc.nodeType if exact type is in supported_class
     else:
-        node = mfn.name()
+        if not mfn.hasUniqueName():
+            node = om.MDagPath.getAPathTo(mObject).partialPathName()
+        else:
+            node = mfn.name()
         assigned_class = DependNode
         for node_type in reversed(cmds.nodeType(node, i=True)):  # checks each inherited types for the node
             if node_type in supported_classes:
@@ -147,7 +150,7 @@ def ls(*args, **kwargs):
 
 def selected(**kwargs):
     """Returns current scene selection as yam objects; kwargs are passed on to 'ls'."""
-    if 'os' not in kwargs and 'sl' not in kwargs:
+    if 'os' not in kwargs and 'sl' not in kwargs and 'orderedSelection' not in kwargs and 'selection' not in kwargs:
         kwargs['os'] = True
     return ls(**kwargs)
 
@@ -1174,35 +1177,35 @@ class YamList(list):
             return [getattr(x, attr)() for x in self]
         return [getattr(x, attr) for x in self]
 
-    def keepType(self, type, inherited=True):
-        if isinstance(type, basestring):
-            type = [type]
-        assert all(isinstance(x, basestring) for x in type), "arg 'type' expected : 'str' or 'list(str, ...)' but " \
-                                                             "was given '{}'".format(type)
+    def keepType(self, nodeType, inherited=True):
+        if isinstance(nodeType, basestring):
+            nodeType = [nodeType]
+        assert all(isinstance(x, basestring) for x in nodeType), "arg 'type' expected : 'str' or 'list(str, ...)' but " \
+                                                             "was given '{}'".format(nodeType)
         for i, item in reversed(list(enumerate(self))):
-            for type_ in type:
+            for type_ in nodeType:
                 if inherited:
                     if type_ not in item.inheritedTypes():
                         self.pop(i)
                 else:
-                    if type_ != item.type():
+                    if type_ != item.nodeType():
                         self.pop(i)
 
-    def popType(self, type, inherited=True):
-        popped = YamList()
-        if isinstance(type, basestring):
-            type = [type]
-        assert all(isinstance(x, basestring) for x in type), "arg 'type' expected : 'str' or 'list(str, ...)' but " \
-                                                             "was given '{}'".format(type)
+    def popType(self, nodeType, inherited=True):
+        popped = type(self)()
+        if isinstance(nodeType, basestring):
+            nodeType = [nodeType]
+        assert all(isinstance(x, basestring) for x in nodeType), "arg 'type' expected : 'str' or 'list(str, ...)' " \
+                                                                 "but was given '{}'".format(nodeType)
         for i, item in reversed(list(enumerate(self))):
-            for type_ in type:
+            for type_ in nodeType:
                 if inherited:
                     if type_ in item.inheritedTypes():
                         popped.append(self.pop(i))
                 else:
-                    if type_ == item.type():
+                    if type_ == item.nodeType():
                         popped.append(self.pop(i))
         return popped
 
     def copy(self):
-        return YamList(self)
+        return type(self)(self)
