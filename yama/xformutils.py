@@ -117,12 +117,14 @@ def matchComponents(comps=None, slave=None, ws=False):
 
 
 def getCenter(objs):
-    objs = nodes.yams(objs)
     assert objs, "No objects given"
-    poses = [x.getPosition(ws=True) for x in objs]
-    xs = [x for x, y, z in poses]
-    ys = [y for x, y, z in poses]
-    zs = [z for x, y, z in poses]
+    objs = nodes.yams(objs)
+    xs, ys, zs = [[]] * 3
+    for obj in objs:
+        x, y, z = obj.getPosition(ws=True)
+        xs.append(x)
+        ys.append(y)
+        zs.append(z)
     minx, maxx = min(xs), max(xs)
     miny, maxy = min(ys), max(ys)
     minz, maxz = min(zs), max(zs)
