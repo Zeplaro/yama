@@ -45,15 +45,14 @@ def getComponent(node, attr):
 
     if attr == 'cp':
         attr = shape_component.get(type(node), 'cp')
+
+    # Getting api_type to get the proper class for the component
     api_type = component_shape_MFnid.get((attr, type(node)))
     if api_type is None:
-        try:
-            om_list = om.MSelectionList()
-            om_list.add(node.name + '.' + attr + '[0]')
-            dag, comp = om_list.getComponent(0)
-            api_type = comp.apiTypeStr
-        except (RuntimeError, TypeError) as e:
-            raise e
+        om_list = om.MSelectionList()
+        om_list.add(node.name + '.' + attr + '[0]')
+        dag, comp = om_list.getComponent(0)
+        api_type = comp.apiTypeStr
 
     if api_type not in mFnid_component_class:
         raise TypeError("component '{}' of api type '{}' not in supported types".format(attr, api_type))
@@ -83,8 +82,6 @@ class Components(nodes.Yam):
 
     def __init__(self, node, apiType):
         super(Components, self).__init__()
-        if isinstance(node, nodes.Transform):
-            node = node.shape
         assert isinstance(node, nodes.ControlPoint), "component node should be of type 'ControlPoint', " \
                                                      "instead node type is '{}'".format(type(node).__name__)
         self.node = node
@@ -96,7 +93,7 @@ class Components(nodes.Yam):
         if item == '*':
             item = slice(None)
         if isinstance(item, slice):
-            return nodes.YamList(self.index(i) for i in range(len(self.node))[item])
+            return ComponentsSlice(self.node, self, item)
         return self.index(item)
 
     def __len__(self):
@@ -248,7 +245,8 @@ class Component(nodes.Yam):
                                                                self.second_index, self.third_index)
         elif self.second_index is not None:
             return "<class {}('{}', '{}', {}, {})>".format(self.__class__.__name__, self.node,
-                                                           self.components.component_name, self.index, self.second_index)
+                                                           self.components.component_name, self.index,
+                                                           self.second_index)
         else:
             return "<class {}('{}', '{}', {})>".format(self.__class__.__name__, self.node,
                                                        self.components.component_name, self.index)
@@ -280,7 +278,7 @@ class Component(nodes.Yam):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.uuid(), self.type(), self.indexes()))
+        return hash((self.node.uuid(), self.type(), self.indices()))
 
     def exists(self):
         return cmds.objExists(self.name)
@@ -298,7 +296,7 @@ class Component(nodes.Yam):
             attribute += '[' + str(self.third_index) + ']'
         return attribute
 
-    def indexes(self):
+    def indices(self):
         return self.index, self.second_index, self.third_index
 
     def getPosition(self, ws=False):
@@ -358,6 +356,69 @@ class CurveCV(Component):
             space = om.MSpace.kObject
         point = om.MPoint(*value)
         self.node.mFnNurbsCurve.setCVPosition(self.index, point, space)
+
+
+class ComponentsSlice(nodes.Yam):
+    def __init__(self, node, components, components_slice):
+        super(ComponentsSlice, self).__init__()
+        self.node = node
+        self.components = components
+        self.slice = components_slice
+        if components_slice.step is not None:
+            self._indices = tuple(range(components_slice.start, components_slice.stop, components_slice.step))
+        else:
+            self._indices = tuple(range(components_slice.start, components_slice.stop))
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return "<class {}('{}', '{}', {})>".format(self.__class__.__name__, self.node, self.components.component_name,
+                                                   self.slice)
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            raise RuntimeError("cannot slice a ComponentsSlice object")
+        return self.components.index(self._indices[item])
+
+    def __len__(self):
+        return len(self._indices)
+
+    def __iter__(self):
+        for i in self._indices:
+            yield self.components.index(i)
+
+    def __eq__(self, other):
+        if isinstance(other, ComponentsSlice):
+            return self._indices == other.indices
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash((self.node.uuid(), self.components.api_type, self._indices))
+
+    @property
+    def name(self):
+        start_stop = [str(s) if s is not None else '' for s in (self.slice.start, self.slice.stop)]
+        return self.node + '.' + self.components.component_name + '[' + ':'.join(start_stop) + ']'
+
+    def indices(self):
+        return self._indices
+
+    def type(self):
+        return self.components.api_type
+
+    def inheritedTypes(self):
+        return ['component', self.components.api_type]
+
+    def getPositions(self, ws=False):
+        return [x.getPosition(ws=ws) for x in self]
+
+    def setPositions(self, values, ws=False):
+        for x, value in zip(self, values):
+            x.setPosition(value, ws=ws)
 
 
 # Removed 'v' because rarely used and similar to short name for 'visibility'
