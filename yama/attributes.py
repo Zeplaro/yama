@@ -183,9 +183,11 @@ class Attribute(nodes.Yam):
     def name(self):
         """
         The full node.attribute name.
+        Not using self.mPlug.name() because, unlike node.name, it does not returned the node's  minimum string
+        representation which will uniquely identify the path, in case the node has a non unique name.
         :return: str
         """
-        return self.mPlug.name()
+        return self.node.name + '.' + self.attribute
 
     def attr(self, attr):
         """
