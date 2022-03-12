@@ -125,7 +125,7 @@ def createNode(*args, **kwargs):
     return yam(cmds.createNode(*args, **kwargs))
 
 
-def spaceLocator(name, pos=(0, 0, 0), rot=(0, 0, 0), parent=None, ws=False):
+def spaceLocator(name='locator', pos=(0, 0, 0), rot=(0, 0, 0), parent=None, ws=False):
     """
     Creates a locator.
     :param name: str, the locator name
@@ -582,7 +582,7 @@ class Transform(DagNode):
         if noIntermediate:
             children = YamList(x for x in children if not x.mFnDagNode.isIntermediateObject)
         if type:
-            children.keepType(type=type)
+            children.keepType(type)
         return children
 
     def shapes(self, type=None, noIntermediate=True):
