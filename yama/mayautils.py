@@ -518,6 +518,7 @@ def hammerShells(vertices=None, reverse=False):
     for node, vtxs in data.items():
         node = nodes.yam(node)
         shells = node.shells(indexOnly=True)  # Uses indexOnly for 'index in/not in shell' for much faster performance
+        print("Found {} shells for '{}'".format(len(shells), node))
         for shell in shells:
             if reverse:
                 vtxs_indexes = {vtx.index for vtx in vtxs}
