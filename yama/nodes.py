@@ -1180,8 +1180,8 @@ class YamList(list):
     def keepType(self, nodeType, inherited=True):
         if isinstance(nodeType, basestring):
             nodeType = [nodeType]
-        assert all(isinstance(x, basestring) for x in nodeType), "arg 'type' expected : 'str' or 'list(str, ...)' but " \
-                                                             "was given '{}'".format(nodeType)
+        assert all(isinstance(x, basestring) for x in nodeType), "arg 'type' expected : 'str' or 'list(str, ...)' but" \
+                                                                 " was given '{}'".format(nodeType)
         for i, item in reversed(list(enumerate(self))):
             for type_ in nodeType:
                 if inherited:

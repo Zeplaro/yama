@@ -224,7 +224,7 @@ class Attribute(nodes.Yam):
 
     @property
     def index(self):
-        return self.mPlug.logocalIndex()
+        return self.mPlug.logicalIndex()
 
     @property
     def parent(self):
