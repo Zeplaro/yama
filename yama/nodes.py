@@ -1026,7 +1026,7 @@ class SkinCluster(GeometryFilter):
             conns = (x for x in inf.worldMatrix.destinationConnections(type='skinCluster') if x.node == self)
             for conn in conns:
                 bpm = self.bindPreMatrix[conn.index]
-                if bpm.sourceConnections():
+                if bpm.sourceConnection():
                     print("{} is connected and can't be reset".format(bpm))
                     continue
                 wim = inf.worldInverseMatrix.value
