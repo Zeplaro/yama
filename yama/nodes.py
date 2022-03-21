@@ -926,6 +926,7 @@ class WeightGeometryFilter(GeometryFilter):
 
     @weights.setter
     def weights(self, weights):
+        weights = weightsdict.WeightsDict(weights)
         weightsAttr = self.weightsAttr
         for i, weight in weights.items():
             weightsAttr[i].value = weight
