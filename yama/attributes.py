@@ -455,7 +455,11 @@ def getAttr(attr):
     except Exception as e:
         print('## failed to get MPlug value: {}'.format(e))
 
-    return cmds.getAttr(attr.name)
+    value = cmds.getAttr(attr.name)
+    # To simply return the tuple in the list that cmds returns for attribute like '.translate', '.rotate', etc...
+    if isinstance(value, list) and len(value) == 1 and isinstance(value[0], tuple):
+        return value[0]
+    return value
 
 
 def setAttr(attr, value, **kwargs):
@@ -488,12 +492,12 @@ def getMPlugValue(mPlug):
         return mPlug.asInt()
     elif attr_type in ('kDistance', ):
         return mPlug.asMDistance().asUnits(om.MDistance.uiUnit())
-    elif attr_type in ('kAngle', ):
-        return mPlug.asMAngle().asUnits(om.MAngle.uiUnits())
+    elif attr_type in ('kAngle', 'kDoubleAngleAttribute'):
+        return mPlug.asMAngle().asUnits(om.MAngle.uiUnit())
     elif attr_type in ('kTypedAttribute', ):
         return mPlug.asString()
     elif attr_type in ('kTimeAttribute', ):
-        return mPlug.asMTime().asUnits(om.MTime.uiUnits())
+        return mPlug.asMTime().asUnits(om.MTime.uiUnit())
     elif attr_type in ('kAttribute2Double', 'kAttribute3Double', 'kAttribute4Double', ):
         values = []
         for child_index in range(mPlug.numChildren()):
@@ -519,12 +523,12 @@ def setMPlugValue(mPlug, value):
         return mPlug.setInt(value)
     elif attr_type in ('kDistance', ):
         mPlug.setMDistance(om.MDistance(value, om.MDistance.uiUnit()))
-    elif attr_type in ('kAngle', ):
-        mPlug.setMAngle(om.MAngle(value, om.MAngle.uiUnits()))
+    elif attr_type in ('kAngle', 'kDoubleAngleAttribute'):
+        mPlug.setMAngle(om.MAngle(value, om.MAngle.uiUnit()))
     elif attr_type in ('kTypedAttribute', ):
         mPlug.setString(value)
     elif attr_type in ('kTimeAttribute', ):
-        mPlug.setMTime(om.MTime(value, om.MTime.uiUnits()))
+        mPlug.setMTime(om.MTime(value, om.MTime.uiUnit()))
     elif attr_type in ('kAttribute2Double', 'kAttribute3Double', 'kAttribute4Double', ):
         for child_index in range(mPlug.numChildren()):
             setMPlugValue(mPlug.child(child_index, value[child_index]))
