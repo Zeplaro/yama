@@ -70,7 +70,14 @@ def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene',
 
 
 def match(objs=None, t=True, r=True, s=False, ws=True):
-    """ TODO """
+    """
+    Match the position, rotation and scale of the first object to the following objects.
+    :param objs: [str, ...] or None to get selected objects.
+    :param t: bool, True to match translation.
+    :param r: bool, True to match rotation.
+    :param s: bool, True to match scale.
+    :param ws:  bool, True to match in world space.
+    """
     if not objs:
         objs = nodes.selected()
     assert len(objs) > 1, "Less than 2 objects selected"
@@ -104,7 +111,12 @@ def match(objs=None, t=True, r=True, s=False, ws=True):
 
 @decorators.keepsel
 def matchComponents(comps=None, slave=None, ws=False):
-    """ TODO """
+    """
+    Match the position, rotation and scale of the given/selected components to the slave object.
+    :param comps: [str, ...] or None to get selected components.
+    :param slave: str, Name of the slave object or None to get last selected object.
+    :param ws: bool, True to match in world space.
+    """
     if not comps or not slave:
         comps = nodes.selected(fl=False)
         slave = comps.pop(-1)

@@ -202,7 +202,12 @@ def matrixRowToMaya(matrix):
 
 @decorators.keepsel
 def getSymmetryTable(obj=None, axis='x'):
-    """TODO"""
+    """
+    Returns a SymTable object containing the symmetry table of the given object.
+    :param obj: the object to get the symmetry table from
+    :param axis: the axis to use for the symmetry table
+    :return: a SymTable object
+    """
 
     def selected():
         return cmds.ls(os=True, fl=True)
@@ -237,7 +242,10 @@ def getSymmetryTable(obj=None, axis='x'):
 
 
 class SymTable(dict):
-    """TODO"""
+    """
+    A class to represent a symmetry table. It is a dictionary with the keys being the left vertices index and the values
+    being the right vertices index.
+    """
 
     def __init__(self, axis='x'):
         assert axis in ('x', 'y', 'z')

@@ -125,7 +125,12 @@ def reskin(objs=None):
 
 
 def mirrorWeights(weights, table):
-    # TODO : Average mid vtxs
+    """
+    Mirror weights according to the given mirror table.
+    :param weights: dict of {'index': weight}
+    :param table: mirror table from mayautils.getSymmetryTable
+    :return: dict of {'index': weight}
+    """
     mir_weights = weights.copy()
     for l_cp in table:
         mir_weights[table[l_cp]] = weights[l_cp]

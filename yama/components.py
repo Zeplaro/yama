@@ -19,10 +19,10 @@ from . import config, nodes
 
 def getComponent(node, attr):
     """
-    todo : docstring
-    :param node:
-    :param attr:
-    :return:
+    Returns the proper component object for the given node and component name and index.
+    :param node: The node to get the component from.
+    :param attr: The component name to get the component from.
+    :return: The component object.
     """
     indices = []
     if '.' in attr:
@@ -76,7 +76,7 @@ def getComponent(node, attr):
 
 class Components(nodes.Yam):
     """
-    todo : docstring
+    Base class for components not indexed.
     """
     __metaclass__ = ABCMeta
 
@@ -148,6 +148,9 @@ class Components(nodes.Yam):
 
 
 class SingleIndexed(Components):
+    """
+    Base class for components indexed by a single index.
+    """
     def __init__(self, *args, **kwargs):
         super(SingleIndexed, self).__init__(*args, **kwargs)
 
@@ -157,6 +160,9 @@ class SingleIndexed(Components):
 
 
 class MeshVertices(SingleIndexed):
+    """
+    Class for mesh vertices.
+    """
     def __init__(self, *args, **kwargs):
         super(MeshVertices, self).__init__(*args, **kwargs)
         if not config.undoable:
@@ -179,6 +185,9 @@ class MeshVertices(SingleIndexed):
 
 
 class CurveCVs(SingleIndexed):
+    """
+    Class for curve cvs.
+    """
     def __init__(self, *args, **kwargs):
         super(CurveCVs, self).__init__(*args, **kwargs)
         if not config.undoable:
@@ -201,6 +210,9 @@ class CurveCVs(SingleIndexed):
 
 
 class DoubleIndexed(Components):
+    """
+    Base class for components indexed by two indices.
+    """
     def __init__(self, *args, **kwargs):
         super(DoubleIndexed, self).__init__(*args, **kwargs)
 
@@ -211,6 +223,9 @@ class DoubleIndexed(Components):
 
 
 class TripleIndexed(Components):
+    """
+    Base class for components indexed by three indices.
+    """
     def __init__(self, *args, **kwargs):
         super(TripleIndexed, self).__init__(*args, **kwargs)
 
@@ -224,9 +239,8 @@ class TripleIndexed(Components):
 
 class Component(nodes.Yam):
     """
-    todo : docstring
+    Base class for single indexed component.
     """
-
     def __init__(self, node, components, index, secondIndex=None, thirdIndex=None):
         super(Component, self).__init__()
         if isinstance(node, nodes.Transform):
@@ -255,9 +269,7 @@ class Component(nodes.Yam):
 
     def __getitem__(self, item):
         """
-        todo : work with slice
-        :param item:
-        :return:
+        todo : work with slices
         """
         assert isinstance(item, int)
         if isinstance(self.components, SingleIndexed):
@@ -362,7 +374,8 @@ class CurveCV(Component):
 
 class ComponentsSlice(nodes.Yam):
     """
-    todo : docstring
+    A slice object to work with maya slices.
+    Warning : ComponentsSlice does contain the last index of the slice unlike in a Python slice.
     """
     def __init__(self, node, components, components_slice):
         super(ComponentsSlice, self).__init__()
