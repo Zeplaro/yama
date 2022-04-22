@@ -264,6 +264,23 @@ class SymTable(dict):
             str_ += '{}: {}, '.format(key, value)
         return "SymTable({})".format('{' + str_[:-2] + '}')
 
+    def __invert__(self):
+        """
+        Retuns a flipped symmetry table.
+        :return: the flipped symmetry table object
+        """
+        inv = SymTable(axis=self.axis)
+        for key, value in self.items():
+            inv[value] = key
+        return inv
+
+    def invert(self):
+        """
+        Flips the symmetry table.
+        """
+        for key, value in self.items():
+            self[value] = key
+
 
 def mirrorPos(obj, table):
     for l_cp in table:
