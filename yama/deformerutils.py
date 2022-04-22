@@ -146,16 +146,21 @@ def flipWeights(weights, table):
 
 
 @decorators.keepsel
-def copyDeformerWeights(sourceGeo, destinationGeo, sourceDeformer, destinationDeformer):
+def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, destinationGeo=None):
     """
     For two geometries with diffferent topologies, copies a given deformer weight to another given deformer.
-    :param sourceGeo: the geo on which the sourceDeformer is applied
-    :param destinationGeo: the geo on which the destinationDeformer is applied
     :param sourceDeformer: the deformer to copy the weights from, the given object needs to have a weights attribute
     :param destinationDeformer: the deformer to copy the weights on, the given object needs to have a weights attribute
+    :param sourceGeo: the geo on which the sourceDeformer is applied; if None, the geo is taken from the sourceDeformer
+    :param destinationGeo: the geo on which the destinationDeformer is applied; if None, the geo is taken from the
+                           destinationDeformer
     """
-    sourceGeo, destinationGeo, sourceDeformer, destinationDeformer = nodes.yams((sourceGeo, destinationGeo,
-                                                                                 sourceDeformer, destinationDeformer))
+    sourceDeformer, destinationDeformer = nodes.yams((sourceDeformer, destinationDeformer))
+    if sourceGeo is None:
+        sourceGeo = sourceDeformer.geometry()
+    if destinationGeo is None:
+        destinationGeo = destinationDeformer.geometry()
+    
     assert hasattr(sourceDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
                                                "".format(sourceDeformer, type(sourceDeformer).__name__)
     assert hasattr(destinationDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
