@@ -157,9 +157,9 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
     """
     sourceDeformer, destinationDeformer = nodes.yams((sourceDeformer, destinationDeformer))
     if sourceGeo is None:
-        sourceGeo = sourceDeformer.geometry()
+        sourceGeo = sourceDeformer.geometry
     if destinationGeo is None:
-        destinationGeo = destinationDeformer.geometry()
+        destinationGeo = destinationDeformer.geometry
     
     assert hasattr(sourceDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
                                                "".format(sourceDeformer, type(sourceDeformer).__name__)
