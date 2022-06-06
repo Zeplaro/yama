@@ -239,7 +239,7 @@ class TripleIndexed(Components):
 
 class Component(nodes.Yam):
     """
-    Base class for single indexed component.
+    Base class for indexed component.
     """
     def __init__(self, node, components, index, secondIndex=None, thirdIndex=None):
         super(Component, self).__init__()
@@ -419,7 +419,7 @@ class ComponentsSlice(nodes.Yam):
 
     @property
     def name(self):
-        start_stop = [str(s) if s is not None else '' for s in (self.slice.start, self.slice.stop)]
+        start_stop = [str(s) if s is not None else '' for s in (self.slice.start, self.slice.stop - 1)]
         return self.node + '.' + self.components.component_name + '[' + ':'.join(start_stop) + ']'
 
     @property
