@@ -219,7 +219,23 @@ class Attribute(nodes.Yam):
         """
         setAttr(self, value)
 
+    def get(self):
+        """
+        Alternative way to get the maya value.
+        """
+        return getAttr(self)
+
+    def set(self, value):
+        """
+        Alternative way to set the maya value.
+        """
+        setAttr(self, value)
+
     def exists(self):
+        """
+        Checks if the attribute exists.
+        :return: bool
+        """
         return cmds.objExists(self.name)
 
     @property
@@ -228,6 +244,10 @@ class Attribute(nodes.Yam):
 
     @property
     def parent(self):
+        """
+        The parent attribute.
+        :return: Attribute object
+        """
         if self.mPlug.isElement:
             return Attribute(self.node, self.mPlug.array())
         else:
@@ -268,6 +288,12 @@ class Attribute(nodes.Yam):
         cmds.disconnectAttr(self.name, attr)
 
     def listConnections(self, **kwargs):
+        """
+        List the connections to this attribute via cmds.listConnections.
+        By default, 'skipConversionNodes' and 'plugs' kwargs are set to True.
+        :param kwargs: kwards to pass on to cmds.listConnections
+        :return: YamList of Attribute or Yam node objects.
+        """
         if 'scn' not in kwargs and 'skipConversionNodes' not in kwargs:
             kwargs['skipConversionNodes'] = True
         if 'p' not in kwargs and 'plugs' not in kwargs:
@@ -292,6 +318,11 @@ class Attribute(nodes.Yam):
                 self.disconnect(c)
 
     def listAttr(self, **kwargs):
+        """
+        List the attributes of this attribute via cmds.listAttr.
+        :param kwargs: kwards to pass on to cmds.listAttr.
+        :return: YamList of Attribute objects.
+        """
         return nodes.listAttr(self, **kwargs)
 
     def type(self):
