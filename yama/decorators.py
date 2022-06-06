@@ -9,7 +9,7 @@ def mayaundo(func):
     def wrapper(*args, **kwargs):
         cmds.undoInfo(openChunk=True)
         result = func(*args, **kwargs)
-        cmds.undoInfo(cloasChunck=True)
+        cmds.undoInfo(closeChunk=True)
         return result
     return wrapper
 
