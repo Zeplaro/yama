@@ -11,6 +11,7 @@ import sys
 from math import sqrt
 from maya import cmds
 import maya.api.OpenMaya as om
+import maya.api.OpenMayaAnim as oma
 import maya.OpenMaya as om1
 
 # python 2 to 3 compatibility
@@ -974,9 +975,16 @@ class SkinCluster(GeometryFilter):
     def __init__(self, mObject, mFnDependencyNode):
         super(SkinCluster, self).__init__(mObject, mFnDependencyNode)
         self._weights_attr = None
+        self._mFnSkinCluster = None
+
+    @property
+    def mFnSkinCluster(self):
+        if self._mFnSkinCluster is None:
+            self._mFnSkinCluster = oma.MFnSkinCluster(self.mObject)
+        return self._mFnSkinCluster
 
     def influences(self):
-        return yams(cmds.skinCluster(self.name, q=True, inf=True)) or []
+        return yams(self.mFnSkinCluster.influenceObjects())
 
     def getVertexWeight(self, index, numInfluences=None):
         if numInfluences is None:
@@ -1018,6 +1026,40 @@ class SkinCluster(GeometryFilter):
         weightsAttr = self.blendWeights
         for vtx in data:
             weightsAttr[vtx].value = data[vtx]
+
+    def getPointsAffectedByInfluence(self, influence):
+        """
+        Returns the points affected by the given influence
+        :param influence: str, int, DependNode, mObject or mDagPath
+        :return: YamList of components
+        """
+        import components
+        if isinstance(influence, DependNode):
+            if influence in self.influences():
+                influence = influence.mDagPath
+            else:
+                raise RuntimeError('Influence not found in skin cluster')
+        elif isinstance(influence, int):
+            influence = self.influences()[influence].mDagPath
+        elif isinstance(influence, (str, om.MObject. om.MDagPath)):
+            influence = yam(influence)
+            if influence in self.influences():
+                influence = influence.mDagPath
+            else:
+                raise RuntimeError('Influence not found in skin cluster')
+        else:
+            raise RuntimeError('Invalid influence type; {}, {}'.format(influence, type(influence)))
+        vtx_list = yams(self.mFnSkinCluster.getPointsAffectedByInfluence(influence)[0].getSelectionStrings())
+        vtxs = YamList()
+        for vtx in vtx_list:
+            if isinstance(vtx, components.Component):
+                vtxs.append(vtx)
+            elif isinstance(vtx, components.ComponentsSlice):
+                for vtx_ in vtx:
+                    vtxs.append(vtx_)
+            else:
+                raise RuntimeError("Invalid object type: '{}', {}".format(vtx, type(vtx)))
+        return vtxs
 
     def reskin(self):
         """
