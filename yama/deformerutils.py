@@ -235,3 +235,40 @@ def hammerShells(vertices=None, reverse=False):
             if shell_vtxs:
                 nodes.select(shell_vtxs)
                 cmds.WeightHammer()
+
+
+def transferInfluenceWeights(skinCluster, influences, target_influence, add_missing_target=True):
+    """
+    Transfer weights from a list of influences to a target influence.
+    :param skinCluster: any type that can be passed to nodes.yam; the skinCluster to work on.
+    :param influences: list; influences to transfer weights from.
+    :param target_influence: any type that can be passed to nodes.yam; the influence to transfer weights to.
+    :param add_missing_target: bool; if True, adds missing target influences to the skinCluster.
+    """
+    influence_indexes = []
+    all_influences = skinCluster.influences()
+
+    # Checks the target influence
+    target_influence = nodes.yam(target_influence)
+    if target_influence in all_influences:
+        target_index = all_influences.index(target_influence)
+    elif add_missing_target:
+        cmds.skinCluster(skinCluster.name, e=True, addInfluence=target_influence, lockWeights=True, weight=0.0)
+        all_influences = skinCluster.influences()
+        target_index = all_influences.index(target_influence)
+    else:
+        cmds.warning("Target influence not found in skinCluster '{}': '{}'".format(skinCluster, target_influence))
+        return
+
+    # Checks the influences
+    for inf in influences:
+        inf = nodes.yam(inf)
+        if inf in all_influences:
+            influence_indexes.append(all_influences.index(inf))
+        else:
+            cmds.warning("Influence not found in skinCluster '{}': '{}'".format(skinCluster, inf))
+
+    for inf in influence_indexes:
+        for vtx in skinCluster.getPointsAffectedByInfluence(inf):
+            skinCluster.weightList[vtx.index].weights[target_index].value += skinCluster.weightList[vtx.index].weights[inf].value
+            skinCluster.weightList[vtx.index].weights[inf].value = 0.0
