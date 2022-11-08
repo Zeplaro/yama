@@ -245,6 +245,7 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
     :param target_influence: any type that can be passed to nodes.yam; the influence to transfer weights to.
     :param add_missing_target: bool; if True, adds missing target influences to the skinCluster.
     """
+    skinCluster = nodes.yam(skinCluster)
     influence_indexes = []
     all_influences = skinCluster.influences()
 
