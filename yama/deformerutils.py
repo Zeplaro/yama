@@ -1,13 +1,8 @@
 # encoding: utf8
 
-import sys
+from six import string_types
 from maya import cmds, mel
 from . import nodes, decorators
-
-# python 2 to 3 compatibility
-_pyversion = sys.version_info[0]
-if _pyversion == 3:
-    basestring = str
 
 
 def getSkinCluster(obj, firstOnly=True):
@@ -15,7 +10,7 @@ def getSkinCluster(obj, firstOnly=True):
     skns = cmds.ls(skns, type='skinCluster')
     if firstOnly:
         return nodes.yam(skns[0]) if skns else None
-    return nodes.yams(skns) if skns else []
+    return nodes.yams(skns) if skns else nodes.YamList()
 
 
 def getSkinClusters(objs, firstOnly=True):
@@ -40,7 +35,7 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
     """
     from . import mayautils as mut
 
-    if isinstance(objs, basestring):
+    if isinstance(objs, string_types):
         raise RuntimeError("first arg objs='{}' is of type {} "
                            "instead of expected type: list".format(objs, type(objs).__name__))
     if not objs:

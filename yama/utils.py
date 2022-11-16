@@ -4,6 +4,8 @@
 Contains non maya specific utils.
 """
 
+from __future__ import division
+
 
 def multList(list_a, list_b):
     """

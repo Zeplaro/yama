@@ -5,14 +5,8 @@ Contains all the class and functions for maya components.
 """
 
 from abc import ABCMeta, abstractmethod
-import sys
 from maya import cmds
 import maya.api.OpenMaya as om
-
-# python 2 to 3 compatibility
-_pyversion = sys.version_info[0]
-if _pyversion == 3:
-    basestring = str
 
 from . import config, nodes
 
@@ -44,10 +38,10 @@ def getComponent(node, attr):
         node = shape
 
     if attr == 'cp':
-        attr = shape_component.get(type(node), 'cp')
+        attr = shape_component.get(node.__class__, 'cp')
 
     # Getting api_type to get the proper class for the component
-    api_type = component_shape_MFnid.get((attr, type(node)))
+    api_type = component_shape_MFnid.get((attr, node.__class__))
     if api_type is None:
         om_list = om.MSelectionList()
         om_list.add(node.name + '.' + attr + '[0]')

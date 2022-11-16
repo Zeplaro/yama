@@ -4,15 +4,9 @@
 Contains all the class and functions for maya attributes.
 """
 
-import sys
 from maya import cmds
 import maya.api.OpenMaya as om
 from . import config, nodes, weightslist
-
-# python 2 to 3 compatibility
-_pyversion = sys.version_info[0]
-if _pyversion == 3:
-    basestring = str
 
 
 def getAttribute(node, attr):
@@ -22,9 +16,10 @@ def getAttribute(node, attr):
     :param attr: str or OpenMaya.MPlug
     :return: Attribute
     """
-    if isinstance(attr, basestring):
+    try:  # In case attr is given as a string
         attr = getMPlug(node + '.' + attr)
-    assert isinstance(attr, om.MPlug), "'str' or 'OpenMaya.MPlug' expected, got '{}'".format(type(attr).__name__)
+    except TypeError:  # Fails to + is attr is given directly as an MPlug
+        pass
     return Attribute(node, attr)
 
 
@@ -93,14 +88,14 @@ class Attribute(nodes.Yam):
         """
         if item == '*':
             item = slice(None)
-        if isinstance(item, slice):
+        if item.__class__ == slice:  # Not using isinstance() for efficiency
             return nodes.YamList(Attribute(self.node, self.mPlug.selectAncestorLogicalIndex(i))
                                  for i in range(len(self))[item])
 
         try:
             return Attribute(self.node, self.mPlug.selectAncestorLogicalIndex(item))
         except RuntimeError:
-            raise RuntimeError("'{}' is not an array attribute and cannot use __getitem__".format(self))
+            raise TypeError("'{}' is not an array attribute and cannot use __getitem__".format(self))
 
     def __add__(self, other):
         """
@@ -476,9 +471,11 @@ class BlendshapeTarget(Attribute):
 
 
 def getAttr(attr):
-    if not isinstance(attr, Attribute):
-        attr = nodes.yam(attr)
-
+    """
+    Gets the attribute value.
+    :param attr: Attibute object
+    :return: the value of the attribute.
+    """
     try:
         return getMPlugValue(attr.mPlug)
     except Exception as e:
@@ -486,15 +483,18 @@ def getAttr(attr):
 
     value = cmds.getAttr(attr.name)
     # To simply return the tuple in the list that cmds returns for attribute like '.translate', '.rotate', etc...
-    if isinstance(value, list) and len(value) == 1 and isinstance(value[0], tuple):
+    if value.__class__ == list and len(value) == 1 and value[0].__class__ == tuple:  # Not using isinstance() for efficiency
         return value[0]
     return value
 
 
 def setAttr(attr, value, **kwargs):
-    if not isinstance(attr, Attribute):
-        attr = nodes.yam(attr)
-
+    """
+    Sets the attribute value.
+    :param attr: Attribute object
+    :param value: the value to set on the attribute
+    :param kwargs: passed onto cmds.setAttr
+    """
     if not config.undoable:
         try:
             setMPlugValue(attr.mPlug, value)
@@ -512,8 +512,6 @@ def setAttr(attr, value, **kwargs):
 
 
 def getMPlugValue(mPlug):
-    assert isinstance(mPlug, om.MPlug), "'OpenMaya.MPlug' object expected, " \
-                                        "instead got : '{}' of type '{}'".format(mPlug, type(mPlug).__name__)
     attr_type = mPlug.attribute().apiTypeStr
     if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
         return mPlug.asDouble()
@@ -543,8 +541,6 @@ def getMPlugValue(mPlug):
 
 
 def setMPlugValue(mPlug, value):
-    assert isinstance(mPlug, om.MPlug), "'OpenMaya.MPlug' object expected, instead got : " \
-                                        "'{}' of type '{}'".format(mPlug, type(mPlug).__name__)
     attr_type = mPlug.attribute().apiTypeStr
     if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
         mPlug.setDouble(value)

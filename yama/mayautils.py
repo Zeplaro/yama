@@ -1,14 +1,8 @@
 # encoding: utf8
 
-import sys
 from maya import cmds, mel
 import maya.api.OpenMaya as om
 from . import nodes, xformutils, utils, decorators
-
-# python 2 to 3 compatibility
-_pyversion = sys.version_info[0]
-if _pyversion == 3:
-    basestring = str
 
 
 def createHook(node, parent=None, suffix='hook'):
