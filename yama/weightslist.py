@@ -1,11 +1,6 @@
 # encoding: utf8
 
 from __future__ import division
-import sys
-
-_pyversion = sys.version_info[0]
-if _pyversion == 3:
-    basestring = str
 
 from . import io
 
@@ -16,56 +11,54 @@ class WeightsList(list):
         for i in list(*args, **kwargs):
             self.append(i)
 
+    @classmethod
+    def fromLengthValue(cls, length, value=0.0):
+        return cls(float(value) for _ in range(length))
+
     def __setitem__(self, key, value):
         super(WeightsList, self).__setitem__(key, float(value))
 
-    def get(self, k, value=None):
-        try:
-            return self[k]
-        except IndexError:
-            return value
-
     def __add__(self, other):
         if isinstance(other, (int, float)):
-            other = WeightsListFromLength(len(self), other)
+            other = self.fromLengthValue(len(self), other)
         return WeightsList(x + y for (x, y) in zip(self, other))
 
     def __iadd__(self, other):
         if isinstance(other, (int, float)):
-            other = WeightsListFromLength(len(self), other)
+            other = self.fromLengthValue(len(self), other)
         for i, (_, y) in enumerate(zip(self, other)):
             self[i] += y
 
     def __sub__(self, other):
         if isinstance(other, (int, float)):
-            other = WeightsListFromLength(len(self), other)
+            other = self.fromLengthValue(len(self), other)
         return WeightsList(x - y for (x, y) in zip(self, other))
 
     def __isub__(self, other):
         if isinstance(other, (int, float)):
-            other = WeightsListFromLength(len(self), other)
+            other = self.fromLengthValue(len(self), other)
         for i, (_, y) in enumerate(zip(self, other)):
             self[i] -= y
 
     def __mul__(self, other):
         if isinstance(other, (int, float)):
-            other = WeightsListFromLength(len(self), other)
+            other = self.fromLengthValue(len(self), other)
         return WeightsList(x * y for (x, y) in zip(self, other))
 
     def __imul__(self, other):
         if isinstance(other, (int, float)):
-            other = WeightsListFromLength(len(self), other)
+            other = self.fromLengthValue(len(self), other)
         for i, (_, y) in enumerate(zip(self, other)):
             self[i] *= y
 
     def __div__(self, other):
         if isinstance(other, (int, float)):
-            other = WeightsListFromLength(len(self), other)
+            other = self.fromLengthValue(len(self), other)
         return WeightsList(x / y for (x, y) in zip(self, other))
 
     def __idiv__(self, other):
         if isinstance(other, (int, float)):
-            other = WeightsListFromLength(len(self), other)
+            other = self.fromLengthValue(len(self), other)
         for i, (_, y) in enumerate(zip(self, other)):
             self[i] /= y
 
@@ -77,7 +70,7 @@ class WeightsList(list):
 
     def __eq__(self, other):
         if isinstance(other, (int, float)):
-            other = WeightsListFromLength(len(self), other)
+            other = self.fromLengthValue(len(self), other)
         return super(WeightsList, self).__eq__(other)
 
     def __ne__(self, other):
@@ -85,6 +78,12 @@ class WeightsList(list):
 
     def __hash__(self):
         return hash(tuple(self))
+
+    def get(self, k, value=None):
+        try:
+            return self[k]
+        except IndexError:
+            return value
 
     def clamp(self, min_value=0.0, max_value=1.0):
         for i, x in enumerate(self):
@@ -117,7 +116,3 @@ def normalizeWeights(*weights):
         for i, value in enumerate(values):
             lists[i].append(value * mult)
     return lists
-
-
-def WeightsListFromLength(length, value=0.0):
-    return WeightsList(float(value) for _ in range(length))
