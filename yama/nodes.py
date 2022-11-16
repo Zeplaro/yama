@@ -19,7 +19,7 @@ _pyversion = sys.version_info[0]
 if _pyversion == 3:
     basestring = str
 
-from . import weightsdict, config
+from . import weightslist, config
 
 
 def yam(node):
@@ -123,6 +123,8 @@ def createNode(*args, **kwargs):
     :param kwargs: cmds kwargs for cmds.createNode
     :return: a DependNode object
     """
+    if 'ss' not in kwargs and 'skipSelect' not in kwargs:
+        kwargs['ss'] = True
     return yam(cmds.createNode(*args, **kwargs))
 
 
@@ -919,17 +921,13 @@ class WeightGeometryFilter(GeometryFilter):
 
     @property
     def weights(self):
-        weights = weightsdict.WeightsDict()
         weightsAttr = self.weightsAttr
-        for i in range(len(self.geometry)):
-            weights[i] = weightsAttr[i].value
-        return weights
+        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(self.geometry)))
 
     @weights.setter
     def weights(self, weights):
-        weights = weightsdict.WeightsDict(weights)
         weightsAttr = self.weightsAttr
-        for i, weight in weights.items():
+        for i, weight in enumerate(weights):
             weightsAttr[i].value = weight
 
     @property
@@ -986,46 +984,84 @@ class SkinCluster(GeometryFilter):
     def influences(self):
         return yams(self.mFnSkinCluster.influenceObjects())
 
-    def getVertexWeight(self, index, numInfluences=None):
-        if numInfluences is None:
-            numInfluences = len(self.influences())
-        weights = weightsdict.WeightsDict()
+    def getVertexWeight(self, index, influence_indexes=None):
+        if influence_indexes is None:
+            influence_indexes = self.getInfluenceIndexes()
+        weights = weightslist.WeightsList()
         weightsAttr = self.weightList[index].weights
-        for jnt in range(numInfluences):
-            weights[jnt] = weightsAttr[jnt].value
+        for i, jnt_index in enumerate(influence_indexes):
+            weights.append(weightsAttr[jnt_index].value)
         return weights
 
-    def setVertexWeight(self, index, values):
+    def setVertexWeight(self, index, values, influence_indexes=None):
+        if influence_indexes is None:
+            influence_indexes = self.getInfluenceIndexes()
         weightsAttr = self.weightList[index].weights
-        for jnt, value in values.items():
-            weightsAttr[jnt].value = value
+        for index, value in enumerate(values):
+            weightsAttr[influence_indexes[index]].value = value
 
     @property
     def weights(self):
-        weights = {}
-        numInfluences = len(self.influences())
-        for i in range(len(self.geometry)):
-            weights[i] = self.getVertexWeight(i, numInfluences)
+        weights = []
+        # Getting the OpenMaya conponents influenced by the skinCluster
+        mfn_set = om.MFnSet(self.mFnSkinCluster.deformerSet)
+        _, components = mfn_set.getMembers(False).getComponent(0)
+        # Getting the weights
+        weights_array, num_influences = self.mFnSkinCluster.getWeights(self.geometry.mDagPath, components)
+
+        for i in range(0, len(weights_array), num_influences):
+            weights.append(weightslist.WeightsList(weights_array[i:i + num_influences]))
         return weights
 
     @weights.setter
     def weights(self, weights):
-        for vtx in weights:
-            self.setVertexWeight(vtx, weights[vtx])
+        if config.undoable:
+            self.setWeights(weights)
+        else:
+            self.setWeightsOM(weights)
+
+    def setWeights(self, weights):
+        for vtx, weight in enumerate(weights):
+            self.setVertexWeight(index=vtx, values=weight)
+
+    def setWeightsOM(self, weights):
+        # Getting the OpenMaya conponents influenced by the skinCluster
+        mfn_set = om.MFnSet(self.mFnSkinCluster.deformerSet)
+        _, components = mfn_set.getMembers(False).getComponent(0)
+        # Getting an array of the influences indexes
+        num_influences = len(self.influences())
+        influence_array = om.MIntArray(range(num_influences))
+        # Flattening the list of weights into a single list
+        flat_weights = om.MDoubleArray([i[j] for i in weights for j in range(num_influences)])
+        # Setting the weights
+        self.mFnSkinCluster.setWeights(self.geometry.mDagPath, components, influence_array, flat_weights)
 
     @property
     def dqWeights(self):
-        dq_weights = weightsdict.WeightsDict()
-        weightsAttr = self.blendWeights
-        for i in range(len(self.geometry)):
-            dq_weights[i] = weightsAttr[i].value
-        return dq_weights
+        mfn_set = om.MFnSet(self.mFnSkinCluster.deformerSet)
+        _, components = mfn_set.getMembers(False).getComponent(0)
+        return weightslist.WeightsList(self.mFnSkinCluster.getBlendWeights(self.geometry.mDagPath, components))
 
     @dqWeights.setter
     def dqWeights(self, data):
+        if config.undoable:
+            self.setDqWeights(data)
+        else:
+            self.setDqWeightsOM(data)
+
+    def setDqWeights(self, data):
         weightsAttr = self.blendWeights
-        for vtx in data:
-            weightsAttr[vtx].value = data[vtx]
+        for vtx, value in enumerate(data):
+            weightsAttr[vtx].value = value
+
+    def setDqWeightsOM(self, data):
+        # Getting the OpenMaya conponents influenced by the skinCluster
+        mfn_set = om.MFnSet(self.mFnSkinCluster.deformerSet)
+        _, components = mfn_set.getMembers(False).getComponent(0)
+        # Converting the data into maya array
+        data = om.MDoubleArray(data)
+        # Setting the weights
+        self.mFnSkinCluster.setBlendWeights(self.geometry.mDagPath, components, data)
 
     def getPointsAffectedByInfluence(self, influence):
         """
@@ -1076,8 +1112,19 @@ class SkinCluster(GeometryFilter):
                 cmds.setAttr(bpm.name, *wim, type='matrix')
         cmds.skinCluster(self.name, e=True, rbm=True)
 
+    def indexForInfluenceObject(self, influence):
+        """
+        Returns the influence connection index on the skinCluster.
+        :param influence: DagNode
+        :return: int
+        """
+        return self.mFnSkinCluster.indexForInfluenceObject(influence.mDagPath)
 
-class BlendShape(GeometryFilter):
+    def getInfluenceIndexes(self):
+        return [self.indexForInfluenceObject(inf) for inf in self.influences()]
+
+
+class BlendShape(WeightGeometryFilter):
     def __init__(self, mObject, mFnDependencyNode):
         super(BlendShape, self).__init__(mObject, mFnDependencyNode)
         self._targets = []
@@ -1106,20 +1153,6 @@ class BlendShape(GeometryFilter):
     @property
     def weightsAttr(self):
         return self.inputTarget[0].baseWeights
-
-    @property
-    def weights(self):
-        weights = weightsdict.WeightsDict()
-        weightsAttr = self.weightsAttr
-        for index in range(len(self.geometry)):
-            weights[index] = weightsAttr[index].value
-        return weights
-
-    @weights.setter
-    def weights(self, weights):
-        weightsAttr = self.weightsAttr
-        for i, weight in weights.items():
-            weightsAttr[i].value = weight
 
 
 # Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from
