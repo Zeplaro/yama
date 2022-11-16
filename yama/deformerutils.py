@@ -10,14 +10,16 @@ if _pyversion == 3:
     basestring = str
 
 
-def getSkinCluster(obj):
-    skn = cmds.listHistory(str(obj), pdo=True)
-    skn = cmds.ls(skn, type='skinCluster')
-    return nodes.yam(skn[0]) if skn else None
+def getSkinCluster(obj, firstOnly=True):
+    skns = cmds.listHistory(str(obj), pdo=True)
+    skns = cmds.ls(skns, type='skinCluster')
+    if firstOnly:
+        return nodes.yam(skns[0]) if skns else None
+    return nodes.yams(skns) if skns else []
 
 
-def getSkinClusters(objs):
-    return nodes.YamList([getSkinCluster(obj) for obj in objs])
+def getSkinClusters(objs, firstOnly=True):
+    return nodes.YamList([getSkinCluster(obj, firstOnly=firstOnly) for obj in objs])
 
 
 def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamespace=False):
@@ -59,6 +61,20 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
         return
     master = nodes.yam(objs[0])
     slaves = mut.hierarchize(objs[1:], reverse=True)
+
+    for slave in slaves:
+        shapes = []
+        for shape in slave.shapes(noIntermediate=False):
+            if shape.intermediateObject.value:
+                shapes.append(shape)
+        if shapes:
+            result = cmds.confirmDialog(title='Confirm', message='These slaves already have intermediate shapes on '
+                                                                 'them : {}\nDo you want to continue ?'.format(shapes),
+                                        button=['Yes', 'No'], defaultButton='Yes', cancelButton='No',
+                                        dismissString='No')
+            if result == 'No':
+                cmds.warning("SkinAs operation cancelled")
+                return
 
     masterskn = getSkinCluster(master)
     if not masterskn:
@@ -160,7 +176,7 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
         sourceGeo = sourceDeformer.geometry
     if destinationGeo is None:
         destinationGeo = destinationDeformer.geometry
-    
+
     assert hasattr(sourceDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
                                                "".format(sourceDeformer, type(sourceDeformer).__name__)
     assert hasattr(destinationDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
@@ -249,27 +265,34 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
     influence_indexes = []
     all_influences = skinCluster.influences()
 
-    # Checks the target influence
-    target_influence = nodes.yam(target_influence)
-    if target_influence in all_influences:
-        target_index = all_influences.index(target_influence)
-    elif add_missing_target:
-        cmds.skinCluster(skinCluster.name, e=True, addInfluence=target_influence, lockWeights=True, weight=0.0)
-        all_influences = skinCluster.influences()
-        target_index = all_influences.index(target_influence)
-    else:
-        cmds.warning("Target influence not found in skinCluster '{}': '{}'".format(skinCluster, target_influence))
-        return
-
     # Checks the influences
+    missing_influences = []
     for inf in influences:
         inf = nodes.yam(inf)
         if inf in all_influences:
-            influence_indexes.append(all_influences.index(inf))
+            influence_indexes.append([inf, skinCluster.indexForInfluenceObject(inf)])
         else:
-            cmds.warning("Influence not found in skinCluster '{}': '{}'".format(skinCluster, inf))
+            missing_influences.append(inf)
+    if not influence_indexes:
+        cmds.warning("None of the influences were found in skinCluster '{}': {}".format(skinCluster, influences))
+        return False
+    if missing_influences:
+        cmds.warning("Influences not found in skinCluster '{}': {}".format(skinCluster, missing_influences))
 
-    for inf in influence_indexes:
+    # Checks the target influence
+    target_influence = nodes.yam(target_influence)
+    if target_influence in all_influences:
+        target_index = skinCluster.indexForInfluenceObject(target_influence)
+    elif add_missing_target:
+        cmds.skinCluster(skinCluster.name, e=True, addInfluence=target_influence.name, lockWeights=True, weight=0.0)
+        target_index = skinCluster.indexForInfluenceObject(target_influence)
+    else:
+        cmds.warning("Target influence not found in skinCluster '{}': '{}'".format(skinCluster, target_influence))
+        return False
+
+    for inf, index in influence_indexes:
         for vtx in skinCluster.getPointsAffectedByInfluence(inf):
-            skinCluster.weightList[vtx.index].weights[target_index].value += skinCluster.weightList[vtx.index].weights[inf].value
-            skinCluster.weightList[vtx.index].weights[inf].value = 0.0
+            skinCluster.weightList[vtx.index].weights[target_index].value += skinCluster.weightList[vtx.index].weights[
+                index].value
+            skinCluster.weightList[vtx.index].weights[index].value = 0.0
+    return True
