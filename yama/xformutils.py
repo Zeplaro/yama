@@ -1,4 +1,8 @@
+# encoding: utf8
+
+from __future__ import division
 from maya import cmds
+
 from . import nodes, components, decorators
 
 
@@ -42,6 +46,10 @@ def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene',
         worldUpObject: str, Use for worldUpType "object" and "objectrotation"
         worldUpVector: [float, float, float], Use for worldUpType "scene" and "objectrotation"
     """
+    if worldUpType == 'object':
+        if not worldUpObject:
+            raise Exception("worldUpObject is required for worldUpType 'object'")
+        assert cmds.objExists(worldUpObject), "Object '{}' does not exist".format(worldUpObject)
     if not objs:
         objs = nodes.selected()
     assert objs and len(objs) > 1, "Not enough object selected"

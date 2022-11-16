@@ -5,14 +5,8 @@ Contains all the class and functions for maya components.
 """
 
 from abc import ABCMeta, abstractmethod
-import sys
 from maya import cmds
 import maya.api.OpenMaya as om
-
-# python 2 to 3 compatibility
-_pyversion = sys.version_info[0]
-if _pyversion == 3:
-    basestring = str
 
 from . import config, nodes
 
@@ -44,10 +38,10 @@ def getComponent(node, attr):
         node = shape
 
     if attr == 'cp':
-        attr = shape_component.get(type(node), 'cp')
+        attr = shape_component.get(node.__class__, 'cp')
 
     # Getting api_type to get the proper class for the component
-    api_type = component_shape_MFnid.get((attr, type(node)))
+    api_type = component_shape_MFnid.get((attr, node.__class__))
     if api_type is None:
         om_list = om.MSelectionList()
         om_list.add(node.name + '.' + attr + '[0]')
@@ -198,7 +192,7 @@ class CurveCVs(SingleIndexed):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        return [[p.x, p.y, p.z] for p in self.node.MFnNurbsCurve.cvPositions(space)]
+        return [[p.x, p.y, p.z] for p in self.node.mFnNurbsCurve.cvPositions(space)]
 
     def setPositionsOM(self, values, ws=False):
         if ws:
@@ -239,7 +233,7 @@ class TripleIndexed(Components):
 
 class Component(nodes.Yam):
     """
-    Base class for single indexed component.
+    Base class for indexed component.
     """
     def __init__(self, node, components, index, secondIndex=None, thirdIndex=None):
         super(Component, self).__init__()
@@ -419,7 +413,7 @@ class ComponentsSlice(nodes.Yam):
 
     @property
     def name(self):
-        start_stop = [str(s) if s is not None else '' for s in (self.slice.start, self.slice.stop)]
+        start_stop = [str(s) if s is not None else '' for s in (self.slice.start, self.slice.stop - 1)]
         return self.node + '.' + self.components.component_name + '[' + ':'.join(start_stop) + ']'
 
     @property

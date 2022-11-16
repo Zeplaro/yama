@@ -7,18 +7,14 @@ yam or yams to initialize existing objects into their proper class type.
 """
 
 from abc import ABCMeta, abstractproperty, abstractmethod
-import sys
+from six import string_types, PY2
 from math import sqrt
 from maya import cmds
 import maya.api.OpenMaya as om
+import maya.api.OpenMayaAnim as oma
 import maya.OpenMaya as om1
 
-# python 2 to 3 compatibility
-_pyversion = sys.version_info[0]
-if _pyversion == 3:
-    basestring = str
-
-from . import weightsdict, config
+from . import weightslist, config
 
 
 def yam(node):
@@ -28,15 +24,15 @@ def yam(node):
 
     examples :
     >> yam('skincluster42')
-    SkinCluster('skincluster42')
+    ---> SkinCluster('skincluster42')
 
     >> yam('pCube1.tz')
-    Attribute('pCube1.tz')
+    ---> Attribute('pCube1.tz')
     """
 
     mPlug = None
     component = None
-    if isinstance(node, basestring):
+    if isinstance(node, string_types):
         # Getting the mObject associated with the given node uses 'try' in case the node does not exists or multiple
         # objects with the same name exists.
         mSelectionList = om.MSelectionList()
@@ -56,18 +52,18 @@ def yam(node):
         mObject = mSelectionList.getDependNode(0)
         mfn = om.MFnDependencyNode(mObject)
 
-    elif isinstance(node, Yam):
-        return node
-
-    elif isinstance(node, om.MObject):
+    elif node.__class__ == om.MObject:  # Not using isinstance() for efficiency
         mObject = node
         mfn = om.MFnDependencyNode(mObject)
 
-    elif isinstance(node, om.MDagPath):
+    elif isinstance(node, Yam):
+        return node
+
+    elif node.__class__ == om.MDagPath:  # Not using isinstance() for efficiency
         mObject = node.node()
         mfn = om.MFnDependencyNode(mObject)
 
-    elif isinstance(node, om.MPlug):
+    elif node.__class__ == om.MPlug:  # Not using isinstance() for efficiency
         mPlug = node
         mObject = mPlug.node()
         mfn = om.MFnDependencyNode(mObject)
@@ -122,6 +118,8 @@ def createNode(*args, **kwargs):
     :param kwargs: cmds kwargs for cmds.createNode
     :return: a DependNode object
     """
+    if 'ss' not in kwargs and 'skipSelect' not in kwargs:
+        kwargs['ss'] = True
     return yam(cmds.createNode(*args, **kwargs))
 
 
@@ -189,14 +187,14 @@ def listAttr(obj, **kwargs):
     """
     obj = yam(obj)
     from . import attributes
-    isAttr = False
+    is_attr = False
     if isinstance(obj, attributes.Attribute):
-        isAttr = True
+        is_attr = True
         if obj.mPlug.isArray:
             obj = obj[0]
     attrs = YamList()
     for attr in cmds.listAttr(obj.name, **kwargs):
-        if isAttr:
+        if is_attr:
             # If obj is Attribute then removing the obj.attribute from the beginning of the listed attr
             if kwargs.get('shortNames', False) or kwargs.get('sn', False):
                 attr = attr[len(obj.mPlug.partialName()):]
@@ -227,7 +225,7 @@ class Yam(object):
     """
     __metaclass__ = ABCMeta
 
-    if _pyversion == 2:  # if python 2, using use abstractproperty
+    if PY2:  # if python 2, using use abstractproperty
         @abstractproperty
         def name(self):
             pass
@@ -252,7 +250,7 @@ class DependNode(Yam):
 
     def __init__(self, mObject, mFnDependencyNode):
         """
-        Needs an maya api 2.0 MObject associated to the node and a MFnDependencyNode initialized with the mObject.
+        Needs a maya api 2.0 MObject associated to the node and a MFnDependencyNode initialized with the mObject.
         :param mObject: maya api MObject
         :param mFnDependencyNode:
         """
@@ -617,7 +615,7 @@ class Transform(DagNode):
         """
         Wraps the query of cmds.xform, the kwarg query=True is not needed and will be set to True.
         :param kwargs: any kwargs queryable from cmds.xform
-        :return: the queried value/s
+        :return: the queried value·s
         """
         kwargs['q'] = True
         return cmds.xform(self.name, **kwargs)
@@ -626,7 +624,7 @@ class Transform(DagNode):
         """
         Wraps the of cmds.xform, the kwarg query=True cannot be used.
         :param kwargs: any kwargs settable with cmds.xform
-        :return: the queried value/s
+        :return: the queried value·s
         """
         if 'q' in kwargs or 'query' in kwargs:
             raise RuntimeError("setXform kwargs cannot contain 'q' or 'query'")
@@ -654,7 +652,7 @@ class Transform(DagNode):
         :param obj: Transform, Component or str
         :return: float
         """
-        if isinstance(obj, basestring):
+        if isinstance(obj, string_types):
             obj = yam(obj)
         from . import components
         if not isinstance(obj, (Transform, components.Component)):
@@ -777,7 +775,7 @@ class NurbsCurve(ControlPoint):
 
     @staticmethod
     def create(cvs, knots, degree, form, parent):
-        if isinstance(parent, basestring):
+        if isinstance(parent, string_types):
             parent = yam(parent).mObject
         elif isinstance(parent, DependNode):
             parent = parent.mObject
@@ -918,17 +916,13 @@ class WeightGeometryFilter(GeometryFilter):
 
     @property
     def weights(self):
-        weights = weightsdict.WeightsDict()
         weightsAttr = self.weightsAttr
-        for i in range(len(self.geometry)):
-            weights[i] = weightsAttr[i].value
-        return weights
+        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(self.geometry)))
 
     @weights.setter
     def weights(self, weights):
-        weights = weightsdict.WeightsDict(weights)
         weightsAttr = self.weightsAttr
-        for i, weight in weights.items():
+        for i, weight in enumerate(weights):
             weightsAttr[i].value = weight
 
     @property
@@ -974,50 +968,129 @@ class SkinCluster(GeometryFilter):
     def __init__(self, mObject, mFnDependencyNode):
         super(SkinCluster, self).__init__(mObject, mFnDependencyNode)
         self._weights_attr = None
+        self._mFnSkinCluster = None
+
+    @property
+    def mFnSkinCluster(self):
+        if self._mFnSkinCluster is None:
+            self._mFnSkinCluster = oma.MFnSkinCluster(self.mObject)
+        return self._mFnSkinCluster
 
     def influences(self):
-        return yams(cmds.skinCluster(self.name, q=True, inf=True)) or []
+        return yams(self.mFnSkinCluster.influenceObjects())
 
-    def getVertexWeight(self, index, numInfluences=None):
-        if numInfluences is None:
-            numInfluences = len(self.influences())
-        weights = weightsdict.WeightsDict()
+    def getVertexWeight(self, index, influence_indexes=None):
+        if influence_indexes is None:
+            influence_indexes = self.getInfluenceIndexes()
+        weights = weightslist.WeightsList()
         weightsAttr = self.weightList[index].weights
-        for jnt in range(numInfluences):
-            weights[jnt] = weightsAttr[jnt].value
+        for i, jnt_index in enumerate(influence_indexes):
+            weights.append(weightsAttr[jnt_index].value)
         return weights
 
-    def setVertexWeight(self, index, values):
+    def setVertexWeight(self, index, values, influence_indexes=None):
+        if influence_indexes is None:
+            influence_indexes = self.getInfluenceIndexes()
         weightsAttr = self.weightList[index].weights
-        for jnt, value in values.items():
-            weightsAttr[jnt].value = value
+        for index, value in enumerate(values):
+            weightsAttr[influence_indexes[index]].value = value
 
     @property
     def weights(self):
-        weights = {}
-        numInfluences = len(self.influences())
-        for i in range(len(self.geometry)):
-            weights[i] = self.getVertexWeight(i, numInfluences)
+        weights = []
+        # Getting the OpenMaya conponents influenced by the skinCluster
+        mfn_set = om.MFnSet(self.mFnSkinCluster.deformerSet)
+        _, components = mfn_set.getMembers(False).getComponent(0)
+        # Getting the weights
+        weights_array, num_influences = self.mFnSkinCluster.getWeights(self.geometry.mDagPath, components)
+
+        for i in range(0, len(weights_array), num_influences):
+            weights.append(weightslist.WeightsList(weights_array[i:i + num_influences]))
         return weights
 
     @weights.setter
     def weights(self, weights):
-        for vtx in weights:
-            self.setVertexWeight(vtx, weights[vtx])
+        if config.undoable:
+            self.setWeights(weights)
+        else:
+            self.setWeightsOM(weights)
+
+    def setWeights(self, weights):
+        for vtx, weight in enumerate(weights):
+            self.setVertexWeight(index=vtx, values=weight)
+
+    def setWeightsOM(self, weights):
+        # Getting the OpenMaya conponents influenced by the skinCluster
+        mfn_set = om.MFnSet(self.mFnSkinCluster.deformerSet)
+        _, components = mfn_set.getMembers(False).getComponent(0)
+        # Getting an array of the influences indexes
+        num_influences = len(self.influences())
+        influence_array = om.MIntArray(range(num_influences))
+        # Flattening the list of weights into a single list
+        flat_weights = om.MDoubleArray([i[j] for i in weights for j in range(num_influences)])
+        # Setting the weights
+        self.mFnSkinCluster.setWeights(self.geometry.mDagPath, components, influence_array, flat_weights)
 
     @property
     def dqWeights(self):
-        dq_weights = weightsdict.WeightsDict()
-        weightsAttr = self.blendWeights
-        for i in range(len(self.geometry)):
-            dq_weights[i] = weightsAttr[i].value
-        return dq_weights
+        mfn_set = om.MFnSet(self.mFnSkinCluster.deformerSet)
+        _, components = mfn_set.getMembers(False).getComponent(0)
+        return weightslist.WeightsList(self.mFnSkinCluster.getBlendWeights(self.geometry.mDagPath, components))
 
     @dqWeights.setter
     def dqWeights(self, data):
+        if config.undoable:
+            self.setDqWeights(data)
+        else:
+            self.setDqWeightsOM(data)
+
+    def setDqWeights(self, data):
         weightsAttr = self.blendWeights
-        for vtx in data:
-            weightsAttr[vtx].value = data[vtx]
+        for vtx, value in enumerate(data):
+            weightsAttr[vtx].value = value
+
+    def setDqWeightsOM(self, data):
+        # Getting the OpenMaya conponents influenced by the skinCluster
+        mfn_set = om.MFnSet(self.mFnSkinCluster.deformerSet)
+        _, components = mfn_set.getMembers(False).getComponent(0)
+        # Converting the data into maya array
+        data = om.MDoubleArray(data)
+        # Setting the weights
+        self.mFnSkinCluster.setBlendWeights(self.geometry.mDagPath, components, data)
+
+    def getPointsAffectedByInfluence(self, influence):
+        """
+        Returns the points affected by the given influence
+        :param influence: str, int, DependNode, mObject or mDagPath
+        :return: YamList of components
+        """
+        import components
+        if isinstance(influence, DependNode):
+            if influence in self.influences():
+                influence = influence.mDagPath
+            else:
+                raise RuntimeError('Influence not found in skin cluster')
+        elif isinstance(influence, int):
+            influence = self.influences()[influence].mDagPath
+        elif isinstance(influence, (str, om.MObject. om.MDagPath)):
+            influence = yam(influence)
+            if influence in self.influences():
+                influence = influence.mDagPath
+            else:
+                raise RuntimeError('Influence not found in skin cluster')
+        else:
+            raise RuntimeError('Invalid influence type; {}, {}'.format(influence, type(influence)))
+        vtx_list = yams(self.mFnSkinCluster.getPointsAffectedByInfluence(influence)[0].getSelectionStrings())
+        vtxs = YamList()
+        for vtx in vtx_list:
+            if isinstance(vtx, components.Component):
+                vtxs.append(vtx)
+            elif isinstance(vtx, components.ComponentsSlice):
+                for vtx_ in vtx:
+                    vtxs.append(vtx_)
+            else:
+                raise RuntimeError("Invalid object type: '{}', {}".format(vtx, type(vtx)))
+        return vtxs
 
     def reskin(self):
         """
@@ -1034,8 +1107,19 @@ class SkinCluster(GeometryFilter):
                 cmds.setAttr(bpm.name, *wim, type='matrix')
         cmds.skinCluster(self.name, e=True, rbm=True)
 
+    def indexForInfluenceObject(self, influence):
+        """
+        Returns the influence connection index on the skinCluster.
+        :param influence: DagNode
+        :return: int
+        """
+        return self.mFnSkinCluster.indexForInfluenceObject(influence.mDagPath)
 
-class BlendShape(GeometryFilter):
+    def getInfluenceIndexes(self):
+        return [self.indexForInfluenceObject(inf) for inf in self.influences()]
+
+
+class BlendShape(WeightGeometryFilter):
     def __init__(self, mObject, mFnDependencyNode):
         super(BlendShape, self).__init__(mObject, mFnDependencyNode)
         self._targets = []
@@ -1056,7 +1140,7 @@ class BlendShape(GeometryFilter):
     def targets(self, target):
         if isinstance(target, int):
             return self._targets[target]
-        elif isinstance(target, basestring):
+        elif isinstance(target, string_types):
             return self._targets_names[target]
         else:
             raise KeyError(target)
@@ -1064,20 +1148,6 @@ class BlendShape(GeometryFilter):
     @property
     def weightsAttr(self):
         return self.inputTarget[0].baseWeights
-
-    @property
-    def weights(self):
-        weights = weightsdict.WeightsDict()
-        weightsAttr = self.weightsAttr
-        for index in range(len(self.geometry)):
-            weights[index] = weightsAttr[index].value
-        return weights
-
-    @weights.setter
-    def weights(self, weights):
-        weightsAttr = self.weightsAttr
-        for i, weight in weights.items():
-            weightsAttr[i].value = weight
 
 
 # Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from
@@ -1112,6 +1182,7 @@ class YamList(list):
 
     def __init__(self, *arg):
         super(YamList, self).__init__(*arg)
+        self.no_check = False
         self._check_all()
 
     def __repr__(self):
@@ -1128,24 +1199,34 @@ class YamList(list):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    @staticmethod
-    def _check(item):
-        if not isinstance(item, Yam):
-            raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
-
-    def _check_all(self):
-        for item in self:
+    def _check(self, item):
+        """
+        Check that the given item is a Yam object and raises an error if it is not.
+        :param item: object to check
+        """
+        if not self.no_check:
             if not isinstance(item, Yam):
                 raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
 
+    def _check_all(self):
+        """
+        Check that all the items in the current object are Yam objects and raises an error if they are not.
+        """
+        if not self.no_check:
+            for item in self:
+                if not isinstance(item, Yam):
+                    raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
+
     def append(self, item):
-        self._check(item)
+        if not self.no_check:
+            self._check(item)
         super(YamList, self).append(item)
 
     def extend(self, items):
-        if not isinstance(items, YamList):
-            for item in items:
-                self._check(item)
+        if not self.no_check:
+            if not isinstance(items, YamList):
+                for item in items:
+                    self._check(item)
         super(YamList, self).extend(items)
 
     def insert(self, index, item):
@@ -1159,7 +1240,11 @@ class YamList(list):
         super(YamList, self).sort(key=key, reverse=reverse)
 
     def attrs(self, attr):
-        return [x.attr(attr) for x in self]
+        yl = YamList()
+        yl.no_check = True
+        yl.extend(x.attr(attr) for x in self)
+        yl.no_check = False
+        return yl
 
     def values(self, attr=None):
         if attr:
@@ -1179,24 +1264,37 @@ class YamList(list):
         return [getattr(x, attr) for x in self]
 
     def keepType(self, nodeType, inherited=True):
-        if isinstance(nodeType, basestring):
+        """
+        Remove all nodes that are not of the given type.
+        :param nodeType: str or list, e.g.: 'joint' or ['blendShape', 'skinCluster']
+        :param inherited: bool, if True keep nodes who's type is inheriting from given type.
+        """
+        if isinstance(nodeType, string_types):
             nodeType = [nodeType]
-        assert all(isinstance(x, basestring) for x in nodeType), "arg 'type' expected : 'str' or 'list(str, ...)' but" \
-                                                                 " was given '{}'".format(nodeType)
         for i, item in reversed(list(enumerate(self))):
+            if inherited:
+                inherited_types = item.inheritedTypes()
+            else:
+                node_type = item.nodeType()
             for type_ in nodeType:
                 if inherited:
-                    if type_ not in item.inheritedTypes():
+                    if type_ not in inherited_types:
                         self.pop(i)
                 else:
-                    if type_ != item.nodeType():
+                    if type_ != node_type:
                         self.pop(i)
 
     def popType(self, nodeType, inherited=True):
-        popped = type(self)()
-        if isinstance(nodeType, basestring):
+        """
+        Removes all nodes of given type from current object and returns them in a new YamList.
+        :param nodeType: str or list, e.g.: 'joint' or ['blendShape', 'skinCluster']
+        :param inherited: bool, if True keep nodes who's type is inheriting from given type.
+        :return: YamList of the removed nodes
+        """
+        popped = YamList()
+        if isinstance(nodeType, string_types):
             nodeType = [nodeType]
-        assert all(isinstance(x, basestring) for x in nodeType), "arg 'type' expected : 'str' or 'list(str, ...)' " \
+        assert all(isinstance(x, string_types) for x in nodeType), "arg 'type' expected : 'str' or 'list(str, ...)' " \
                                                                  "but was given '{}'".format(nodeType)
         for i, item in reversed(list(enumerate(self))):
             for type_ in nodeType:
@@ -1209,4 +1307,8 @@ class YamList(list):
         return popped
 
     def copy(self):
-        return type(self)(self)
+        yl = YamList()
+        yl.no_check = True
+        yl.extend(self)
+        yl.no_check = False
+        return yl
