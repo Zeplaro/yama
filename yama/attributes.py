@@ -7,7 +7,7 @@ Contains all the class and functions for maya attributes.
 import sys
 from maya import cmds
 import maya.api.OpenMaya as om
-from . import config, nodes, weightsdict
+from . import config, nodes, weightslist
 
 # python 2 to 3 compatibility
 _pyversion = sys.version_info[0]
@@ -256,9 +256,10 @@ class Attribute(nodes.Yam):
     def settable(self):
         """
         Gets if the attribute is settable if it's not locked and either not connected, or has only keyframed animation.
+        OpenMaya.MPlug.isFreeToChange returns 0 if the attribute is 'free' and 1 if it is not.
         Returns: bool
         """
-        return cmds.getAttr(self.name, settable=True)
+        return not self.mPlug.isFreeToChange()
 
     def connectTo(self, attr, **kwargs):
         """
@@ -464,11 +465,8 @@ class BlendshapeTarget(Attribute):
 
     @property
     def weights(self):
-        weights = weightsdict.WeightsDict()
         weightsAttr = self.weightsAttr
-        for i in range(len(self.node.geometry)):
-            weights[i] = weightsAttr[i].value
-        return weights
+        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(self.node.geometry)))
 
     @weights.setter
     def weights(self, weights):
