@@ -198,7 +198,7 @@ class CurveCVs(SingleIndexed):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        return [[p.x, p.y, p.z] for p in self.node.MFnNurbsCurve.cvPositions(space)]
+        return [[p.x, p.y, p.z] for p in self.node.mFnNurbsCurve.cvPositions(space)]
 
     def setPositionsOM(self, values, ws=False):
         if ws:
