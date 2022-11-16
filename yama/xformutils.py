@@ -1,4 +1,8 @@
+# encoding: utf8
+
+from __future__ import division
 from maya import cmds
+
 from . import nodes, components, decorators
 
 
