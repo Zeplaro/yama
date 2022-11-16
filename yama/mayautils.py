@@ -295,7 +295,6 @@ def mirrorPos(obj, table):
         obj.cp[mid].setPosition(pos)
 
 
-@decorators.keepsel
 def flipPos(obj, table, reverse_face_normal=True):
     for l_cp in table:
         l_pos = obj.cp[l_cp].getPosition()
@@ -340,3 +339,15 @@ def snapAlongCurve(curve=None, objs=None):
         x, y, z, _ = curve.mFnNurbsCurve.getPointAtParam(param, om.MSpace.kWorld)
         obj.setPosition([x, y, z], ws=True)
         len_step += step
+
+
+def sortOutliner(objs=None, key=str):
+    if not objs:
+        objs = nodes.selected()
+    grp = nodes.createNode('transform', name='grp_TEMP', ss=True)
+    for i in sorted(objs, key=key):
+        parent = i.parent
+        grp.setXform(m=i.getXform(m=True, ws=True), ws=True)
+        i.parent = grp
+        i.parent = parent
+    cmds.delete(grp.name)
