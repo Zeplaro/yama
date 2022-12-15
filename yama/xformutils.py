@@ -2,6 +2,7 @@
 
 from __future__ import division
 from maya import cmds
+import maya.api.OpenMaya as om
 
 from . import nodes, components, decorators
 
@@ -152,3 +153,24 @@ def getCenter(objs):
     y = (miny + maxy) / 2
     z = (minz + maxz) / 2
     return [x, y, z]
+
+
+def snapAlongCurve(objs, curve, inverse=True):
+    objs = nodes.yams(objs)
+    if inverse:
+        objs = objs[::-1]
+    curve = nodes.yam(curve)
+    if not isinstance(curve, nodes.NurbsCurve):
+        if curve.shape:
+            curve = curve.shape
+        if not isinstance(curve, nodes.NurbsCurve):
+            raise RuntimeError("Curve '{}' must be of type or have a shape of type 'NurbsCurve' "
+                               "not '{}'".format(curve, type(curve).__name__))
+
+    num_objs = len(objs)
+    param_length = curve.mFnNurbsCurve.findParamFromLength(curve.arclen())
+    step = param_length / (num_objs - 1)
+    for i, obj in enumerate(objs):
+        param = step * i
+        point = curve.mFnNurbsCurve.getPointAtParam(param, om.MSpace.kWorld)
+        obj.setPosition([point.x, point.y, point.z], ws=True)

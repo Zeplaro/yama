@@ -99,7 +99,7 @@ class Components(nodes.Yam):
         return self.name
 
     def __repr__(self):
-        return "<class {}('{}', '{}')>".format(self.__class__.__name__, self.node.name, self.component_name)
+        return "{}('{}', '{}')".format(self.__class__.__name__, self.node.name, self.component_name)
 
     @abstractmethod
     def __iter__(self):
@@ -245,21 +245,26 @@ class Component(nodes.Yam):
         self.second_index = secondIndex
         self.third_index = thirdIndex
 
+    @property
+    def isAYamComponent(self):
+        """Used to check if an object is an instance of Component with the faster hasattr instead of slower
+        isinstance."""
+        return True
+
     def __str__(self):
         return self.name
 
     def __repr__(self):
         if self.third_index is not None:
-            return "<class {}('{}', '{}', {}, {}, {})>".format(self.__class__.__name__, self.node,
-                                                               self.components.component_name, self.index,
-                                                               self.second_index, self.third_index)
+            return "{}('{}', '{}', {}, {}, {})".format(self.__class__.__name__, self.node,
+                                                       self.components.component_name, self.index, self.second_index,
+                                                       self.third_index)
         elif self.second_index is not None:
-            return "<class {}('{}', '{}', {}, {})>".format(self.__class__.__name__, self.node,
-                                                           self.components.component_name, self.index,
-                                                           self.second_index)
+            return "{}('{}', '{}', {}, {})".format(self.__class__.__name__, self.node, self.components.component_name,
+                                                   self.index, self.second_index)
         else:
-            return "<class {}('{}', '{}', {})>".format(self.__class__.__name__, self.node,
-                                                       self.components.component_name, self.index)
+            return "{}('{}', '{}', {})".format(self.__class__.__name__, self.node, self.components.component_name,
+                                               self.index)
 
     def __getitem__(self, item):
         """
@@ -385,8 +390,8 @@ class ComponentsSlice(nodes.Yam):
         return self.name
 
     def __repr__(self):
-        return "<class {}('{}', '{}', {})>".format(self.__class__.__name__, self.node, self.components.component_name,
-                                                   self.slice)
+        return "{}('{}', '{}', {})".format(self.__class__.__name__, self.node, self.components.component_name,
+                                           self.slice)
 
     def __getitem__(self, item):
         if isinstance(item, slice):
