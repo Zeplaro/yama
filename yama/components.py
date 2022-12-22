@@ -3,6 +3,7 @@
 """
 Contains all the class and functions for maya components.
 """
+# TODO : fixed setPositionsOM on cvs ?
 
 from abc import ABCMeta, abstractmethod
 from maya import cmds
@@ -167,7 +168,7 @@ class MeshVertices(SingleIndexed):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        return [[p.x, p.y, p.z] for p in self.node.mFnMesh.getPoints(space)]
+        return [[p.x, p.y, p.z] for p in self.node.MFn.getPoints(space)]
 
     def setPositionsOM(self, values, ws=False):
         if ws:
@@ -175,7 +176,7 @@ class MeshVertices(SingleIndexed):
         else:
             space = om.MSpace.kObject
         mps = [om.MPoint(x) for x in values]
-        self.node.mFnMesh.setPoints(mps, space)
+        self.node.MFn.setPoints(mps, space)
 
 
 class CurveCVs(SingleIndexed):
@@ -192,7 +193,7 @@ class CurveCVs(SingleIndexed):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        return [[p.x, p.y, p.z] for p in self.node.mFnNurbsCurve.cvPositions(space)]
+        return [[p.x, p.y, p.z] for p in self.node.MFn.cvPositions(space)]
 
     def setPositionsOM(self, values, ws=False):
         if ws:
@@ -200,7 +201,7 @@ class CurveCVs(SingleIndexed):
         else:
             space = om.MSpace.kObject
         mps = [om.MPoint(x) for x in values]
-        self.node.mFnNurbsCurve.setCVPositions(mps, space)
+        self.node.MFn.setCVPositions(mps, space)
 
 
 class DoubleIndexed(Components):
@@ -336,7 +337,7 @@ class MeshVertex(Component):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        p = self.node.mFnMesh.getPoint(self.index, space)
+        p = self.node.MFn.getPoint(self.index, space)
         return [p.x, p.y, p.z]
 
     def setPositionOM(self, value, ws=False):
@@ -345,7 +346,7 @@ class MeshVertex(Component):
         else:
             space = om.MSpace.kObject
         point = om.MPoint(value)
-        self.node.mFnMesh.setPoint(self.index, point, space)
+        self.node.MFn.setPoint(self.index, point, space)
 
 
 class CurveCV(Component):
@@ -359,7 +360,7 @@ class CurveCV(Component):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        p = self.node.mFnNurbsCurve.cvPosition(self.index, space)
+        p = self.node.MFn.cvPosition(self.index, space)
         return [p.x, p.y, p.z]
 
     def setPositionOM(self, value, ws=False):
@@ -368,7 +369,7 @@ class CurveCV(Component):
         else:
             space = om.MSpace.kObject
         point = om.MPoint(*value)
-        self.node.mFnNurbsCurve.setCVPosition(self.index, point, space)
+        self.node.MFn.setCVPosition(self.index, point, space)
 
 
 class ComponentsSlice(nodes.Yam):
