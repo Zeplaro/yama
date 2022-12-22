@@ -14,7 +14,26 @@ import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
 import maya.OpenMaya as om1
 
-from . import weightslist, config
+from . import weightslist, config, checks
+
+
+def getMObject(node):
+    """
+    Gets the associated OpenMaya.MObject for the given node.
+    :param node: str, node unique name
+    :return: OpenMaya.MObject
+    """
+    mSelectionList = om.MSelectionList()
+    try:
+        mSelectionList.add(node)
+    except RuntimeError:
+        if checks.objExists(node):
+            raise Exception("more than one object called '{}'".format(node))
+        raise checks.objExists(node, raiseError=True)
+    return mSelectionList.getDependNode(0)
+
+
+gmo = getMObject
 
 
 def yam(node):
@@ -30,75 +49,50 @@ def yam(node):
     ---> Attribute('pCube1.tz')
     """
 
-    mPlug = None
-    component = None
+    attribute = None
+
     if hasattr(node, 'isAYamObject'):
         return node
 
     elif isinstance(node, string_types):
-        # Getting the mObject associated with the given node uses 'try' in case the node does not exists or multiple
-        # objects with the same name exists.
-        mSelectionList = om.MSelectionList()
-        try:
-            mSelectionList.add(node)
-        except RuntimeError:
-            if cmds.objExists(node):
-                raise RuntimeError("more than one object called '{}'".format(node))
-            raise RuntimeError("No '{}' object found in scene".format(node))
-
-        if '.' in node:  # checking if an attribute was given with the node
-            try:
-                mPlug = mSelectionList.getPlug(0)
-            except TypeError:
-                component = node.split('.')[-1]
-
-        mObject = mSelectionList.getDependNode(0)
-        mfn = om.MFnDependencyNode(mObject)
+        if '.' in node:  # checking if an attribute or component was given with the node
+            node, attribute = node.split('.', 1)
+        MObject = getMObject(node)
 
     elif node.__class__ == om.MObject:  # Not using isinstance() for efficiency
-        mObject = node
-        mfn = om.MFnDependencyNode(mObject)
+        if not om.MObjectHandle(node).isValid():
+            raise TypeError("Given MObject does not contain a valid node".format(node.info))
+        MObject = node
 
     elif node.__class__ == om.MDagPath:  # Not using isinstance() for efficiency
-        mObject = node.node()
-        mfn = om.MFnDependencyNode(mObject)
+        MObject = node.node()
 
     elif node.__class__ == om.MPlug:  # Not using isinstance() for efficiency
-        mPlug = node
-        mObject = mPlug.node()
-        mfn = om.MFnDependencyNode(mObject)
+        if node.isNull:
+            raise TypeError("Given MPlug does not contain a valid attribute : '{}'".format(node.info))
+        from . import attributes
+        return attributes.Attribute(MPlug=node)
 
     else:
         raise TypeError("yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected,"
                         " got {}.".format(node.__class__.__name__))
 
     # checking if node type has a supported class, if not defaults to DependNode
-    type_name = mfn.typeName
-    if type_name in supported_classes:
-        assigned_class = supported_classes[type_name]  # skips the mc.nodeType if exact type is in supported_class
+    type_name = MObject.apiType()
+    if type_name in supported_classes_MFn:
+        assigned_class = supported_classes_MFn[type_name]  # skips the mc.nodeType if exact type is in supported_class
     else:
-        if not mfn.hasUniqueName():
-            node = om.MDagPath.getAPathTo(mObject).partialPathName()
-        else:
-            node = mfn.name()
         assigned_class = DependNode
+        if MObject.hasFn(om.MFn.kDagNode):
+            node = om.MDagPath.getAPathTo(MObject).partialPathName()  # Getting the shortest unique name
         for node_type in reversed(cmds.nodeType(node, i=True)):  # checks each inherited types for the node
-            if node_type in supported_classes:
-                assigned_class = supported_classes[node_type]
+            if node_type in supported_classes_str:
+                assigned_class = supported_classes_str[node_type]
                 break
 
-    yam_node = assigned_class(mObject, mfn)
-    if mPlug is not None:
-        from . import attributes
-        return attributes.Attribute(yam_node, mPlug)
-    elif component is not None:
-        from . import components
-        try:
-            return components.getComponent(yam_node, component)
-        except TypeError as e:
-            if not cmds.objExists(node):
-                raise RuntimeError("No '{}' object found in scene".format(node))
-            raise e
+    yam_node = assigned_class(MObject)
+    if attribute:
+        return yam_node.attr(attribute)
     return yam_node
 
 
@@ -190,14 +184,14 @@ def listAttr(obj, **kwargs):
     is_attr = False
     if isinstance(obj, attributes.Attribute):
         is_attr = True
-        if obj.mPlug.isArray:
+        if obj.MPlug.isArray:
             obj = obj[0]
     attrs = YamList()
     for attr in cmds.listAttr(obj.name, **kwargs):
         if is_attr:
             # If obj is Attribute then removing the obj.attribute from the beginning of the listed attr
             if kwargs.get('shortNames', False) or kwargs.get('sn', False):
-                attr = attr[len(obj.mPlug.partialName()):]
+                attr = attr[len(obj.MPlug.partialName()):]
             else:
                 attr = attr[len(obj.attribute):]
         try:
@@ -209,7 +203,7 @@ def listAttr(obj, **kwargs):
                     split = attr.split('.')
                     attr = obj.attr(split.pop(0))
                     while split:
-                        if attr.mPlug.isArray:
+                        if attr.MPlug.isArray:
                             attr = attr[0]  # sets the array attr index to 0 to get a valid existing attribute 'child'
                         attr = attr.attr(split.pop(0))
                     attrs.append(attr)
@@ -225,7 +219,7 @@ class Yam(object):
     """
     __metaclass__ = ABCMeta
 
-    if PY2:  # if python 2, using use abstractproperty
+    if PY2:  # if python 2, use abstractproperty
         @abstractproperty
         def name(self):
             pass
@@ -249,26 +243,38 @@ class DependNode(Yam):
 
     All implemented maya api functions and variables are from api 2.0; for api 1.0 the functions and variables are
     defined with a '1' suffix;
-    e.g.: >>> node.mObject  <-- gives a api 2.0 object
-    -     >>> node.mObject1 <-- gives a api 1.0 object
+    e.g.: >>> node.MObject  <-- gives a api 2.0 object
+    -     >>> node.MObject1 <-- gives a api 1.0 object
     """
 
-    def __init__(self, mObject, mFnDependencyNode):
+    def __init__(self, MObject):
         """
-        Needs a maya api 2.0 MObject associated to the node and a MFnDependencyNode initialized with the mObject.
-        :param mObject: maya api MObject
-        :param mFnDependencyNode:
+        Needs a maya api 2.0 MObject associated to the node and a MFnDependencyNode initialized with the MObject.
+        :param MObject: maya api MObject
         """
         super(DependNode, self).__init__()
-        self.mObject = mObject
-        self._mObject1 = None
-        self.mFnDependencyNode = mFnDependencyNode
+        self.MObject = MObject
+        self._MObject1 = None
+        self._MFnFnc = om.MFnDependencyNode
+        self._MFnObject = 'MObject'
+        self._MFn = None
+        self._attributes = {}
 
     @property
     def isAYamNode(self):
         """Used to check if an object is an instance of DependNode with the faster hasattr instead of slower
         isinstance."""
         return True
+
+    @property
+    def MFn(self):
+        """
+        Gets the associated api 2.0 MFn object
+        :return: api 2.0 MFn Object
+        """
+        if self._MFn is None:
+            self._MFn = self._MFnFnc(getattr(self, self._MFnObject))
+        return self._MFn
 
     def __repr__(self):
         """
@@ -289,7 +295,9 @@ class DependNode(Yam):
         :param attr: str
         :return: Attribute object
         """
-        return self.attr(attr)
+        if attr not in self._attributes:
+            self._attributes[attr] = self.attr(attr)
+        return self._attributes[attr]
 
     def __add__(self, other):
         """
@@ -316,11 +324,11 @@ class DependNode(Yam):
         :param other:
         :return:
         """
-        if hasattr(other, 'mObject'):
-            return self.mObject == other.mObject
+        if hasattr(other, 'MObject'):
+            return self.MObject == other.MObject
         else:
             try:
-                return self.mObject == yam(other).mObject
+                return self.MObject == yam(other).MObject
             except (RuntimeError, TypeError):
                 return False
 
@@ -338,21 +346,21 @@ class DependNode(Yam):
         return self.__bool__()
 
     def __hash__(self):
-        return hash(self.mFnDependencyNode.uuid().asString())
+        return om.MObjectHandle(self.MObject).hashCode()
 
     @property
-    def mObject1(self):
+    def MObject1(self):
         """
         Gets the associated api 1.0 MObject
         :return: api 1.0 MObject
         """
-        if self._mObject1 is None:
+        if self._MObject1 is None:
             mSelectionList = om1.MSelectionList()
             mSelectionList.add(self.name)
-            mObject = om1.MObject()
-            mSelectionList.getDependNode(0, mObject)
-            self._mObject1 = mObject
-        return self._mObject1
+            MObject = om1.MObject()
+            mSelectionList.getDependNode(0, MObject)
+            self._MObject1 = MObject
+        return self._MObject1
 
     def rename(self, newName):
         """
@@ -361,12 +369,12 @@ class DependNode(Yam):
         :param newName: str
         """
         if not config.undoable:
-            self.mFnDependencyNode.setName(newName)
+            self.MFn.setName(newName)
         cmds.rename(self.name, newName)
 
     @property
     def name(self):
-        return self.mFnDependencyNode.name()
+        return self.MFn.name()
 
     @name.setter
     def name(self, value):
@@ -375,7 +383,7 @@ class DependNode(Yam):
     @property
     def shortName(self):
         """Returns the node name only, without any '|' and 'parent' in case other nodes have the same name"""
-        return self.mFnDependencyNode.name()
+        return self.MFn.name()
 
     def attr(self, attr):
         """
@@ -384,8 +392,6 @@ class DependNode(Yam):
         :param attr: str
         :return: Attribute object
         """
-        assert attr, "No attribute given"
-
         try:
             from . import components
             return components.getComponent(self, attr)  # Trying to get component if one
@@ -452,7 +458,7 @@ class DependNode(Yam):
         Returns the node type name
         :return: str
         """
-        return self.mFnDependencyNode.typeName
+        return self.MFn.typeName
 
     def inheritedTypes(self):
         """
@@ -468,8 +474,8 @@ class DependNode(Yam):
 
     def uuid(self, asString=True):
         if asString:
-            return self.mFnDependencyNode.uuid().asString()
-        return self.mFnDependencyNode.uuid()
+            return self.MFn.uuid().asString()
+        return self.MFn.uuid()
 
 
 class DagNode(DependNode):
@@ -477,41 +483,31 @@ class DagNode(DependNode):
     Subclass for all maya dag nodes.
     """
 
-    def __init__(self, mObject, mFnDependencyNode):
-        super(DagNode, self).__init__(mObject, mFnDependencyNode)
-        self._mDagPath = None
-        self._mDagPath1 = None
-        self._mFnDagNode = None
+    def __init__(self, MObject):
+        super(DagNode, self).__init__(MObject)
+        self._MFnFnc = om.MFnDagNode
+        self._MDagPath = None
+        self._MDagPath1 = None
 
     @property
-    def mDagPath(self):
+    def MDagPath(self):
         """
         Gets the associated api 2.0 MDagPath
         :return: api 2.0 MDagPath
         """
-        if self._mDagPath is None:
-            self._mDagPath = om.MDagPath.getAPathTo(self.mObject)
-        return self._mDagPath
+        if self._MDagPath is None:
+            self._MDagPath = om.MDagPath.getAPathTo(self.MObject)
+        return self._MDagPath
 
     @property
-    def mDagPath1(self):
+    def MDagPath1(self):
         """
         Gets the associated api 1.0 MDagPath
         :return: api 1.0 MDagPath
         """
-        if self._mDagPath1 is None:
-            self._mDagPath1 = om1.MDagPath.getApAthTo(self.mObject1)
-        return self._mDagPath1
-
-    @property
-    def mFnDagNode(self):
-        """
-        Gets the associated api 2.0 MFnDagNode
-        :return: api 2.0 MFnDagNode
-        """
-        if self._mFnDagNode is None:
-            self._mFnDagNode = om.MFnDagNode(self.mObject)
-        return self._mFnDagNode
+        if self._MDagPath1 is None:
+            self._MDagPath1 = om1.MDagPath.getAPathTo(self.MObject1)
+        return self._MDagPath1
 
     @property
     def parent(self):
@@ -519,10 +515,10 @@ class DagNode(DependNode):
         Gets the node parent node or None if in world.
         :return: DependNode or None
         """
-        p = self.mFnDagNode.parent(0)
-        if p.apiTypeStr == 'kWorld':
+        parent = self.MFn.parent(0)
+        if parent.apiTypeStr == 'kWorld':
             return None
-        return yam(p)
+        return yam(parent)
 
     @parent.setter
     def parent(self, parent):
@@ -530,7 +526,7 @@ class DagNode(DependNode):
         Sets the node under the given parent or world if None.
         :return: DependNode or None
         """
-        if self.parent is parent:
+        if self.parent == parent:
             return
         elif parent is None:
             cmds.parent(self.name, world=True)
@@ -542,7 +538,7 @@ class DagNode(DependNode):
         """
         Returns the minimum string representation in case of other objects with same name.
         """
-        return self.mFnDagNode.partialPathName()
+        return self.MFn.partialPathName()
 
     @name.setter
     def name(self, value):
@@ -557,7 +553,7 @@ class DagNode(DependNode):
         Gets the full path name of the object including the leading |.
         :return: str
         """
-        return self.mDagPath.fullPathName()
+        return self.MDagPath.fullPathName()
 
     @property
     def fullPath(self):
@@ -565,8 +561,9 @@ class DagNode(DependNode):
 
 
 class Transform(DagNode):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(Transform, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(Transform, self).__init__(MObject)
+        self._MFnFnc = om.MFnTransform
 
     def __len__(self):
         shape = self.shape
@@ -592,9 +589,9 @@ class Transform(DagNode):
         :param noIntermediate: if True skips intermediate shapes.
         :return: list of DependNode
         """
-        children = yams(self.mDagPath.child(x) for x in range(self.mDagPath.childCount()))
+        children = yams(self.MDagPath.child(x) for x in range(self.MDagPath.childCount()))
         if noIntermediate:
-            children = YamList(x for x in children if not x.mFnDagNode.isIntermediateObject)
+            children = YamList(x for x in children if not x.MFn.isIntermediateObject)
         if type:
             children.keepType(type)
         return children
@@ -605,21 +602,21 @@ class Transform(DagNode):
         :param noIntermediate: if True skips intermediate shapes.
         :return: list of Shape object
         """
-        children = yams(self.mDagPath.child(x) for x in range(self.mDagPath.childCount()))
+        children = yams(self.MDagPath.child(x) for x in range(self.MDagPath.childCount()))
         children = YamList(x for x in children if isinstance(x, Shape))
         if noIntermediate:
-            children = YamList(x for x in children if not x.mFnDagNode.isIntermediateObject)
+            children = YamList(x for x in children if not x.MFn.isIntermediateObject)
         if type:
             children.keepType(type)
         return children
 
     @property
-    def shape(self, noIntermediate=True):
+    def shape(self):
         """
         Returns the first shape if it exists.
         :return: Shape object
         """
-        shapes = self.shapes(noIntermediate=noIntermediate)
+        shapes = self.shapes()
         return shapes[0] if shapes else None
 
     def allDescendents(self, type=None):
@@ -680,18 +677,18 @@ class Transform(DagNode):
 
 
 class Joint(Transform):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(Transform, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(Transform, self).__init__(MObject)
 
 
 class Constraint(Transform):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(Constraint, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(Constraint, self).__init__(MObject)
 
 
 class Shape(DagNode):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(Shape, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(Shape, self).__init__(MObject)
 
     @property
     def parent(self):
@@ -709,11 +706,11 @@ class ControlPoint(Shape):
     Handles shape that have control point; e.g.: Mesh, NurbsCurve, NurbsSurface, Lattice
     """
 
-    def __init__(self, mObject, mFnDependencyNode):
-        super(ControlPoint, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(ControlPoint, self).__init__(MObject)
 
     def __len__(self):
-        return len(cmds.ls(self.name+'.cp[*]', fl=True))
+        return len(cmds.ls(self.name + '.cp[*]', fl=True))
 
     def getPositions(self, ws=False):
         return [cp.getPosition(ws=ws) for cp in self.cp]
@@ -724,25 +721,20 @@ class ControlPoint(Shape):
 
 
 class Mesh(ControlPoint):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(Mesh, self).__init__(mObject, mFnDependencyNode)
-        self._mFnMesh = None
+    def __init__(self, MObject):
+        super(Mesh, self).__init__(MObject)
+        self._MFnFnc = om.MFnMesh
+        self._MFnObject = 'MDagPath'
 
     def __len__(self):
         """
         Returns the mesh number of vertices.
         :return: int
         """
-        return self.mFnMesh.numVertices
-
-    @property
-    def mFnMesh(self):
-        if self._mFnMesh is None:
-            self._mFnMesh = om.MFnMesh(self.mDagPath)
-        return self._mFnMesh
+        return self.MFn.numVertices
 
     def shells(self, indexOnly=False):
-        polygon_counts, polygon_connects = self.mFnMesh.getVertices()
+        polygon_counts, polygon_connects = self.MFn.getVertices()
         faces_vtxs = []
         i = 0
         for poly_count in polygon_counts:
@@ -778,32 +770,27 @@ class Mesh(ControlPoint):
 
 
 class NurbsCurve(ControlPoint):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(NurbsCurve, self).__init__(mObject, mFnDependencyNode)
-        self._mFnNurbsCurve = None
+    def __init__(self, MObject):
+        super(NurbsCurve, self).__init__(MObject)
+        self._MFnFnc = om.MFnNurbsCurve
+        self._MFnObject = 'MDagPath'
 
     def __len__(self):
         """
         Returns the mesh number of cvs.
         :return: int
         """
-        return self.mFnNurbsCurve.numCVs
+        return self.MFn.numCVs
 
     @staticmethod
     def create(cvs, knots, degree, form, parent):
         if isinstance(parent, string_types):
-            parent = yam(parent).mObject
+            parent = yam(parent).MObject
         elif isinstance(parent, DependNode):
-            parent = parent.mObject
+            parent = parent.MObject
         assert isinstance(parent, om.MObject)
         curve = om.MFnNurbsCurve().create(cvs, knots, degree, form, False, True, parent)
         return yam(curve)
-
-    @property
-    def mFnNurbsCurve(self):
-        if self._mFnNurbsCurve is None:
-            self._mFnNurbsCurve = om.MFnNurbsCurve(self.mDagPath)
-        return self._mFnNurbsCurve
 
     def arclen(self, ws=False):
         """
@@ -812,12 +799,12 @@ class NurbsCurve(ControlPoint):
         :return: float
         """
         if not ws:
-            return self.mFnNurbsCurve.length()
+            return self.MFn.length()
         return cmds.arclen(self.name)
 
     @property
     def data(self):
-        data = {'cvs': self.mFnNurbsCurve.cvPositions(),
+        data = {'cvs': self.MFn.cvPositions(),
                 'knots': self.knots(),
                 'degree': self.degree(),
                 'form': self.form(),
@@ -825,28 +812,23 @@ class NurbsCurve(ControlPoint):
         return data
 
     def knots(self):
-        return list(self.mFnNurbsCurve.knots())
+        return list(self.MFn.knots())
 
     def degree(self):
-        return self.mFnNurbsCurve.degree
+        return self.MFn.degree
 
     def form(self):
-        return self.mFnNurbsCurve.form
+        return self.MFn.form
 
 
 class NurbsSurface(ControlPoint):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(NurbsSurface, self).__init__(mObject, mFnDependencyNode)
-        self._mFnNurbsSurface = None
+    def __init__(self, MObject):
+        super(NurbsSurface, self).__init__(MObject)
+        self._MFnFnc = om.MFnNurbsSurface
+        self._MFnObject = 'MDagPath'
 
     def __len__(self):
         return self.lenU() * self.lenV()
-
-    @property
-    def mFnNurbsSurface(self):
-        if self._mFnNurbsSurface is None:
-            self._mFnNurbsSurface = om.MFnNurbsSurface(self.mDagPath)
-        return self._mFnNurbsSurface
 
     def lenUV(self):
         """
@@ -860,19 +842,19 @@ class NurbsSurface(ControlPoint):
         Gets the number of cvs in U
         :return: int
         """
-        return self.mFnNurbsSurface.numCVsInU
+        return self.MFn.numCVsInU
 
     def lenV(self):
         """
         Gets the number of cvs in V
         :return: int
         """
-        return self.mFnNurbsSurface.numCVsInV
+        return self.MFn.numCVsInV
 
 
 class Lattice(ControlPoint):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(Lattice, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(Lattice, self).__init__(MObject)
 
     def __len__(self):
         """
@@ -912,20 +894,20 @@ class Lattice(ControlPoint):
 
 
 class Locator(Shape):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(Locator, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(Locator, self).__init__(MObject)
+
+
+class Camera(Shape):
+    def __init__(self, MObject):
+        super(Camera, self).__init__(MObject)
+        self._MFnFnc = om.MFnCamera
 
 
 class GeometryFilter(DependNode):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(GeometryFilter, self).__init__(mObject, mFnDependencyNode)
-        self._mFnGeometryFilter = None
-
-    @property
-    def mFnGeometryFilter(self):
-        if not self._mFnGeometryFilter:
-            self._mFnGeometryFilter = oma.MFnGeometryFilter(self.mObject)
-        return self._mFnGeometryFilter
+    def __init__(self, MObject):
+        super(GeometryFilter, self).__init__(MObject)
+        self._MFnFnc = oma.MFnGeometryFilter
 
     @property
     def geometry(self):
@@ -937,13 +919,13 @@ class GeometryFilter(DependNode):
         Gets the OpenMaya conponents influenced by the deformer and the deformed geometry
         :return: (om.MDagPath, om.MObject)
         """
-        mfn_set = om.MFnSet(self.mFnGeometryFilter.deformerSet)
+        mfn_set = om.MFnSet(self.MFn.deformerSet)
         return mfn_set.getMembers(True).getComponent(0)
 
 
 class WeightGeometryFilter(GeometryFilter):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(WeightGeometryFilter, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(WeightGeometryFilter, self).__init__(MObject)
 
     @property
     def weights(self):
@@ -966,8 +948,8 @@ class WeightGeometryFilter(GeometryFilter):
 
 
 class Cluster(WeightGeometryFilter):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(Cluster, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(Cluster, self).__init__(MObject)
 
     def convertToRoot(self):
         """
@@ -996,19 +978,13 @@ class Cluster(WeightGeometryFilter):
 
 
 class SkinCluster(GeometryFilter):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(SkinCluster, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(SkinCluster, self).__init__(MObject)
         self._weights_attr = None
-        self._mFnSkinCluster = None
-
-    @property
-    def mFnSkinCluster(self):
-        if self._mFnSkinCluster is None:
-            self._mFnSkinCluster = oma.MFnSkinCluster(self.mObject)
-        return self._mFnSkinCluster
+        self._MFnFnc = oma.MFnSkinCluster
 
     def influences(self):
-        return yams(self.mFnSkinCluster.influenceObjects())
+        return yams(self.MFn.influenceObjects())
 
     def getVertexWeight(self, index, influence_indexes=None):
         if influence_indexes is None:
@@ -1038,7 +1014,7 @@ class SkinCluster(GeometryFilter):
             influence = self.influences().index(influence)
         if not geo or not components:
             geo, components = self.getDeformerSetGeoAndComponents()
-        return weightslist.WeightsList(self.mFnSkinCluster.getWeights(geo, components, influence))
+        return weightslist.WeightsList(self.MFn.getWeights(geo, components, influence))
 
     def setInfluenceWeights(self, influence, weights, geo=None, components=None):
         if not config.undoable:
@@ -1060,13 +1036,13 @@ class SkinCluster(GeometryFilter):
         if not geo or not components:
             geo, components = self.getDeformerSetGeoAndComponents()
 
-        self.mFnSkinCluster.setWeights(geo, components, om.MIntArray([inf_index]), om.MDoubleArray(weights))
+        self.MFn.setWeights(geo, components, om.MIntArray([inf_index]), om.MDoubleArray(weights))
 
     @property
     def weights(self):
         weights = []
         # Getting the weights
-        weights_array, num_influences = self.mFnSkinCluster.getWeights(*self.getDeformerSetGeoAndComponents())
+        weights_array, num_influences = self.MFn.getWeights(*self.getDeformerSetGeoAndComponents())
 
         for i in range(0, len(weights_array), num_influences):
             weights.append(weightslist.WeightsList(weights_array[i:i + num_influences]))
@@ -1091,11 +1067,11 @@ class SkinCluster(GeometryFilter):
         # Flattening the list of weights into a single list
         flat_weights = om.MDoubleArray([i[j] for i in weights for j in range(num_influences)])
         # Setting the weights
-        self.mFnSkinCluster.setWeights(geo, components, influence_array, flat_weights)
+        self.MFn.setWeights(geo, components, influence_array, flat_weights)
 
     @property
     def dqWeights(self):
-        return weightslist.WeightsList(self.mFnSkinCluster.getBlendWeights(*self.getDeformerSetGeoAndComponents()))
+        return weightslist.WeightsList(self.MFn.getBlendWeights(*self.getDeformerSetGeoAndComponents()))
 
     @dqWeights.setter
     def dqWeights(self, data):
@@ -1114,7 +1090,7 @@ class SkinCluster(GeometryFilter):
         # Converting the data into maya array
         data = om.MDoubleArray(data)
         # Setting the weights
-        self.mFnSkinCluster.setBlendWeights(geo, components, data)
+        self.MFn.setBlendWeights(geo, components, data)
 
     def getPointsAffectedByInfluence(self, influence):
         """
@@ -1124,13 +1100,13 @@ class SkinCluster(GeometryFilter):
         """
         import components
         if influence in self.influences():
-            influence = influence.mDagPath
+            influence = influence.MDagPath
         else:
             if not isinstance(influence, DagNode):
                 raise TypeError("Influence should be of type 'DependNode' not '{}'".format(type(influence).__name__))
             raise RuntimeError("Influence not found in skin cluster")
 
-        vtx_list = yams(self.mFnSkinCluster.getPointsAffectedByInfluence(influence)[0].getSelectionStrings())
+        vtx_list = yams(self.MFn.getPointsAffectedByInfluence(influence)[0].getSelectionStrings())
         vtxs = YamList()
         for vtx in vtx_list:
             if hasattr(vtx, 'isAYamComponent'):
@@ -1161,7 +1137,7 @@ class SkinCluster(GeometryFilter):
         :param influence: DagNode
         :return: int
         """
-        return self.mFnSkinCluster.indexForInfluenceObject(influence.mDagPath)
+        return self.MFn.indexForInfluenceObject(influence.MDagPath)
 
     def getInfluenceIndexes(self):
         return [self.indexForInfluenceObject(inf) for inf in self.influences()]
@@ -1190,10 +1166,53 @@ class SkinCluster(GeometryFilter):
             new_data.append(weights)
         return new_data
 
+    @property
+    def data(self):
+        return {'influences': self.influences().names,
+                'weights': self.weights,
+                'dqWeights': self.dqWeights,
+                'skinningMethod': self.skinningMethod.value,
+                'maxInfluences': self.maxInfluences.value,
+                'normalizeWeights': self.normalizeWeights.value,
+                'maintainMaxInfluences': self.maintainMaxInfluences.value,
+                'weightDistribution': self.weightDistribution.value,
+                }
+
+    @data.setter
+    def data(self, data):
+        missing = []
+        to_add = []
+        influences = self.influences()
+        for influence in data['influences']:
+            if not checks.objExists(influence):
+                missing.append(influence)
+            elif influence not in influences:
+                to_add.append(influence)
+        if missing:
+            raise RuntimeError('Influences not found in scene : {}'.format(missing))
+        self.addInfluences(to_add)
+
+        self.skinningMethod.value = data['skinningMethod']
+        self.maxInfluences.value = data['maxInfluences']
+        self.normalizeWeights.value = data['normalizeWeights']
+        self.maintainMaxInfluences.value = data['maintainMaxInfluences']
+        self.weightDistribution.value = data['weightDistribution']
+        self.weights = data['weights']
+        self.dqWeights = data['dqWeights']
+
+    def addInfluence(self, influence):
+        if hasattr(influence, 'isAYamNode'):
+            influence = influence.name
+        cmds.skinCluster(self.name, edit=True, addInfluence=influence, weight=0.0)
+
+    def addInfluences(self, influences):
+        for inf in influences:
+            self.addInfluence(inf)
+
 
 class BlendShape(WeightGeometryFilter):
-    def __init__(self, mObject, mFnDependencyNode):
-        super(BlendShape, self).__init__(mObject, mFnDependencyNode)
+    def __init__(self, MObject):
+        super(BlendShape, self).__init__(MObject)
         self._targets = []
         self._targets_names = {}
         self.getTargets()
@@ -1201,15 +1220,16 @@ class BlendShape(WeightGeometryFilter):
     def getTargets(self):
         from . import attributes as attrs
         targets = cmds.listAttr(self.name + '.weight[:]')
-        self._targets = []
+        self._targets = YamList()
+        self._targets.no_check = True
         self._targets_names = {}
         for index, target in enumerate(targets):
-            bs_target = attrs.BlendshapeTarget(self, attrs.getMPlug(self.name + '.' + target), index)
+            bs_target = attrs.BlendshapeTarget(attrs.getMPlug(self.name + '.' + target), self, index)
             self._targets.append(bs_target)
             self._targets_names[target] = bs_target
         return self._targets
 
-    def targets(self, target):
+    def getTarget(self, target):
         if isinstance(target, int):
             return self._targets[target]
         elif isinstance(target, string_types):
@@ -1221,26 +1241,61 @@ class BlendShape(WeightGeometryFilter):
     def weightsAttr(self):
         return self.inputTarget[0].baseWeights
 
+    @property
+    def data(self):
+        targets = self.getTargets()
+        return {'targets': self._targets_names.keys(),
+                'weights': self.weights,
+                'targetWeights': [target.weights for target in targets],
+                }
+
+    @data.setter
+    def data(self, data):
+        self.weights = data['weights']
+        for i, target in enumerate(self.getTargets()):
+            target.weights = data['targetWeights'][i]
+
 
 # Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from
 # the yam method. Follow this syntax -> 'mayaType': class)
-supported_classes = {'dagNode': DagNode,
-                     'transform': Transform,
-                     'joint': Joint,
-                     'constraint': Constraint,
-                     'shape': Shape,
-                     'controlPoint': ControlPoint,
-                     'mesh': Mesh,
-                     'nurbsCurve': NurbsCurve,
-                     'nurbsSurface': NurbsSurface,
-                     'lattice': Lattice,
-                     'locator': Locator,
-                     'geometryFilter': GeometryFilter,
-                     'weightGeometryFilter': WeightGeometryFilter,
-                     'cluster': Cluster,
-                     'skinCluster': SkinCluster,
-                     'blendShape': BlendShape,
-                     }
+supported_classes_str = {
+    'dagNode': DagNode,
+    'transform': Transform,
+    'joint': Joint,
+    'constraint': Constraint,
+    'shape': Shape,
+    'controlPoint': ControlPoint,
+    'mesh': Mesh,
+    'nurbsCurve': NurbsCurve,
+    'nurbsSurface': NurbsSurface,
+    'lattice': Lattice,
+    'locator': Locator,
+    'geometryFilter': GeometryFilter,
+    'weightGeometryFilter': WeightGeometryFilter,
+    'cluster': Cluster,
+    'skinCluster': SkinCluster,
+    'blendShape': BlendShape,
+    'camera': Camera,
+}
+
+supported_classes_MFn = {
+    om.MFn.kDagNode: DagNode,
+    om.MFn.kTransform: Transform,
+    om.MFn.kJoint: Joint,
+    om.MFn.kConstraint: Constraint,
+    om.MFn.kShape: Shape,
+    om.MFn.kMesh: Mesh,
+    om.MFn.kNurbsCurve: NurbsCurve,
+    om.MFn.kNurbsSurface: NurbsSurface,
+    om.MFn.kLatticeComponent: Lattice,
+    om.MFn.kLocator: Locator,
+    om.MFn.kGeometryFilt: GeometryFilter,
+    om.MFn.kWeightGeometryFilt: WeightGeometryFilter,
+    om.MFn.kCluster: Cluster,
+    om.MFn.kSkinClusterFilter: SkinCluster,
+    om.MFn.kBlendShape: BlendShape,
+    om.MFn.kCamera: Camera,
+}
 
 
 class YamList(list):
@@ -1299,7 +1354,8 @@ class YamList(list):
         if not self.no_check:
             for item in self:
                 if not hasattr(item, 'isAYamObject'):
-                    raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
+                    raise TypeError("YamList can only contain Yam objects. "
+                                    "'{}' is '{}'".format(item, type(item).__name__))
 
     def append(self, item):
         if not self.no_check:
@@ -1342,8 +1398,8 @@ class YamList(list):
     def names(self):
         return [x.name for x in self]
 
-    def mObjects(self):
-        return [x.mObject for x in self]
+    def MObjects(self):
+        return [x.MObject for x in self]
 
     def getattrs(self, attr, call=False):
         if call:
