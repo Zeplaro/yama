@@ -3,6 +3,7 @@
 """
 Contains all the class and functions for maya components.
 """
+# TODO : Improve getComponent func
 # TODO : fixed setPositionsOM on cvs ?
 
 from abc import ABCMeta, abstractmethod

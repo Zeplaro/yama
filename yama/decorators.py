@@ -29,6 +29,6 @@ def keepsel(func):
 def verbose(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        print("---- Calling '{}' -args: '{}' --kwargs: '{}'".format(func.__name__, args, kwargs))
+        print("---- Calling '{}'; -args: '{}'; --kwargs: '{}'".format(func.__name__, args, kwargs))
         return func(*args, **kwargs)
     return wrapper
