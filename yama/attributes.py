@@ -29,14 +29,19 @@ def getAttribute(node, attr):
 
 def getMPlug(attr):
     om_list = om.MSelectionList()
+
     try:
         om_list.add(attr)
     except RuntimeError:
         raise checks.ObjExistsError("Attribute '{}' does not exist".format(attr))
+
     try:
         MPlug = om_list.getPlug(0)
     except TypeError as e:
-        raise TypeError("Failed to get plug : '{}'; {}".format(attr, e))
+        cmds.warning("Failed to use MSelectionList.getPlug : '{}'; {}".format(attr, e))
+        node = om_list.getDependNode(0)
+        attribute = attr.split('.', 1)[-1]
+        MPlug = om.MFnDependencyNode(node).findPlug(attribute, False)
     return MPlug
 
 
@@ -208,10 +213,10 @@ class Attribute(nodes.Yam):
             self.getChildren()
             return self.attr(attr)
         else:
-            cmds.warning("Attribute was not generated with getChildren")
-            MPlug = getMPlug(self.node.name + '.' + attr)
+            MPlug = getMPlug(self.name + '.' + attr)
             attribute = Attribute(MPlug, self.node)
-            cmds.warning("Attribute was not generated with getChildren but still exists ?!")
+            cmds.warning("Attribute was not generated with getChildren but still exists ? "
+                         r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
             self._attributes[attr] = attribute
             return self.attr(attr)
 
