@@ -5,6 +5,7 @@ Contains all the class for maya node types, and all nodes related functions.
 The main functions used would be createNode to create a new node and get it initialized as its proper class type; and
 yam or yams to initialize existing objects into their proper class type.
 """
+# TODO : Create Singleton class for nodes
 
 from abc import ABCMeta, abstractproperty, abstractmethod
 from six import string_types, PY2
@@ -29,8 +30,12 @@ def getMObject(node):
     except RuntimeError:
         if checks.objExists(node):
             raise Exception("more than one object called '{}'".format(node))
-        raise checks.objExists(node, raiseError=True)
-    return mSelectionList.getDependNode(0)
+        checks.objExists(node, raiseError=True)
+    try:
+        MObject = mSelectionList.getDependNode(0)
+    except Exception as e:
+        raise Exception("Failed to getDependNode on : '{}'; {}".format(node, e))
+    return MObject
 
 
 gmo = getMObject
@@ -171,45 +176,13 @@ def select(*args, **kwargs):
 def listAttr(obj, **kwargs):
     """
     Returns the maya cmds.listAttr as Attribute objects.
-    If the attr returned by the cmds is part of an array attribute but the array attr has no index it will fail because
-    the child attribute doesn't really exists under the parent without index. This tries to fix that by adding a default
-    index of 0 to the parent array before returning the full attribute.
-    This workaround is not perfect and will only list attrs under the index 0 of array attrs
-    :param obj : DependNode or Attribute
+    :param obj : DependNode, Attribute or str.
     :param kwargs: kwargs passed on to cmds.listAttr
     :return: YamList([Attribute, ...])
     """
-    obj = yam(obj)
-    from . import attributes
-    is_attr = False
-    if isinstance(obj, attributes.Attribute):
-        is_attr = True
-        if obj.MPlug.isArray:
-            obj = obj[0]
-    attrs = YamList()
-    for attr in cmds.listAttr(obj.name, **kwargs):
-        if is_attr:
-            # If obj is Attribute then removing the obj.attribute from the beginning of the listed attr
-            if kwargs.get('shortNames', False) or kwargs.get('sn', False):
-                attr = attr[len(obj.MPlug.partialName()):]
-            else:
-                attr = attr[len(obj.attribute):]
-        try:
-            attr = obj.attr(attr)
-            attrs.append(attr)
-        except AttributeError:
-            if '.' in attr:
-                try:
-                    split = attr.split('.')
-                    attr = obj.attr(split.pop(0))
-                    while split:
-                        if attr.MPlug.isArray:
-                            attr = attr[0]  # sets the array attr index to 0 to get a valid existing attribute 'child'
-                        attr = attr.attr(split.pop(0))
-                    attrs.append(attr)
-                except AttributeError as e:
-                    print("Failed to get attribute '{}' on '{}': {}".format(attr, obj, e))
-    return attrs
+    if not hasattr(obj, 'isAYamNode'):
+        obj = yam(obj)
+    return YamList(obj.attr(attr) for attr in cmds.listAttr(obj.name, **kwargs) or [])
 
 
 class Yam(object):
@@ -387,17 +360,13 @@ class DependNode(Yam):
 
     def attr(self, attr):
         """
-        Gets an Attribute or Component object for the given attr.
+        Gets an Attribute object for the given attr.
         This function should be use in case the attr conflicts with a function or attribute of the class.
         :param attr: str
         :return: Attribute object
         """
-        try:
-            from . import components
-            return components.getComponent(self, attr)  # Trying to get component if one
-        except (RuntimeError, TypeError):
-            from . import attributes
-            return attributes.getAttribute(self, attr)
+        from . import attributes
+        return attributes.getAttribute(self, attr)
 
     def listRelatives(self, **kwargs):
         """
@@ -582,6 +551,19 @@ class Transform(DagNode):
                 raise RuntimeError("in '{}.__contains__('{}')'; {}".format(self, item, e))
         return item.longName.startswith(self.longName)
 
+    def attr(self, attr):
+        """
+        Gets an Attribute or Component object for the given attr.
+        This function should be use in case the attr conflicts with a function or attribute of the class.
+        :param attr: str
+        :return: Attribute object
+        """
+        try:
+            from . import components
+            return components.getComponent(self, attr)  # Trying to get component if one
+        except (RuntimeError, TypeError):
+            super(Transform, self).attr(attr)
+
     def children(self, type=None, noIntermediate=True):
         """
         Gets all the node's children as a list of DependNode.
@@ -718,6 +700,19 @@ class ControlPoint(Shape):
     def setPositions(self, data, ws=False):
         for cp, pos in zip(self.cp, data):
             cp.setPosition(pos, ws=ws)
+
+    def attr(self, attr):
+        """
+        Gets an Attribute or Component object for the given attr.
+        This function should be use in case the attr conflicts with a function or attribute of the class.
+        :param attr: str
+        :return: Attribute object
+        """
+        try:
+            from . import components
+            return components.getComponent(self, attr)  # Trying to get component if one
+        except (RuntimeError, TypeError):
+            super(ControlPoint, self).attr(attr)
 
 
 class Mesh(ControlPoint):
