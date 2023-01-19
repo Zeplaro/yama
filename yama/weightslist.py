@@ -11,6 +11,18 @@ class WeightsList(list):
         for i in list(*args, **kwargs):
             self.append(i)
 
+    def __repr__(self):
+        return 'WeightsList' + super(WeightsList, self).__repr__()
+
+    def __getitem__(self, item):
+        try:
+            return super(WeightsList, self).__getitem__(item)
+        except TypeError:
+            try:
+                return super(WeightsList, self).__getitem__(int(item))
+            except TypeError:
+                raise TypeError("list indices must be integers or string number, not {}".format(type(item).__name__))
+
     @classmethod
     def fromLengthValue(cls, length, value=0.0):
         return cls(float(value) for _ in range(length))

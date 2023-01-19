@@ -7,9 +7,11 @@ from maya import cmds
 def mayaundo(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        cmds.undoInfo(openChunk=True)
-        result = func(*args, **kwargs)
-        cmds.undoInfo(closeChunk=True)
+        try:
+            cmds.undoInfo(openChunk=True)
+            result = func(*args, **kwargs)
+        finally:
+            cmds.undoInfo(closeChunk=True)
         return result
     return wrapper
 
@@ -27,6 +29,6 @@ def keepsel(func):
 def verbose(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        print("---- Calling '{}' -args: '{}' --kwargs: '{}'".format(func.__name__, args, kwargs))
+        print("---- Calling '{}'; -args: '{}'; --kwargs: '{}'".format(func.__name__, args, kwargs))
         return func(*args, **kwargs)
     return wrapper

@@ -107,20 +107,20 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
         for axe in 'xyz':
             for tr_ in tr:
                 attr = obj.attr(tr_ + axe)
-                if attr.settable():
+                if attr.isSettable():
                     attr.value = 0
             if s:
                 attr = obj.attr('s' + axe)
-                if attr.settable():
+                if attr.isSettable():
                     attr.value = 1
         if v:
             attr = obj.v
-            if attr.settable():
+            if attr.isSettable():
                 attr.value = True
         if user:
             attrs = obj.listAttr(ud=True, scalar=True, visible=True)
             for attr in attrs:
-                if not attr.settable():
+                if not attr.isSettable():
                     continue
                 attr.value = attr.defaultValue
 

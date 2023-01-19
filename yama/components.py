@@ -3,6 +3,8 @@
 """
 Contains all the class and functions for maya components.
 """
+# TODO : Improve getComponent func
+# TODO : fixed setPositionsOM on cvs ?
 
 from abc import ABCMeta, abstractmethod
 from maya import cmds
@@ -13,12 +15,11 @@ from . import config, nodes
 
 def getComponent(node, attr):
     """
-    Returns the proper component object for the given node and component name and index.
+    Returns the proper component object for the given node, component name and index.
     :param node: The node to get the component from.
     :param attr: The component name to get the component from.
     :return: The component object.
     """
-    indices = []
     if '.' in attr:
         raise TypeError("component '{}' not in supported types".format(attr))
 
@@ -32,17 +33,18 @@ def getComponent(node, attr):
 
     # Changing node to its shape if given a transform
     if isinstance(node, nodes.Transform):
-        shape = node.shape
-        if not shape:
+        node = node.shape
+        if not node:
             raise RuntimeError("node '{}' has no shape to get component on".format(node))
-        node = shape
 
     if attr == 'cp':
-        attr = shape_component.get(node.__class__, 'cp')
+        if node.__class__ in shape_component:
+            attr = shape_component[node.__class__]
 
     # Getting api_type to get the proper class for the component
-    api_type = component_shape_MFnid.get((attr, node.__class__))
-    if api_type is None:
+    if (attr, node.__class__) in component_shape_MFnid:
+        api_type = component_shape_MFnid[(attr, node.__class__)]
+    else:
         om_list = om.MSelectionList()
         om_list.add(node.name + '.' + attr + '[0]')
         dag, comp = om_list.getComponent(0)
@@ -53,6 +55,7 @@ def getComponent(node, attr):
 
     comp_class = mFnid_component_class[api_type][1]
     component = comp_class(node, api_type)
+    indices = []
     for index in split:
         index = index[:-1]  # Removing the closing ']'
         if index == '*':  # if using the maya wildcard symbol
@@ -99,7 +102,7 @@ class Components(nodes.Yam):
         return self.name
 
     def __repr__(self):
-        return "<class {}('{}', '{}')>".format(self.__class__.__name__, self.node.name, self.component_name)
+        return "{}('{}', '{}')".format(self.__class__.__name__, self.node.name, self.component_name)
 
     @abstractmethod
     def __iter__(self):
@@ -118,7 +121,7 @@ class Components(nodes.Yam):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.uuid(), self.api_type))
+        return hash((self.node.hashCode, self.api_type))
 
     @property
     def name(self):
@@ -167,7 +170,7 @@ class MeshVertices(SingleIndexed):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        return [[p.x, p.y, p.z] for p in self.node.mFnMesh.getPoints(space)]
+        return [[p.x, p.y, p.z] for p in self.node.MFn.getPoints(space)]
 
     def setPositionsOM(self, values, ws=False):
         if ws:
@@ -175,7 +178,7 @@ class MeshVertices(SingleIndexed):
         else:
             space = om.MSpace.kObject
         mps = [om.MPoint(x) for x in values]
-        self.node.mFnMesh.setPoints(mps, space)
+        self.node.MFn.setPoints(mps, space)
 
 
 class CurveCVs(SingleIndexed):
@@ -192,7 +195,7 @@ class CurveCVs(SingleIndexed):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        return [[p.x, p.y, p.z] for p in self.node.mFnNurbsCurve.cvPositions(space)]
+        return [[p.x, p.y, p.z] for p in self.node.MFn.cvPositions(space)]
 
     def setPositionsOM(self, values, ws=False):
         if ws:
@@ -200,7 +203,7 @@ class CurveCVs(SingleIndexed):
         else:
             space = om.MSpace.kObject
         mps = [om.MPoint(x) for x in values]
-        self.node.mFnNurbsCurve.setCVPositions(mps, space)
+        self.node.MFn.setCVPositions(mps, space)
 
 
 class DoubleIndexed(Components):
@@ -245,21 +248,26 @@ class Component(nodes.Yam):
         self.second_index = secondIndex
         self.third_index = thirdIndex
 
+    @property
+    def isAYamComponent(self):
+        """Used to check if an object is an instance of Component with the faster hasattr instead of slower
+        isinstance."""
+        return True
+
     def __str__(self):
         return self.name
 
     def __repr__(self):
         if self.third_index is not None:
-            return "<class {}('{}', '{}', {}, {}, {})>".format(self.__class__.__name__, self.node,
-                                                               self.components.component_name, self.index,
-                                                               self.second_index, self.third_index)
+            return "{}('{}', '{}', {}, {}, {})".format(self.__class__.__name__, self.node,
+                                                       self.components.component_name, self.index, self.second_index,
+                                                       self.third_index)
         elif self.second_index is not None:
-            return "<class {}('{}', '{}', {}, {})>".format(self.__class__.__name__, self.node,
-                                                           self.components.component_name, self.index,
-                                                           self.second_index)
+            return "{}('{}', '{}', {}, {})".format(self.__class__.__name__, self.node, self.components.component_name,
+                                                   self.index, self.second_index)
         else:
-            return "<class {}('{}', '{}', {})>".format(self.__class__.__name__, self.node,
-                                                       self.components.component_name, self.index)
+            return "{}('{}', '{}', {})".format(self.__class__.__name__, self.node, self.components.component_name,
+                                               self.index)
 
     def __getitem__(self, item):
         """
@@ -286,7 +294,7 @@ class Component(nodes.Yam):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.uuid(), self.type(), self.indices()))
+        return hash((self.node.hashCode, self.type(), self.indices()))
 
     def exists(self):
         return cmds.objExists(self.name)
@@ -331,7 +339,7 @@ class MeshVertex(Component):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        p = self.node.mFnMesh.getPoint(self.index, space)
+        p = self.node.MFn.getPoint(self.index, space)
         return [p.x, p.y, p.z]
 
     def setPositionOM(self, value, ws=False):
@@ -340,7 +348,7 @@ class MeshVertex(Component):
         else:
             space = om.MSpace.kObject
         point = om.MPoint(value)
-        self.node.mFnMesh.setPoint(self.index, point, space)
+        self.node.MFn.setPoint(self.index, point, space)
 
 
 class CurveCV(Component):
@@ -354,7 +362,7 @@ class CurveCV(Component):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        p = self.node.mFnNurbsCurve.cvPosition(self.index, space)
+        p = self.node.MFn.cvPosition(self.index, space)
         return [p.x, p.y, p.z]
 
     def setPositionOM(self, value, ws=False):
@@ -363,7 +371,7 @@ class CurveCV(Component):
         else:
             space = om.MSpace.kObject
         point = om.MPoint(*value)
-        self.node.mFnNurbsCurve.setCVPosition(self.index, point, space)
+        self.node.MFn.setCVPosition(self.index, point, space)
 
 
 class ComponentsSlice(nodes.Yam):
@@ -385,8 +393,8 @@ class ComponentsSlice(nodes.Yam):
         return self.name
 
     def __repr__(self):
-        return "<class {}('{}', '{}', {})>".format(self.__class__.__name__, self.node, self.components.component_name,
-                                                   self.slice)
+        return "{}('{}', '{}', {})".format(self.__class__.__name__, self.node, self.components.component_name,
+                                           self.slice)
 
     def __getitem__(self, item):
         if isinstance(item, slice):
@@ -409,7 +417,7 @@ class ComponentsSlice(nodes.Yam):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.uuid(), self.components.api_type, self._indices))
+        return hash((self.node.hashCode, self.components.api_type, self._indices))
 
     @property
     def name(self):
