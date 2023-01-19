@@ -27,7 +27,7 @@ def getAttribute(node, attr):
         return Attribute(MPlug, node)
 
 
-def getMPlug(attr):
+def getMPlug(attr):  # type: (str) -> om.MPlug
     om_list = om.MSelectionList()
 
     try:
@@ -59,13 +59,14 @@ class Attribute(nodes.Yam):
         assert isinstance(MPlug, om.MPlug), ("MPlug arg should be of type OpenMaya.MPlug not : '{}'".format(MPlug.__class__.__name__))
         if node:
             assert isinstance(node, nodes.DependNode)
+            self.node = node
         else:
-            node = nodes.yam(MPlug.node())
-        self.node = node
+            self.node = nodes.yam(MPlug.node())
         self.MPlug = MPlug
         self._MPlug1 = None
         self._attributes = {}
         self._children_generated = False
+        self._hashCode = None
 
     def __str__(self):
         return self.name
@@ -174,7 +175,7 @@ class Attribute(nodes.Yam):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.uuid(), self.attribute))
+        return self.hashCode
 
     @property
     def MPlug1(self):
@@ -210,17 +211,24 @@ class Attribute(nodes.Yam):
         elif self.MPlug.isArray:
             return self[0].attr(attr)
         elif not self._children_generated:
-            self.getChildren()
+            self._getChildren()
             return self.attr(attr)
         else:
             MPlug = getMPlug(self.name + '.' + attr)
             attribute = Attribute(MPlug, self.node)
-            cmds.warning("Attribute was not generated with getChildren but still exists ? "
+            cmds.warning("Attribute was not generated with _getChildren but still exists ? "
                          r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
             self._attributes[attr] = attribute
             return self.attr(attr)
 
-    def getChildren(self):
+    def _getChildren(self):
+        """
+        Generates a dictionary of Attribute objects for each child of this attribute if it is a compound attribute.
+        Stores the attributes in the self._attributes dictionary, with the long and short names of the attribute as the
+        keys.
+
+        Raises: AttributeError: If the attribute is not a compound attribute and has no children.
+        """
         if not self.MPlug.isCompound:
             raise AttributeError("'{}' is not an compound attribute and has no children attribute".format(self))
         for index in range(self.MPlug.numChildren()):
@@ -234,10 +242,12 @@ class Attribute(nodes.Yam):
 
     @property
     def attribute(self):
+        """Returns the attribute long name by itself without the node name."""
         return self.MPlug.partialName(useLongNames=True, includeInstancedIndices=True)
 
     @attribute.setter
     def attribute(self, newName):
+        """Renames the attribute long name."""
         cmds.renameAttr(self.name, newName)
 
     @property
@@ -340,6 +350,10 @@ class Attribute(nodes.Yam):
         connection = self.listConnections(destination=False, **kwargs)
         if connection:
             return connection[0]
+
+    @property
+    def source(self):
+        return Attribute(self.MPlug.source())
 
     def destinationConnections(self, **kwargs):
         return self.listConnections(source=False, **kwargs)
@@ -482,6 +496,16 @@ class Attribute(nodes.Yam):
             newName = ''
         cmds.addAttr(self.name, e=True, niceName=newName)
 
+    @property
+    def shortName(self):
+        return om.MFnAttribute(self.MPlug.attribute()).shortName
+
+    @property
+    def hashCode(self):
+        if self._hashCode is None:
+            self._hashCode = om.MObjecHandle(self.MPlug.attribute()).hashCode()
+        return self._hashCode
+
 
 class BlendshapeTarget(Attribute):
     def __init__(self, MPlug, node, index):
@@ -514,10 +538,11 @@ def getAttr(attr):
     :param attr: Attibute object
     :return: the value of the attribute.
     """
+    MPlug = attr.MPlug
     try:
-        return getMPlugValue(attr.MPlug)
+        return getMPlugValue(MPlug)
     except Exception as e:
-        print('## failed to get MPlug value: {}'.format(e))
+        print("## failed to get MPlug value on '{}': {}".format(MPlug.name(), e))
 
     value = cmds.getAttr(attr.name)
     # To simply return the tuple in the list that cmds returns for attribute like '.translate', '.rotate', etc...
