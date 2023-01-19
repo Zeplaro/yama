@@ -15,12 +15,11 @@ from . import config, nodes
 
 def getComponent(node, attr):
     """
-    Returns the proper component object for the given node and component name and index.
+    Returns the proper component object for the given node, component name and index.
     :param node: The node to get the component from.
     :param attr: The component name to get the component from.
     :return: The component object.
     """
-    indices = []
     if '.' in attr:
         raise TypeError("component '{}' not in supported types".format(attr))
 
@@ -34,17 +33,18 @@ def getComponent(node, attr):
 
     # Changing node to its shape if given a transform
     if isinstance(node, nodes.Transform):
-        shape = node.shape
-        if not shape:
+        node = node.shape
+        if not node:
             raise RuntimeError("node '{}' has no shape to get component on".format(node))
-        node = shape
 
     if attr == 'cp':
-        attr = shape_component.get(node.__class__, 'cp')
+        if node.__class__ in shape_component:
+            attr = shape_component[node.__class__]
 
     # Getting api_type to get the proper class for the component
-    api_type = component_shape_MFnid.get((attr, node.__class__))
-    if api_type is None:
+    if (attr, node.__class__) in component_shape_MFnid:
+        api_type = component_shape_MFnid[(attr, node.__class__)]
+    else:
         om_list = om.MSelectionList()
         om_list.add(node.name + '.' + attr + '[0]')
         dag, comp = om_list.getComponent(0)
@@ -55,6 +55,7 @@ def getComponent(node, attr):
 
     comp_class = mFnid_component_class[api_type][1]
     component = comp_class(node, api_type)
+    indices = []
     for index in split:
         index = index[:-1]  # Removing the closing ']'
         if index == '*':  # if using the maya wildcard symbol
@@ -120,7 +121,7 @@ class Components(nodes.Yam):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.uuid(), self.api_type))
+        return hash((self.node.hashCode, self.api_type))
 
     @property
     def name(self):
@@ -293,7 +294,7 @@ class Component(nodes.Yam):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.uuid(), self.type(), self.indices()))
+        return hash((self.node.hashCode, self.type(), self.indices()))
 
     def exists(self):
         return cmds.objExists(self.name)
@@ -416,7 +417,7 @@ class ComponentsSlice(nodes.Yam):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.uuid(), self.components.api_type, self._indices))
+        return hash((self.node.hashCode, self.components.api_type, self._indices))
 
     @property
     def name(self):
