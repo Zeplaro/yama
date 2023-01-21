@@ -5,11 +5,12 @@ Contains non maya specific utils.
 """
 
 from __future__ import division
+from six import string_types
 
 
 def multList(list_a, list_b):
     """
-    Zips 'list_a' items with 'list_b' items and multiplies them together
+    Zips 'list_a' items with 'list_b' items and multiplies them together.
     :param list_a: list of digits
     :param list_b: list of digits
     :return: list of digits
@@ -19,7 +20,9 @@ def multList(list_a, list_b):
 
 def decimalToAlphabetical(index):
     """
-    Converts int to an alphabetical index. e.g.: 0 -> 'a', 1 -> 'b', 2 -> 'c', 'yama' -> 440414
+    Converts int to an alphabetical index.
+
+    e.g.: 0 -> 'a', 1 -> 'b', 2 -> 'c', 'yama' -> 440414
     :param index: int
     :return: str
     """
@@ -29,19 +32,21 @@ def decimalToAlphabetical(index):
     index += 1  # because alphabet hase no 0 and starts with 'a'
     while index:
         index -= 1  # 'a' needs to be used as next 'decimal' unit when reaching 'z':  ..., 'y', 'z', 'aa', 'ab', ...
-        reste = index % 26
+        left = index % 26
         index = index // 26
-        alphanum = ascii_lowercase[reste] + alphanum
+        alphanum = ascii_lowercase[left] + alphanum
     return alphanum
 
 
 def alphabeticalToDecimal(alpha):
     """
-    Converts str to an int index. e.g.: 'a' -> 0, 'b' -> 1, 'c' -> 2, 440414 -> 'yama'
+    Converts str to an int index.
+
+    e.g.: 'a' -> 0, 'b' -> 1, 'c' -> 2, 440414 -> 'yama'
     :param alpha: str
     :return: int
     """
-    assert isinstance(alpha, str) and alpha
+    assert isinstance(alpha, string_types) and alpha
     from string import ascii_lowercase
     index = -1
     for step, letter in reversed(list(enumerate(reversed(alpha)))):
@@ -51,7 +56,7 @@ def alphabeticalToDecimal(alpha):
 
 
 def decimalToRoman(index):
-    """Converts an int to a roman numerical index"""
+    """Converts int to roman numeral"""
     assert isinstance(index, int) and index > 0
     roman = [(1000, 'M'), (900, 'CM'),
              (500, 'D'), (400, 'CD'),
@@ -68,3 +73,28 @@ def decimalToRoman(index):
                 index -= value
                 break
     return roman_num
+
+
+def romanToDecimal(roman):
+    """Converts roman numeral to int"""
+    assert isinstance(roman, string_types) and roman
+    values = [('M', 1000), ('CM', 900),
+              ('D', 500), ('CD', 400),
+              ('C', 100), ('XC', 90),
+              ('L', 50), ('XL', 40),
+              ('X', 10), ('IX', 9),
+              ('V', 5), ('IV', 4),
+              ('I', 1)]
+    roman = roman.upper()
+    diff = set(roman) - set([x for x, _ in values])
+    if diff:
+        raise ValueError("Only valid roman character accepted; found : {}".format(list(diff)))
+
+    result = 0
+    while roman:
+        for sign, value in values:
+            if roman.startswith(sign):
+                result += value
+                roman = roman[len(sign):]
+                break
+    return result
