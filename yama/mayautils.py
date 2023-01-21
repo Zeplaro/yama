@@ -164,7 +164,7 @@ def wrapMesh(objs=None, ws=True):
         master = master.shape
         if not isinstance(master, nodes.Mesh):
             raise RuntimeError("first object '{}' is not a 'mesh'".format(master))
-    master_mfn = master.mFnMesh
+    master_mfn = master.MFn
     if ws:
         space = om.MSpace.kworld
     else:
@@ -175,7 +175,7 @@ def wrapMesh(objs=None, ws=True):
             if not isinstance(slave, nodes.Mesh):
                 cmds.warning("cannot match '{}' of type '{}'".format(slave, type(slave).__name__))
                 continue
-        slave_mfn = slave.mFnMesh
+        slave_mfn = slave.MFn
         for i in range(len(slave)):
             x, y, z, _ = master_mfn.getClosestPoint(slave_mfn.getPoint(i), space)[0]
             slave.vtx[i].setPosition([x, y, z], ws=True)
@@ -329,8 +329,8 @@ def snapAlongCurve(curve=None, objs=None):
     step = arclen / (len(objs) - 1.0)
     len_step = 0.0
     for i, obj in enumerate(objs):
-        param = curve.mFnNurbsCurve.findParamFromLength(len_step)
-        x, y, z, _ = curve.mFnNurbsCurve.getPointAtParam(param, om.MSpace.kWorld)
+        param = curve.MFn.findParamFromLength(len_step)
+        x, y, z, _ = curve.MFn.getPointAtParam(param, om.MSpace.kWorld)
         obj.setPosition([x, y, z], ws=True)
         len_step += step
 
