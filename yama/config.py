@@ -2,3 +2,4 @@
 
 undoable = True
 use_singleton = True
+verbose = True
