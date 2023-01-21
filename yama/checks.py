@@ -7,7 +7,7 @@ Contains all the custom exceptions and warning classes and methods
 from maya import cmds
 
 
-class ObjExistsError(BaseException):
+class ObjExistsError(Exception):
     pass
 
 
