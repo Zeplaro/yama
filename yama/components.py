@@ -16,8 +16,8 @@ from . import config, nodes
 def getComponent(node, attr):
     """
     Returns the proper component object for the given node, component name and index.
-    :param node: The node to get the component from.
-    :param attr: The component name to get the component from.
+    :param node: DependNode, The node to get the component from.
+    :param attr: str, The component name to get the component from.
     :return: The component object.
     """
     if '.' in attr:
@@ -28,7 +28,7 @@ def getComponent(node, attr):
         split = attr.split('[')
         attr = split.pop(0)
 
-    if attr not in supported_types:
+    if attr not in SupportedTypes.types:
         raise TypeError("component '{}' not in supported types".format(attr))
 
     # Changing node to its shape if given a transform
@@ -38,22 +38,22 @@ def getComponent(node, attr):
             raise RuntimeError("node '{}' has no shape to get component on".format(node))
 
     if attr == 'cp':
-        if node.__class__ in shape_component:
-            attr = shape_component[node.__class__]
+        if node.__class__ in SupportedTypes.shape_component:
+            attr = SupportedTypes.shape_component[node.__class__]
 
     # Getting api_type to get the proper class for the component
-    if (attr, node.__class__) in component_shape_MFnid:
-        api_type = component_shape_MFnid[(attr, node.__class__)]
+    if (attr, node.__class__) in SupportedTypes.component_shape_MFnid:
+        api_type = SupportedTypes.component_shape_MFnid[(attr, node.__class__)]
     else:
         om_list = om.MSelectionList()
         om_list.add(node.name + '.' + attr + '[0]')
         dag, comp = om_list.getComponent(0)
-        api_type = comp.apiTypeStr
+        api_type = comp.apiType()
 
-    if api_type not in mFnid_component_class:
+    if api_type not in SupportedTypes.MFnid_component_class:
         raise TypeError("component '{}' of api type '{}' not in supported types".format(attr, api_type))
 
-    comp_class = mFnid_component_class[api_type][1]
+    comp_class = SupportedTypes.MFnid_component_class[api_type][1]
     component = comp_class(node, api_type)
     indices = []
     for index in split:
@@ -83,8 +83,8 @@ class Components(nodes.Yam):
                                                      "instead node type is '{}'".format(type(node).__name__)
         self.node = node
         self.api_type = apiType
-        self.component_name = mFnid_component_class[apiType][0]
-        self.component_class = mFnid_component_class[apiType][2]
+        self.component_name = SupportedTypes.MFnid_component_class[apiType][0]
+        self.component_class = SupportedTypes.MFnid_component_class[apiType][2]
 
     def __getitem__(self, item):
         if item == '*':
@@ -451,40 +451,47 @@ class ComponentsSlice(nodes.Yam):
         self.setPositions(value, ws=ws)
 
 
-# Removed 'v' because rarely used and similar to short name for 'visibility'
-supported_types = {'cv', 'e', 'ep', 'f', 'map', 'pt', 'sf', 'u', '#v', 'vtx', 'vtxFace', 'cp', }
+class SupportedTypes(object):
+    """
+    Contains all the supported component types and their corresponding class, MFn id, yam class, etc...
+    """
+    # Removed 'v' because rarely used and similar to short name for 'visibility'
+    types = {'cv', 'e', 'ep', 'f', 'map', 'pt', 'sf', 'u', '#v', 'vtx', 'vtxFace', 'cp', }
 
-mFnid_component_class = {'kCurveCVComponent': ('cv', CurveCVs, CurveCV),  # 533
-                         'kCurveEPComponent': ('ep', SingleIndexed, Component),  # 534
-                         'kCurveParamComponent': ('u', SingleIndexed, Component),  # 536
-                         'kIsoparmComponent': ('v', DoubleIndexed, Component),  # 537
-                         'kSurfaceCVComponent': ('cv', DoubleIndexed, Component),  # 539
-                         'kLatticeComponent': ('pt', TripleIndexed, Component),  # 543
-                         'kMeshEdgeComponent': ('e', SingleIndexed, Component),  # 548
-                         'kMeshPolygonComponent': ('f', SingleIndexed, Component),  # 549
-                         'kMeshVertComponent': ('vtx', MeshVertices, MeshVertex),  # 551
-                         'kCharacterMappingData': ('vtxFace', SingleIndexed, Component),  # 741
-                         'kSurfaceFaceComponent': ('sf', DoubleIndexed, Component),  # 774
-                         'kMeshMapComponent': ('map', SingleIndexed, Component),  # 813
-                         }
+    MFnid_component_class = {
+        om.MFn.kCurveCVComponent: ('cv', CurveCVs, CurveCV),  # 533
+        om.MFn.kCurveEPComponent: ('ep', SingleIndexed, Component),  # 534
+        om.MFn.kCurveParamComponent: ('u', SingleIndexed, Component),  # 536
+        om.MFn.kIsoparmComponent: ('v', DoubleIndexed, Component),  # 537
+        om.MFn.kSurfaceCVComponent: ('cv', DoubleIndexed, Component),  # 539
+        om.MFn.kLatticeComponent: ('pt', TripleIndexed, Component),  # 543
+        om.MFn.kMeshEdgeComponent: ('e', SingleIndexed, Component),  # 548
+        om.MFn.kMeshPolygonComponent: ('f', SingleIndexed, Component),  # 549
+        om.MFn.kMeshVertComponent: ('vtx', MeshVertices, MeshVertex),  # 551
+        om.MFn.kCharacterMappingData: ('vtxFace', SingleIndexed, Component),  # 741
+        om.MFn.kSurfaceFaceComponent: ('sf', DoubleIndexed, Component),  # 774
+        om.MFn.kMeshMapComponent: ('map', SingleIndexed, Component),  # 813
+    }
 
-component_shape_MFnid = {('cv', nodes.NurbsCurve): 'kCurveCVComponent',
-                         ('cv', nodes.NurbsSurface): 'kSurfaceCVComponent',
-                         ('e', nodes.Mesh): 'kMeshEdgeComponent',
-                         ('ep', nodes.NurbsCurve): 'kCurveEPComponent',
-                         ('f', nodes.Mesh): 'kMeshPolygonComponent',
-                         ('map', nodes.Mesh): 'kMeshMapComponent',
-                         ('pt', nodes.Lattice): 'kLatticeComponent',
-                         ('sf', nodes.NurbsSurface): 'kSurfaceFaceComponent',
-                         ('u', nodes.NurbsCurve): 'kCurveParamComponent',
-                         ('u', nodes.NurbsSurface): 'kIsoparmComponent',
-                         ('v', nodes.NurbsSurface): 'kIsoparmComponent',
-                         ('vtx', nodes.Mesh): 'kMeshVertComponent',
-                         ('vtxFace', nodes.Mesh): 'kCharacterMappingData',
-                         }
+    component_shape_MFnid = {
+        ('cv', nodes.NurbsCurve): om.MFn.kCurveCVComponent,
+        ('cv', nodes.NurbsSurface): om.MFn.kSurfaceCVComponent,
+        ('e', nodes.Mesh): om.MFn.kMeshEdgeComponent,
+        ('ep', nodes.NurbsCurve): om.MFn.kCurveEPComponent,
+        ('f', nodes.Mesh): om.MFn.kMeshPolygonComponent,
+        ('map', nodes.Mesh): om.MFn.kMeshMapComponent,
+        ('pt', nodes.Lattice): om.MFn.kLatticeComponent,
+        ('sf', nodes.NurbsSurface): om.MFn.kSurfaceFaceComponent,
+        ('u', nodes.NurbsCurve): om.MFn.kCurveParamComponent,
+        ('u', nodes.NurbsSurface): om.MFn.kIsoparmComponent,
+        ('v', nodes.NurbsSurface): om.MFn.kIsoparmComponent,
+        ('vtx', nodes.Mesh): om.MFn.kMeshVertComponent,
+        ('vtxFace', nodes.Mesh): om.MFn.kCharacterMappingData,
+    }
 
-shape_component = {nodes.Mesh: 'vtx',
-                   nodes.NurbsCurve: 'cv',
-                   nodes.NurbsSurface: 'cv',
-                   nodes.Lattice: 'pt',
-                   }
+    shape_component = {
+        nodes.Mesh: 'vtx',
+        nodes.NurbsCurve: 'cv',
+        nodes.NurbsSurface: 'cv',
+        nodes.Lattice: 'pt',
+    }
