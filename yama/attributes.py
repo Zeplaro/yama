@@ -38,7 +38,8 @@ def getMPlug(attr):  # type: (str) -> om.MPlug
     try:
         MPlug = om_list.getPlug(0)
     except TypeError as e:
-        cmds.warning("Failed to use MSelectionList.getPlug : '{}'; {}".format(attr, e))
+        if config.verbose:
+            cmds.warning("Failed to use MSelectionList.getPlug : '{}'; {}".format(attr, e))
         node = om_list.getDependNode(0)
         attribute = attr.split('.', 1)[-1]
         MPlug = om.MFnDependencyNode(node).findPlug(attribute, False)
@@ -216,8 +217,9 @@ class Attribute(nodes.Yam):
         else:
             MPlug = getMPlug(self.name + '.' + attr)
             attribute = Attribute(MPlug, self.node)
-            cmds.warning("Attribute was not generated with _getChildren but still exists ? "
-                         r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
+            if config.verbose:
+                cmds.warning("Attribute was not generated with _getChildren but still exists ? "
+                             r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
             self._attributes[attr] = attribute
             return self.attr(attr)
 
@@ -542,7 +544,8 @@ def getAttr(attr):
     try:
         return getMPlugValue(MPlug)
     except Exception as e:
-        print("## failed to get MPlug value on '{}': {}".format(MPlug.name(), e))
+        if config.verbose:
+            print("## failed to get MPlug value on '{}': {}".format(MPlug.name(), e))
 
     value = cmds.getAttr(attr.name)
     # To simply return the tuple in the list that cmds returns for attribute like '.translate', '.rotate', etc...
@@ -563,13 +566,14 @@ def setAttr(attr, value, **kwargs):
             setMPlugValue(attr.MPlug, value)
             return
         except Exception as e:
-            print("## failed to set MPlug value: {}".format(e))
+            if config.verbose:
+                print("## failed to set MPlug value: {}".format(e))
 
-    type = attr.type()
-    if type in ['double3', 'double2']:
-        cmds.setAttr(attr.name, *value, type=type)
-    elif type in ['matrix', 'string']:
-        cmds.setAttr(attr.name, value, type=type)
+    attr_type = attr.type()
+    if attr_type in ('double2', 'double3', 'float2', 'float3', 'long2', 'long3', 'short2'):
+        cmds.setAttr(attr.name, *value, type=attr_type)
+    elif attr_type in ['matrix', 'string']:
+        cmds.setAttr(attr.name, value, type=attr_type)
     else:
         cmds.setAttr(attr.name, value, **kwargs)
 
