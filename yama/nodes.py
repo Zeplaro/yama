@@ -193,27 +193,64 @@ class Singleton(object):
         if config.use_singleton and hash_code in cls._instances:
             return cls._instances[hash_code]
 
-        else:
-            # checking if node type has a supported class, if not defaults to DependNode
-            type_name = MObject.apiType()
-            if type_name in supported_classes_MFn:
-                assigned_class = supported_classes_MFn[type_name]  # skips the cmds.nodeType if exact type is in supported_class
+        else:  # finding if node type has a supported class
+            type_id = MObject.apiType()
+            # skips the SupportedTypes.getclass if exact type is in supported_class
+            if type_id in SupportedTypes.classes_MFn:
+                assigned_class = SupportedTypes.classes_MFn[type_id]
             else:
-                assigned_class = DependNode
-                if MObject.hasFn(om.MFn.kDagNode):
-                    node_name = om.MDagPath.getAPathTo(MObject).partialPathName()  # Getting the shortest unique name
-                else:
-                    try:
-                        node_name = om.MFnDependencyNode(MObject).name()
-                    except RuntimeError as e:
-                        raise ValueError("Given MObject does not contain a valid dependencyNode; {}".format(e))
-                for node_type in reversed(cmds.nodeType(node_name, i=True)):  # checks each inherited types for the node
-                    if node_type in supported_node_classes_str:
-                        assigned_class = supported_node_classes_str[node_type]
-                        break
+                assigned_class = cls.getclass(MObject)
             yam_node = assigned_class(MObject)
             cls._instances[hash_code] = yam_node
             return yam_node
+
+    @classmethod
+    def getclass(cls, MObject):
+        """
+        Gets the class that most closely corresponds to the given MObject.
+
+        Raises an error if no corresponding class was found, not even DependNode, meaning that
+        MObject.hasFn(om.MFn.KDependencyNode) returned : False.
+        :param MObject: A valid OpenMaya.MObject
+        :return: assigned class
+        """
+        def getit(data, assigned=None):
+            for (child, fn), sub_data in data.items():
+                if MObject.hasFn(fn):
+                    return getit(sub_data, child)
+            return assigned
+        assigned = getit(SupportedTypes.inheritance_tree)
+        if assigned:
+            return assigned
+        raise ValueError("Given MObject does not contain a valid dependencyNode.")
+
+    @classmethod
+    def getclass_cmds(cls, MObject):
+        """
+        Old way to get the class that most closely corresponds to the given MObject.
+
+        Slower than getclass but could be useful for more granular class assignment;
+        i.e., there is no way to check for a node that would inherit from ControlPoint only, because there is no
+        kControlPoint in om.MFn, but this is possible using cmds.nodeType(node_name, inherited=True) and match the
+        returned type to the closest supported class.
+
+        Raises an error if no corresponding class was found, not even DependNode, meaning that
+        OpenMaya.MFnDependencyNode(MObject).name() failed.
+        :param MObject: A valid OpenMaya.MObject
+        :return: assigned class
+        """
+        # checking if node type has a supported class, if not defaults to DependNode
+        if MObject.hasFn(om.MFn.kDagNode):
+            node_name = om.MDagPath.getAPathTo(MObject).partialPathName()  # Getting the shortest unique name
+        else:
+            try:
+                node_name = om.MFnDependencyNode(MObject).name()
+            except RuntimeError as e:
+                raise ValueError("Given MObject does not contain a valid dependencyNode; {}".format(e))
+        for node_type in reversed(cmds.nodeType(node_name, i=True)):  # checks each inherited types for the node
+            if node_type in SupportedTypes.classes_str:
+                return SupportedTypes.classes_str[node_type]
+        return DependNode
 
     @classmethod
     def clear(cls):
@@ -612,8 +649,8 @@ class Transform(DagNode):
         :param attr: str
         :return: Attribute object
         """
+        from . import components
         try:
-            from . import components
             return components.getComponent(self, attr)  # Trying to get component if one
         except (RuntimeError, TypeError):
             return super(Transform, self).attr(attr)
@@ -710,16 +747,6 @@ class Transform(DagNode):
         pos, obj_pos = self.getPosition(ws=True), obj.getPosition(ws=True)
         dist = sqrt(pow(pos[0] - obj_pos[0], 2) + pow(pos[1] - obj_pos[1], 2) + pow(pos[2] - obj_pos[2], 2))
         return dist
-
-
-class Joint(Transform):
-    def __init__(self, MObject):
-        super(Transform, self).__init__(MObject)
-
-
-class Constraint(Transform):
-    def __init__(self, MObject):
-        super(Constraint, self).__init__(MObject)
 
 
 class Shape(DagNode):
@@ -940,17 +967,6 @@ class Lattice(ControlPoint):
         :return: int
         """
         return self.lenXYZ()[2]
-
-
-class Locator(Shape):
-    def __init__(self, MObject):
-        super(Locator, self).__init__(MObject)
-
-
-class Camera(Shape):
-    def __init__(self, MObject):
-        super(Camera, self).__init__(MObject)
-        self._MFnFnc = om.MFnCamera
 
 
 class GeometryFilter(DependNode):
@@ -1174,7 +1190,8 @@ class SkinCluster(GeometryFilter):
             for conn in conns:
                 bpm = self.bindPreMatrix[conn.index]
                 if bpm.sourceConnection():
-                    print("{} is connected and can't be reset".format(bpm))
+                    if config.verbose:
+                        cmds.warning("{} is connected and can't be reset".format(bpm))
                     continue
                 wim = inf.worldInverseMatrix.value
                 cmds.setAttr(bpm.name, *wim, type='matrix')
@@ -1305,110 +1322,144 @@ class BlendShape(WeightGeometryFilter):
             target.weights = data['targetWeights'][i]
 
 
-"""
-Lists the supported types of maya nodes. Any new node class should be added to this list to be able to get it from the 
-yam method. 
-Follow this syntax -> {'mayaType': class,} where 'mayaType' is the type you get when using cmds.nodeType('node').
+class SupportedTypes(object):
+    """
+    Data of supported types of maya nodes.
 
-In addition for faster result the OpenMaya.MFn type should be added in the supported_classes_MFn dict.
-Folow this syntax -> {om.MFn.kNodeMFnType: class,} where om.MFn.kNodeMFnType is a valid corresponding value from om.MFn
-"""
+    Any new node class should be added to the inheritance_tree dict to be able to get it from the yam method and to
+    classes_MFn dict for faster type lookup. New node class should also be added to the classes_str dict to be
+    compatible with getclass_cnds.
 
-# dict of maya nodeType to assigned yam class
-supported_node_classes_str = {
-    'dagNode': DagNode,
-    'transform': Transform,
-    'joint': Joint,
-    'constraint': Constraint,
-    'parentConstraint': Constraint,
-    'pointConstraint': Constraint,
-    'orientConstraint': Constraint,
-    'scaleConstraint': Constraint,
-    'aimConstraint': Constraint,
-    'shape': Shape,
-    'controlPoint': ControlPoint,
-    'mesh': Mesh,
-    'nurbsCurve': NurbsCurve,
-    'nurbsSurface': NurbsSurface,
-    'lattice': Lattice,
-    'locator': Locator,
-    'camera': Camera,
-    'geometryFilter': GeometryFilter,
-    'weightGeometryFilter': WeightGeometryFilter,
-    'cluster': Cluster,
-    'skinCluster': SkinCluster,
-    'blendShape': BlendShape,
-}
-# Some of the most commonly used DependNode classes for faster assigned class lookup
-supported_dependNodes_str = {'multMatrix',
-                             'decomposeMatrix',
-                             'composeMatrix',
-                             'controller',
-                             'multDoubleLinear',
-                             'unitConversion',
-                             'pickMatrix',
-                             'plusMinusAverage',
-                             'blendColors',
-                             'choice',
-                             'condition',
-                             'remapValue',
-                             'reverse',
-                             'addDoubleLinear',
-                             'multiplyDivide',
-                             'distanceBetween',
-                             }
-for i in supported_dependNodes_str:
-    supported_node_classes_str[i] = DependNode
+    classes_MFn syntax is : {om.MFn.kNodeMFnType: class,} where om.MFn.kNodeMFnType is a valid corresponding value from om.MFn
+    classes_str syntax is : {'mayaType': class,} where 'mayaType' is the type you get when using cmds.nodeType('node').
+    """
 
+    # Inheritance tree for all defined classes and their MFn types relative to each others.
+    inheritance_tree = {
+        (DependNode, om.MFn.kDependencyNode): {
+            (DagNode, om.MFn.kDagNode): {
+                (Transform, om.MFn.kTransform): {},
+                (Shape, om.MFn.kShape): {
+                    (Mesh, om.MFn.kMesh): {},
+                    (NurbsCurve, om.MFn.kNurbsCurve): {},
+                    (NurbsSurface, om.MFn.kNurbsSurface): {},
+                    (Lattice, om.MFn.kLattice): {},
+                },
+            },
+            (GeometryFilter, om.MFn.kGeometryFilt): {
+                (WeightGeometryFilter, om.MFn.kWeightGeometryFilt): {
+                    (Cluster, om.MFn.kClusterFilter): {},
+                    (BlendShape, om.MFn.kBlendShape): {},
+                },
+                (SkinCluster, om.MFn.kSkinClusterFilter): {},
+            },
+        },
+    }
 
-# set of all assignable yam class
-supported_node_classes = {DependNode} | set(supported_node_classes_str.values())
+    # dict of MFn id to assigned yam class
+    classes_MFn = {
+        om.MFn.kDagNode: DagNode,  # 107
+        om.MFn.kTransform: Transform,  # 110
+        om.MFn.kJoint: Transform,  # 121
+        om.MFn.kConstraint: Transform,  # 928
+        om.MFn.kParentConstraint: Transform,  # 242
+        om.MFn.kPointConstraint: Transform,  # 240
+        om.MFn.kOrientConstraint: Transform,  # 239
+        om.MFn.kScaleConstraint: Transform,  # 244
+        om.MFn.kAimConstraint: Transform,  # 111
+        om.MFn.kShape: Shape,  # 248
+        om.MFn.kCluster: Shape,  # 251
+        om.MFn.kMesh: Mesh,  # 296
+        om.MFn.kNurbsCurve: NurbsCurve,  # 267
+        om.MFn.kNurbsSurface: NurbsSurface,  # 294
+        om.MFn.kLattice: Lattice,  # 279
+        om.MFn.kLocator: Shape,  # 281
+        om.MFn.kGeometryFilt: GeometryFilter,  # 334
+        om.MFn.kWeightGeometryFilt: WeightGeometryFilter,  # 346
+        om.MFn.kClusterFilter: Cluster,  # 347
+        om.MFn.kSkinClusterFilter: SkinCluster,  # 682
+        om.MFn.kBlendShape: BlendShape,  # 336
+        om.MFn.kCamera: Shape,  # 250
+    }
+    # Some of the most commonly used DependNode classes for faster assigned class lookup
+    supported_dependNodes = {
+        om.MFn.kMatrixMult,  # 393
+        om.MFn.kDecomposeMatrix,  # 1131
+        om.MFn.kComposeMatrix,  # 1132
+        om.MFn.kControllerTag,  # 1124
+        om.MFn.kMultDoubleLinear,  # 770
+        om.MFn.kUnitConversion,  # 526
+        om.MFn.kPickMatrix,  # 1134
+        om.MFn.kPlusMinusAverage,  # 458
+        om.MFn.kBlendColors,  # 31
+        om.MFn.kChoice,  # 36
+        om.MFn.kCondition,  # 37
+        om.MFn.kRemapValue,  # 933
+        om.MFn.kReverse,  # 465
+        om.MFn.kAddDoubleLinear,  # 5
+        om.MFn.kMultiplyDivide,  # 445
+        om.MFn.kDistanceBetween,  # 322
+        om.MFn.kPluginDependNode,  # 456
+    }
+    for i in supported_dependNodes:
+        classes_MFn[i] = DependNode
 
+    # dict of maya nodeType to assigned yam class
+    classes_str = {
+        'dagNode': DagNode,
+        'transform': Transform,
+        'joint': Transform,
+        'constraint': Transform,
+        'parentConstraint': Transform,
+        'pointConstraint': Transform,
+        'orientConstraint': Transform,
+        'scaleConstraint': Transform,
+        'aimConstraint': Transform,
+        'shape': Shape,
+        'controlPoint': ControlPoint,
+        'mesh': Mesh,
+        'nurbsCurve': NurbsCurve,
+        'nurbsSurface': NurbsSurface,
+        'lattice': Lattice,
+        'locator': Shape,
+        'camera': Shape,
+        'geometryFilter': GeometryFilter,
+        'weightGeometryFilter': WeightGeometryFilter,
+        'cluster': Cluster,
+        'skinCluster': SkinCluster,
+        'blendShape': BlendShape,
+    }
+    # Some of the most commonly used DependNode classes for faster assigned class lookup
+    dependNodes_str = {
+        'multMatrix',
+        'decomposeMatrix',
+        'composeMatrix',
+        'controller',
+        'multDoubleLinear',
+        'unitConversion',
+        'pickMatrix',
+        'plusMinusAverage',
+        'blendColors',
+        'choice',
+        'condition',
+        'remapValue',
+        'reverse',
+        'addDoubleLinear',
+        'multiplyDivide',
+        'distanceBetween',
+    }
+    for i in dependNodes_str:
+        classes_str[i] = DependNode
 
-# dict of MFn id to assigned yam class
-supported_classes_MFn = {
-    om.MFn.kDagNode: DagNode,
-    om.MFn.kTransform: Transform,
-    om.MFn.kJoint: Joint,
-    om.MFn.kConstraint: Constraint,
-    om.MFn.kParentConstraint: Constraint,
-    om.MFn.kPointConstraint: Constraint,
-    om.MFn.kOrientConstraint: Constraint,
-    om.MFn.kScaleConstraint: Constraint,
-    om.MFn.kAimConstraint: Constraint,
-    om.MFn.kShape: Shape,
-    om.MFn.kMesh: Mesh,
-    om.MFn.kNurbsCurve: NurbsCurve,
-    om.MFn.kNurbsSurface: NurbsSurface,
-    om.MFn.kLatticeComponent: Lattice,
-    om.MFn.kLocator: Locator,
-    om.MFn.kGeometryFilt: GeometryFilter,
-    om.MFn.kWeightGeometryFilt: WeightGeometryFilter,
-    om.MFn.kCluster: Cluster,
-    om.MFn.kSkinClusterFilter: SkinCluster,
-    om.MFn.kBlendShape: BlendShape,
-    om.MFn.kCamera: Camera,
-}
-# Some of the most commonly used DependNode classes for faster assigned class lookup
-supported_dependNodes = {om.MFn.kMatrixMult,
-                         om.MFn.kDecomposeMatrix,
-                         om.MFn.kComposeMatrix,
-                         om.MFn.kControllerTag,
-                         om.MFn.kMultDoubleLinear,
-                         om.MFn.kUnitConversion,
-                         om.MFn.kPickMatrix,
-                         om.MFn.kPlusMinusAverage,
-                         om.MFn.kBlendColors,
-                         om.MFn.kChoice,
-                         om.MFn.kCondition,
-                         om.MFn.kRemapValue,
-                         om.MFn.kReverse,
-                         om.MFn.kAddDoubleLinear,
-                         om.MFn.kMultiplyDivide,
-                         om.MFn.kDistanceBetween,
-                         }
-for i in supported_dependNodes:
-    supported_classes_MFn[i] = DependNode
+    # set of all assignable yam classes
+    all_classes = {DependNode} | set(classes_str.values())
+
+    # Warning in case a new class was added to the classes_MFn dict and not the classes_str dict
+    diff = set(classes_MFn.values()) - all_classes
+    if diff:
+        cmds.warning("#" * 82)
+        cmds.warning("There is a node class in classes_MFn dict that is not listed in classes_str : '{}'")
+        cmds.warning("#" * 82)
 
 
 class YamList(list):
@@ -1553,3 +1604,26 @@ class YamList(list):
 
     def copy(self):
         return YamList(self, no_init_check=True)
+
+
+class Yum(object):
+    """
+    Lazy way to initialize an existing Yam node.
+
+    Saves 3 characters by not having to type yam('nodeName') and the hassle of having to reach ( and ' which are very
+    far on the keyboard and need the shift modifier.
+    This expects that Yum was initialized at import and stored in variable yum
+
+    Initialize it on a variable (usually already done at import of yama module), e.g. :
+    yum = Yum()
+    And get node :
+    yum.nodeName
+    """
+    def __init__(self):
+        super(Yum, self).__init__()
+
+    def __getattr__(self, item):
+        return yam(item)
+
+
+yum = Yum()
