@@ -155,8 +155,20 @@ def getCenter(objs):
     return [x, y, z]
 
 
-def snapAlongCurve(objs, curve, inverse=True):
-    objs = nodes.yams(objs)
+def snapAlongCurve(objs=None, curve=None, inverse=False):
+    """
+    Snap a list of given objects along a given curve.
+    If no objects or curve are not given : works on current selection with last selected being the curve.
+    :param objs: list, A list of objects to be snapped along the curve.
+    :param curve: nodes.NurbsCurve, A nurbs curve object along which the objects will be snapped.
+    :param inverse: bool, If set to True, the objects will be snapped in reverse order. Default is True.
+    """
+    if not objs or not curve:
+        cmds.warning("No objs or curve given : working with current selection.")
+        objs = nodes.selected()
+        curve = objs.pop(-1)
+    else:
+        objs = nodes.yams(objs)
     if inverse:
         objs = objs[::-1]
     curve = nodes.yam(curve)
@@ -168,9 +180,9 @@ def snapAlongCurve(objs, curve, inverse=True):
                                "not '{}'".format(curve, type(curve).__name__))
 
     num_objs = len(objs)
-    param_length = curve.mFnNurbsCurve.findParamFromLength(curve.arclen())
+    param_length = curve.MFn.findParamFromLength(curve.arclen())
     step = param_length / (num_objs - 1)
     for i, obj in enumerate(objs):
         param = step * i
-        point = curve.mFnNurbsCurve.getPointAtParam(param, om.MSpace.kWorld)
+        point = curve.MFn.getPointAtParam(param, om.MSpace.kWorld)
         obj.setPosition([point.x, point.y, point.z], ws=True)
