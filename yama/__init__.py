@@ -6,3 +6,5 @@ __credits__ = {'emotionalSupport': "Emilie Jolin", 'spellchecking': "Pranil Naic
 
 
 from .nodes import gmo, yam, yams, createNode, ls, selected, select, YamList, spaceLocator
+
+yum = nodes.Yum()
