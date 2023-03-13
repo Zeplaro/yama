@@ -58,7 +58,7 @@ def getComponent(node, attr):
     indices = []
     for index in split:
         index = index[:-1]  # Removing the closing ']'
-        if index == '*':  # if using the maya wildcard symbol
+        if index in ['*', ':']:  # if using the maya wildcard symbols
             indices.append(slice(None))
         elif ':' in index:  # if using a slice to list multiple components
             slice_args = [int(x) if x else None for x in
@@ -162,8 +162,6 @@ class MeshVertices(SingleIndexed):
     """
     def __init__(self, *args, **kwargs):
         super(MeshVertices, self).__init__(*args, **kwargs)
-        if not config.undoable:
-            self.setPositions = self.setPositionsOM
 
     def getPositions(self, ws=False):
         if ws:
@@ -171,6 +169,12 @@ class MeshVertices(SingleIndexed):
         else:
             space = om.MSpace.kObject
         return [[p.x, p.y, p.z] for p in self.node.MFn.getPoints(space)]
+
+    def setPositions(self, values, ws=False):
+        if not config.undoable:
+            self.setPositionsOM(values, ws)
+        else:
+            super(MeshVertices, self).setPositions(values, ws)
 
     def setPositionsOM(self, values, ws=False):
         if ws:
@@ -187,8 +191,6 @@ class CurveCVs(SingleIndexed):
     """
     def __init__(self, *args, **kwargs):
         super(CurveCVs, self).__init__(*args, **kwargs)
-        if not config.undoable:
-            self.setPositions = self.setPositionsOM
 
     def getPositions(self, ws=False):
         if ws:
@@ -197,7 +199,14 @@ class CurveCVs(SingleIndexed):
             space = om.MSpace.kObject
         return [[p.x, p.y, p.z] for p in self.node.MFn.cvPositions(space)]
 
+    def setPositions(self, values, ws=False):
+        if not config.undoable:
+            self.setPositionsOM(values, ws)
+        else:
+            super(CurveCVs, self).setPositions(values, ws)
+
     def setPositionsOM(self, values, ws=False):
+        # TODO: doesn't work ? Does but has a refresh issue ?
         if ws:
             space = om.MSpace.kWorld
         else:
@@ -250,8 +259,8 @@ class Component(nodes.Yam):
 
     @property
     def isAYamComponent(self):
-        """Used to check if an object is an instance of Component with the faster hasattr instead of slower
-        isinstance."""
+        """Used to check if an object is an instance of Component using the faster hasattr method instead of the slower
+        isinstance method."""
         return True
 
     def __str__(self):
@@ -331,8 +340,6 @@ class Component(nodes.Yam):
 class MeshVertex(Component):
     def __init__(self, *args, **kwargs):
         super(MeshVertex, self).__init__(*args, **kwargs)
-        if not config.undoable:
-            self.setPosition = self.setPositionOM
 
     def getPosition(self, ws=False):
         if ws:
@@ -341,6 +348,12 @@ class MeshVertex(Component):
             space = om.MSpace.kObject
         p = self.node.MFn.getPoint(self.index, space)
         return [p.x, p.y, p.z]
+
+    def setPosition(self, values, ws=False):
+        if not config.undoable:
+            self.setPositionOM(values, ws)
+        else:
+            super(MeshVertex, self).setPosition(values, ws)
 
     def setPositionOM(self, value, ws=False):
         if ws:
@@ -354,8 +367,6 @@ class MeshVertex(Component):
 class CurveCV(Component):
     def __init__(self, *args, **kwargs):
         super(CurveCV, self).__init__(*args, **kwargs)
-        if not config.undoable:
-            self.setPosition = self.setPositionOM
 
     def getPosition(self, ws=False):
         if ws:
@@ -364,6 +375,12 @@ class CurveCV(Component):
             space = om.MSpace.kObject
         p = self.node.MFn.cvPosition(self.index, space)
         return [p.x, p.y, p.z]
+
+    def setPosition(self, value, ws=False):
+        if not config.undoable:
+            self.setPositionOM(value, ws)
+        else:
+            super(CurveCV, self).setPosition(value, ws)
 
     def setPositionOM(self, value, ws=False):
         if ws:
