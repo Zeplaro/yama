@@ -82,7 +82,7 @@ def mxConstraint(master=None, slave=None):
     cmds.delete(master_tmp.name, slave_tmp.name)
 
 
-def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
+def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False, raiseErrors=True):
     """
     Resets the objs translate, rotate, scale, visibility and/or user defined attributes to their default values.
     :param objs: list of objects to reset the attributes on. If None then the selected objects are reset.
@@ -122,7 +122,12 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
             for attr in attrs:
                 if not attr.isSettable():
                     continue
-                attr.value = attr.defaultValue
+                try:
+                    attr.value = attr.defaultValue
+                except Exception as e:
+                    if raiseErrors:
+                        raise e
+                    cmds.warning("Failed to set defaultValue on {} : {}".format(attr, e))
 
 
 def insertGroup(obj, suffix='GRP'):
@@ -151,6 +156,15 @@ def insertGroups(objs=None, suffix='GRP'):
 
 
 def wrapMesh(objs=None, ws=True):
+    """
+    Wraps the meshes of all but the first object to the first object's mesh.
+
+    If no objects are passed, the function takes the selected objects. If no 'transform' or 'mesh' is selected, a
+    'RuntimeError' will be raised.
+
+    :param objs: (list of nodes) List of objects to be wrapped. Default is None.
+    :param ws: (bool) If True, the matching is done in world space. Otherwise, the matching is done in object space.
+    """
     if not objs:
         objs = nodes.selected(type=['transform', 'mesh'])
         if not objs:
@@ -195,12 +209,11 @@ def matrixRowToMaya(matrix):
 
 
 @decorators.keepsel
-def getSymmetryTable(obj=None, axis='x'):
+def getSymmetryTable(obj=None):
     """
     Returns a SymTable object containing the symmetry table of the given object.
-    :param obj: the object to get the symmetry table from
-    :param axis: the axis to use for the symmetry table
-    :return: a SymTable object
+    :param obj: the object to get the symmetry table from.
+    :return: SymTable object
     """
 
     def selected():
@@ -210,9 +223,12 @@ def getSymmetryTable(obj=None, axis='x'):
         return int(vtx.split('[')[-1][:-1])
 
     if not obj:
-        obj = selected()[0]
+        obj = selected()
+        if not obj:
+            raise RuntimeError("No mesh given")
+        obj = obj[0]
     cmds.select(str(obj))
-    table = SymTable(axis=axis)
+    table = SymTable()
     cmds.select(sys=1)
     r_vtxs = selected()
     for r_vtx in r_vtxs:
@@ -241,39 +257,29 @@ class SymTable(dict):
     being the right vertices index.
     """
 
-    def __init__(self, axis='x'):
-        assert axis in ('x', 'y', 'z')
-        super(SymTable, self).__init__()
-        self.axis = axis
-        self.axis_mult = [1, 1, 1]
-        self.axis_mult['xyz'.index(axis)] *= -1
+    def __init__(self, *args):
+        super(SymTable, self).__init__(*args)
+        self.axis_mult = [-1, 1, 1]
         self.mids = []
 
     def __repr__(self):
-        return "<{}>".format(self)
-
-    def __str__(self):
-        str_ = ''
-        for key, value in self.items():
-            str_ += '{}: {}, '.format(key, value)
-        return "SymTable({})".format('{' + str_[:-2] + '}')
+        return "SymTable({})".format(super(SymTable, self).__repr__())
 
     def __invert__(self):
         """
         Retuns a flipped symmetry table.
         :return: the flipped symmetry table object
         """
-        inv = SymTable(axis=self.axis)
-        for key, value in self.items():
-            inv[value] = key
-        return inv
+        return SymTable({value: key for key, value in self.items()})
 
     def invert(self):
         """
         Flips the symmetry table.
         """
-        for key, value in self.items():
-            self[value] = key
+        inv = ~self
+        self.clear()
+        for key, value in inv.items():
+            self[key] = value
 
 
 def mirrorPos(obj, table):
@@ -345,3 +351,42 @@ def sortOutliner(objs=None, key=str):
         i.parent = grp
         i.parent = parent
     cmds.delete(grp.name)
+
+
+def getActiveCamera():
+    return nodes.yam(cmds.modelEditor(cmds.getPanel(withFocus=True), q=True, activeView=True, camera=True)).shape
+
+
+def unlockTRSV(objs=None, unlock=True, breakConnections=True, keyable=True, t=True, r=True, s=True, v=True):
+    if not objs:
+        objs = nodes.selected()
+    else:
+        objs = nodes.yams(objs)
+
+    trs = ''
+    trs += 't' if t else ''
+    trs += 'r' if r else ''
+    trs += 's' if s else ''
+
+    for obj in objs:
+        for attr in trs:
+            if unlock:
+                obj.attr(attr).locked = False
+            if keyable:
+                obj.attr(attr).keyable = True
+            if breakConnections:
+                obj.attr(attr).breakConnections()
+            for xyz in 'xyz':
+                if unlock:
+                    obj.attr(attr + xyz).locked = False
+                if keyable:
+                    obj.attr(attr + xyz).keyable = True
+                if breakConnections:
+                    obj.attr(attr + xyz).breakConnections()
+        if v:
+            if unlock:
+                obj.v.locked = False
+            if keyable:
+                obj.v.keyable = True
+            if breakConnections:
+                obj.v.breakConnections()
