@@ -68,17 +68,21 @@ def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene',
                                            worldUpType='objectrotation', worldUpObject=world_null.name,
                                            worldUpVector=worldUpVector, mo=False))
         elif worldUpType == 'object':
-            cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector, worldUpType='object',
-                                           worldUpObject=worldUpObject, mo=False))
+            cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector,
+                                           worldUpType='object', worldUpObject=worldUpObject, mo=False))
+        elif worldUpType == 'objectrotation':
+            cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector,
+                                           worldUpType='objectrotation', worldUpObject=worldUpObject,
+                                           worldUpVector=worldUpVector, mo=False))
         else:
-            cmds.delet(nulls.names, world_null.name)
+            cmds.delete(nulls.names, world_null.name)
             raise NotImplementedError
 
     objs[-1].setXform(t=poses[-1], ro=objs[-2].getXform(ro=True, ws=True), ws=True)
     cmds.delete(world_null.name, nulls.names)
 
 
-def match(objs=None, t=True, r=True, s=False, ws=True):
+def match(objs=None, t=True, r=True, s=False, m=False, ws=True):
     """
     Match the position, rotation and scale of the first object to the following objects.
     :param objs: [str, ...] or None to get selected objects.
@@ -102,6 +106,8 @@ def match(objs=None, t=True, r=True, s=False, ws=True):
             rot = master.getXform(ro=True, ws=ws)
         if s:
             scale = master.getXform(s=True, ws=ws)
+    if m:
+        matrix = master.getXform(m=True, ws=ws)
 
     for slave in slaves:
         if isinstance(slave, nodes.Transform):
@@ -114,6 +120,8 @@ def match(objs=None, t=True, r=True, s=False, ws=True):
         elif isinstance(slave, components.Component):
             if t:
                 slave.setPosition(pos, ws=ws)
+        if m:
+            slave.setXform(m=matrix, ws=ws)
         else:
             print("Cannot match '{}' of type '{}'".format(slave, type(slave).__name__))
 
@@ -186,3 +194,30 @@ def snapAlongCurve(objs=None, curve=None, inverse=False):
         param = step * i
         point = curve.MFn.getPointAtParam(param, om.MSpace.kWorld)
         obj.setPosition([point.x, point.y, point.z], ws=True)
+
+
+def extractXYZ(neutral, pose, axis=('y', 'xz'), ws=False):
+    """
+    Extracts the vertex position difference between two shapes per each given axis or axis combination.
+    :param neutral: neutral shape.
+    :param pose: posed shape.
+    :param extract: the axis or combination of axis to extract from.
+    :return: dictionary containing list of vertex positions per extracted axis
+
+    TODO: Add support for other than world axis
+    """
+    neutral = nodes.yam(neutral)
+    pose = nodes.yam(pose)
+    n_pose = neutral.vtx.getPositions(ws=ws)
+    pose_pos = pose.vtx.getPositions(ws=ws)
+    data = {x: [] for x in axis}
+    for n_vtx_pos, p_vtx_pos in zip(n_pose, pose_pos):
+        for i in axis:
+            pos = []
+            for xyz, n_value, p_value in zip('xyz', n_vtx_pos, p_vtx_pos):
+                if xyz in i:
+                    pos.append(p_value)
+                else:
+                    pos.append(n_value)
+            data[i].append(pos)
+    return data
