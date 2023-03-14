@@ -18,6 +18,16 @@ def multList(list_a, list_b):
     return [x*y for x, y in zip(list_a, list_b)]
 
 
+def addList(list_a, list_b):
+    """
+    Zips 'list_a' items with 'list_b' items and adds them together.
+    :param list_a: list of digits
+    :param list_b: list of digits
+    :return: list of digits
+    """
+    return [x+y for x, y in zip(list_a, list_b)]
+
+
 def decimalToAlphabetical(index):
     """
     Converts int to an alphabetical index.
