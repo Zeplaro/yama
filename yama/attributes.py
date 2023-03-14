@@ -3,6 +3,7 @@
 """
 Contains all the class and functions for maya attributes.
 """
+import sys
 
 from maya import cmds
 import maya.api.OpenMaya as om
@@ -57,9 +58,12 @@ class Attribute(nodes.Yam):
         :param attr (OpenMaya.MPlug):
         """
         super(Attribute, self).__init__()
-        assert isinstance(MPlug, om.MPlug), ("MPlug arg should be of type OpenMaya.MPlug not : '{}'".format(MPlug.__class__.__name__))
+        assert isinstance(MPlug, om.MPlug), (
+            "MPlug arg should be of type OpenMaya.MPlug not : '{}'".format(MPlug.__class__.__name__))
+        assert not MPlug.isNull, ("Given MPlug is Null and does not containt a valid attribute.")
         if node:
-            assert isinstance(node, nodes.DependNode)
+            assert isinstance(node, nodes.DependNode), "Given node arg should be of type DependNode not : {}".format(
+                type(node).__name__)
             self.node = node
         else:
             self.node = nodes.yam(MPlug.node())
@@ -94,12 +98,16 @@ class Attribute(nodes.Yam):
             return nodes.YamList(self[i] for i in range(len(self))[item])
 
         try:
-            if item not in self._attributes:
-                MPlug = self.MPlug.selectAncestorLogicalIndex(item)
+            if not config.use_singleton or item not in self._attributes or self._attributes[item].MPlug.isNull:
+                MPlug = self.MPlug.elementByLogicalIndex(item)
                 self._attributes[item] = Attribute(MPlug, self.node)
             return self._attributes[item]
         except RuntimeError:
             raise TypeError("'{}' is not an array attribute and cannot use __getitem__".format(self))
+
+    if sys.version_info.major == 2:
+        def __getslice__(self, start, stop):
+            return nodes.YamList(self[i] for i in range(len(self))[start:stop])
 
     def __add__(self, other):
         """
@@ -158,8 +166,10 @@ class Attribute(nodes.Yam):
 
     def __iter__(self):
         if self.MPlug.isArray:
+            node = self.node
             for i in range(len(self)):
-                yield self.node.attr(self.MPlug.selectAncestorLogicalIndex(i))
+                MPlug = self.MPlug.elementByLogicalIndex(i)
+                yield Attribute(MPlug, node)
         else:
             raise TypeError("'{}' is not iterable".format(self))
 
@@ -207,21 +217,28 @@ class Attribute(nodes.Yam):
         :param attr: str
         :return: Attribute object
         """
-        if attr in self._attributes:
-            return self._attributes[attr]
-        elif self.MPlug.isArray:
+        if self.MPlug.isArray:  # If array attribute returns the attribute under the array index 0.
             return self[0].attr(attr)
-        elif not self._children_generated:
-            self._getChildren()
-            return self.attr(attr)
-        else:
-            MPlug = getMPlug(self.name + '.' + attr)
-            attribute = Attribute(MPlug, self.node)
-            if config.verbose:
-                cmds.warning("Attribute was not generated with _getChildren but still exists ? "
-                             r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
-            self._attributes[attr] = attribute
-            return self.attr(attr)
+
+        if config.use_singleton:
+            if attr in self._attributes:
+                if not self._attributes[attr].MPlug.isNull:  # Making sure the stored Plug is still valid.
+                    return self._attributes[attr]
+
+            elif not self._children_generated:
+                self._getChildren()  # Generates children attributes in stored attributes.
+                return self.attr(attr)
+
+            else:  # Using singleton and children are generated but attr still isn't in the stored attributes.
+                if config.verbose:
+                    cmds.warning("Attribute was not generated with _getChildren but still exists ? "
+                                 r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
+
+        # Regular MPlug getting if not using singelton or children attribute not generated.
+        MPlug = getMPlug(self.name + '.' + attr)
+        attribute = Attribute(MPlug, self.node)
+        self._attributes[attr] = attribute
+        return attribute
 
     def _getChildren(self):
         """
@@ -355,7 +372,10 @@ class Attribute(nodes.Yam):
 
     @property
     def source(self):
-        return Attribute(self.MPlug.source())
+        try:
+            return Attribute(self.MPlug.source())
+        except AssertionError:
+            raise RuntimeError("Attribute {} does not have a source connection".format(self))
 
     def destinationConnections(self, **kwargs):
         return self.listConnections(source=False, **kwargs)
@@ -490,7 +510,7 @@ class Attribute(nodes.Yam):
 
     @property
     def niceName(self):
-        return cmds.attributeQuery(self.attribute, node=self.node, niceName=True)
+        return cmds.attributeQuery(self.attribute, node=self.node.name, niceName=True)
 
     @niceName.setter
     def niceName(self, newName):
@@ -541,6 +561,7 @@ def getAttr(attr):
     :return: the value of the attribute.
     """
     MPlug = attr.MPlug
+    # if not MPlug.isArray:  # Getting full array is usually faster using cmds
     try:
         return getMPlugValue(MPlug)
     except Exception as e:
@@ -561,7 +582,7 @@ def setAttr(attr, value, **kwargs):
     :param value: the value to set on the attribute
     :param kwargs: passed onto cmds.setAttr
     """
-    if not config.undoable:
+    if not config.undoable:  # and not attr.MPlug.isArray:
         try:
             setMPlugValue(attr.MPlug, value)
             return
@@ -570,34 +591,38 @@ def setAttr(attr, value, **kwargs):
                 print("## failed to set MPlug value: {}".format(e))
 
     attr_type = attr.type()
-    if attr_type in ('double2', 'double3', 'float2', 'float3', 'long2', 'long3', 'short2'):
+    if attr_type in ['double2', 'double3', 'float2', 'float3', 'long2', 'long3', 'short2']:
         cmds.setAttr(attr.name, *value, type=attr_type)
     elif attr_type in ['matrix', 'string']:
         cmds.setAttr(attr.name, value, type=attr_type)
+    elif attr_type in ['TdataCompound', ]:
+        cmds.setAttr(attr.name + '[:]', *value, size=len(value))
     else:
         cmds.setAttr(attr.name, value, **kwargs)
 
 
 def getMPlugValue(MPlug):
+    if MPlug.isArray:
+        return [getMPlugValue(MPlug.elementByLogicalIndex(i)) for i in range(MPlug.numElements())]
     attribute = MPlug.attribute()
     attr_type = attribute.apiTypeStr
-    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
+    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute',):
         return MPlug.asDouble()
-    elif attr_type in ('kEnumAttribute', ):
+    elif attr_type in ('kEnumAttribute',):
         return MPlug.asInt()
-    elif attr_type in ('kDistance', ):
+    elif attr_type in ('kDistance',):
         return MPlug.asMDistance().asUnits(om.MDistance.uiUnit())
     elif attr_type in ('kAngle', 'kDoubleAngleAttribute'):
         return MPlug.asMAngle().asUnits(om.MAngle.uiUnit())
-    elif attr_type in ('kTypedAttribute', ):
+    elif attr_type in ('kTypedAttribute',):
         mfn = om.MFnTypedAttribute(attribute)
-        if mfn.attrType() in (om.MFnData.kMatrix, ):
+        if mfn.attrType() in (om.MFnData.kMatrix,):
             mfn = om.MFnMatrixData(MPlug.asMObject())
             return mfn.matrix()
         return MPlug.asString()
-    elif attr_type in ('kTimeAttribute', ):
+    elif attr_type in ('kTimeAttribute',):
         return MPlug.asMTime().asUnits(om.MTime.uiUnit())
-    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute', ):
+    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute',):
         data_handle = MPlug.asMDataHandle()
         if attr_type == 'kMatrixAttribute':
             return data_handle.asMatrix()
@@ -613,21 +638,23 @@ def getMPlugValue(MPlug):
 
 
 def setMPlugValue(MPlug, value):
+    if MPlug.isArray:
+        return [setMPlugValue(MPlug.elementByLogicalIndex(i), value) for i in range(MPlug.numElements())]
     attribute = MPlug.attribute()
     attr_type = attribute.apiTypeStr
-    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
+    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute',):
         MPlug.setDouble(value)
-    elif attr_type in ('kEnumAttribute', ):
+    elif attr_type in ('kEnumAttribute',):
         return MPlug.setInt(value)
-    elif attr_type in ('kDistance', ):
+    elif attr_type in ('kDistance',):
         MPlug.setMDistance(om.MDistance(value, om.MDistance.uiUnit()))
     elif attr_type in ('kAngle', 'kDoubleAngleAttribute'):
         MPlug.setMAngle(om.MAngle(value, om.MAngle.uiUnit()))
-    elif attr_type in ('kTypedAttribute', ):
+    elif attr_type in ('kTypedAttribute',):
         MPlug.setString(value)
-    elif attr_type in ('kTimeAttribute', ):
+    elif attr_type in ('kTimeAttribute',):
         MPlug.setMTime(om.MTime(value, om.MTime.uiUnit()))
-    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute', ):
+    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute',):
         data_handle = MPlug.asMDataHandle()
         if attr_type == 'kMatrixAttribute':
             data_handle.setMMatrix(value)
