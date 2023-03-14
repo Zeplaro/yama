@@ -6,9 +6,9 @@ import sys
 from . import io
 
 
-class WeightsList(list):
+class WeightList(list):
     def __init__(self, arg=None, force_clamp=True, min_value=0.0, max_value=1.0):
-        super(WeightsList, self).__init__()
+        super(WeightList, self).__init__()
         self.min_value = min_value
         self.max_value = max_value
         self.force_clamp = force_clamp
@@ -19,16 +19,16 @@ class WeightsList(list):
                 self.append(i)
 
     def __repr__(self):
-        return "WeightsList({})".format(super(WeightsList, self).__repr__())
+        return "WeightList({})".format(super(WeightList, self).__repr__())
 
     def __getitem__(self, item):
         if item.__class__ == slice:
-            return self.emptyCopy(super(WeightsList, self).__getitem__(item))
-        return super(WeightsList, self).__getitem__(item)
+            return self.emptyCopy(super(WeightList, self).__getitem__(item))
+        return super(WeightList, self).__getitem__(item)
 
     if sys.version_info.major == 2:
         def __getslice__(self, start, stop):
-            return self.emptyCopy(super(WeightsList, self).__getslice__(start, stop))
+            return self.emptyCopy(super(WeightList, self).__getslice__(start, stop))
 
     @classmethod
     def fromLengthValue(cls, length, value=0.0, force_clamp=True, min_value=0.0, max_value=1.0):
@@ -48,7 +48,7 @@ class WeightsList(list):
         if self.force_clamp:
             value = max(min(value, self.max_value), self.min_value)
 
-        super(WeightsList, self).__setitem__(key, value)
+        super(WeightList, self).__setitem__(key, value)
 
     def __add__(self, other):
         if isinstance(other, (int, float)):
@@ -103,7 +103,7 @@ class WeightsList(list):
     def __eq__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other)
-        return super(WeightsList, self).__eq__(other)
+        return super(WeightList, self).__eq__(other)
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -124,7 +124,7 @@ class WeightsList(list):
             raise ValueError("value must be float or string float; got : {}, {}".format(value, type(value).__name__))
         if self.force_clamp:
             value = min(max(value, self.min_value), self.max_value)
-        super(WeightsList, self).append(value)
+        super(WeightList, self).append(value)
 
     def extend(self, other):
         for i in other:
@@ -137,7 +137,7 @@ class WeightsList(list):
             raise ValueError("value must be float or string float; got : {}, {}".format(value, type(value).__name__))
         if self.force_clamp:
             value = min(max(value, self.min_value), self.max_value)
-        super(WeightsList, self).insert(index, value)
+        super(WeightList, self).insert(index, value)
 
     def clamp(self, min_value=None, max_value=None):
         if min_value is None:
@@ -165,16 +165,16 @@ class WeightsList(list):
         return data
 
     def emptyCopy(self, arg=None):
-        return WeightsList(arg, force_clamp=self.force_clamp, min_value=self.min_value, max_value=self.max_value)
+        return WeightList(arg, force_clamp=self.force_clamp, min_value=self.min_value, max_value=self.max_value)
 
     def copy(self):
         return self.emptyCopy(self)
 
 
 def normalizeWeights(weights, force_clamp=True, min_value=0.0, max_value=1.0):
-    # Checking that all given weights are WeightsList
-    weights = [WeightsList(weight, force_clamp=force_clamp, min_value=min_value, max_value=max_value)
-               if not isinstance(weight, WeightsList) else weight for weight in weights]
+    # Checking that all given weights are WeightList
+    weights = [WeightList(weight, force_clamp=force_clamp, min_value=min_value, max_value=max_value)
+               if not isinstance(weight, WeightList) else weight for weight in weights]
     new_weights = [weight.emptyCopy() for weight in weights]
     for values in zip(*weights):
         mult = 1.0
@@ -189,4 +189,4 @@ def normalizeWeights(weights, force_clamp=True, min_value=0.0, max_value=1.0):
 
 
 def clampWeights(weights, min_value=0.0, max_value=1.0):
-    return WeightsList(weights, force_clamp=True, min_value=min_value, max_value=max_value)
+    return WeightList(weights, force_clamp=True, min_value=min_value, max_value=max_value)

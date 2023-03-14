@@ -8,7 +8,7 @@ import sys
 from maya import cmds
 import maya.api.OpenMaya as om
 import maya.OpenMaya as om1
-from . import config, nodes, weightslist, checks
+from . import config, nodes, weightlist, checks
 
 
 def getAttribute(node, attr):
@@ -548,7 +548,7 @@ class BlendShapeTarget(Attribute):
         if not geometry:
             raise RuntimeError("Deformer is not connected to a geometry")
         weightsAttr = self.weightsAttr
-        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(geometry)))
+        return weightlist.WeightList(weightsAttr[x].value for x in range(len(geometry)))
 
     @weights.setter
     def weights(self, weights):

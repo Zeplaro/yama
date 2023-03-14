@@ -14,7 +14,7 @@ import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
 import maya.OpenMaya as om1
 
-from . import weightslist, config, checks
+from . import weightlist, config, checks
 
 
 def getMObject(node):  # type: (str) -> om.MObject
@@ -1015,7 +1015,7 @@ class WeightGeometryFilter(GeometryFilter):
         if not geometry:
             raise RuntimeError("Deformer is not connected to a geometry")
         weightsAttr = self.weightsAttr
-        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(geometry)))
+        return weightlist.WeightList(weightsAttr[x].value for x in range(len(geometry)))
 
     @weights.setter
     def weights(self, weights):
@@ -1111,7 +1111,7 @@ class SkinCluster(GeometryFilter):
     def getVertexWeight(self, index, influence_indexes=None):
         if influence_indexes is None:
             influence_indexes = self.getInfluenceIndexes()
-        weights = weightslist.WeightsList()
+        weights = weightlist.WeightList()
         weightsAttr = self.weightList[index].weights
         for i, jnt_index in enumerate(influence_indexes):
             weights.append(weightsAttr[jnt_index].value)
@@ -1130,13 +1130,13 @@ class SkinCluster(GeometryFilter):
         :param influence: int or Joint object
         :param geo: om.MDagPath of the deformed geometry
         :param components: om.MObject of the deformed components
-        :return: WeightsList
+        :return: WeightList
         """
         if hasattr(influence, 'isAYamNode') or isinstance(influence, string_types):
             influence = self.influences().index(influence)
         if not geo or not components:
             geo, components = self.getDeformerSetGeoAndComponents()
-        return weightslist.WeightsList(self.MFn.getWeights(geo, components, influence))
+        return weightlist.WeightList(self.MFn.getWeights(geo, components, influence))
 
     def setInfluenceWeights(self, influence, weights, geo=None, components=None):
         if not config.undoable:
@@ -1167,7 +1167,7 @@ class SkinCluster(GeometryFilter):
         weights_array, num_influences = self.MFn.getWeights(*self.getDeformerSetGeoAndComponents())
 
         for i in range(0, len(weights_array), num_influences):
-            weights.append(weightslist.WeightsList(weights_array[i:i + num_influences]))
+            weights.append(weightlist.WeightList(weights_array[i:i + num_influences]))
         return weights
 
     @weights.setter
@@ -1193,7 +1193,7 @@ class SkinCluster(GeometryFilter):
 
     @property
     def dqWeights(self):
-        return weightslist.WeightsList(self.MFn.getBlendWeights(*self.getDeformerSetGeoAndComponents()))
+        return weightlist.WeightList(self.MFn.getBlendWeights(*self.getDeformerSetGeoAndComponents()))
 
     @dqWeights.setter
     def dqWeights(self, data):
@@ -1270,7 +1270,7 @@ class SkinCluster(GeometryFilter):
         range_influence = range(len(data))
         new_data = []
         for vtx in range(num_vtx):
-            weights = weightslist.WeightsList()
+            weights = weightlist.WeightList()
             for inf in range_influence:
                 weights.append(data[inf][vtx])
             new_data.append(weights)
@@ -1282,7 +1282,7 @@ class SkinCluster(GeometryFilter):
         num_influence = len(data[0])
         new_data = []
         for inf in range(num_influence):
-            weights = weightslist.WeightsList()
+            weights = weightlist.WeightList()
             for vtx in range_vtx:
                 weights.append(data[vtx][inf])
             new_data.append(weights)

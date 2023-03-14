@@ -4,7 +4,7 @@ from six import string_types
 from copy import copy
 from maya import cmds, mel
 
-from . import nodes, decorators, components, config, weightslist
+from . import nodes, decorators, components, config, weightlist
 
 
 def getSkinCluster(obj, firstOnly=True):
@@ -209,14 +209,14 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
     destination_skn.envelope.value = 0
 
     source_weights = sourceDeformer.weights
-    source_skn.weights = [weightslist.WeightsList([weight]) for weight in source_weights]
+    source_skn.weights = [weightlist.WeightList([weight]) for weight in source_weights]
 
     cmds.copySkinWeights(sourceSkin=source_skn.name, destinationSkin=destination_skn.name, noMirror=True,
                          surfaceAssociation='closestPoint', influenceAssociation=('oneToOne', 'label', 'closestJoint'),
                          smooth=True, normalize=False)
 
     destination_skn_weights = destination_skn.weights
-    destinationDeformer.weights = weightslist.WeightsList([weight[0] for weight in destination_skn_weights])
+    destinationDeformer.weights = weightlist.WeightList([weight[0] for weight in destination_skn_weights])
 
     cmds.delete(source_skn.name, destination_skn.name)
     cmds.delete(source_jnt.name, destination_jnt.name)
