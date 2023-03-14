@@ -40,7 +40,7 @@ def getMObject(node):  # type: (str) -> om.MObject
 gmo = getMObject
 
 
-def yam(node):
+def yam(node):  # type: (Yam, str, om.MObject, om.MDagPath, om.MPlug) -> Yam
     """
     Handles all node class assignment to assign the proper class depending on the node type.
     Also works with passing a 'node.attribute'.
@@ -70,8 +70,6 @@ def yam(node):
         MObject = node.node()
 
     elif node.__class__ == om.MPlug:  # Not using isinstance() for efficiency
-        if node.isNull:
-            raise TypeError("Given MPlug does not contain a valid attribute : '{}'".format(node.info))
         from . import attributes
         return attributes.Attribute(MPlug=node)
 
@@ -85,7 +83,7 @@ def yam(node):
     return yam_node
 
 
-def yams(nodes):
+def yams(nodes):  # type: ([Yam, str, om.MObject, om.MDagPath, om.MPlug]) -> YamList
     """
     Returns each nodes or attributes initialized as their appropriate DependNode or Attribute. See 'yam' function.
     :param nodes: (list) list of str of existing nodes.
@@ -120,6 +118,11 @@ def spaceLocator(name='locator', pos=(0, 0, 0), rot=(0, 0, 0), parent=None, ws=F
     loc.parent = parent
     loc.setXform(t=pos, ro=rot, ws=ws)
     return loc
+
+
+def duplicate(objs, **kwargs):
+    """Wrapper for cmds.duplicate"""
+    return yams(cmds.duplicate(objs, **kwargs))
 
 
 def ls(*args, **kwargs):
@@ -353,9 +356,7 @@ class DependNode(Yam):
         :param attr: str
         :return: Attribute object
         """
-        if attr not in self._attributes:
-            self._attributes[attr] = self.attr(attr)
-        return self._attributes[attr]
+        return self.attr(attr)
 
     def __add__(self, other):
         """
@@ -451,7 +452,21 @@ class DependNode(Yam):
         :return: Attribute object
         """
         from . import attributes
-        return attributes.getAttribute(self, attr)
+        if config.use_singleton:
+            if attr in self._attributes and not self._attributes[attr].MPlug.isNull:
+                return self._attributes[attr]
+
+        attribute = attributes.getAttribute(self, attr)
+        self._attributes[attr] = attribute
+        return attribute
+
+    def addAttr(self, longName, **kwargs):
+        # Checks if 'attributeType' or 'at' is in kwargs and has a value
+        if not kwargs.get('at') and not kwargs.get('attributeType'):
+            raise RuntimeError("No attribute type given")
+
+        cmds.addAttr(self.name, longName=longName, **kwargs)
+        return self.attr(longName)
 
     def listRelatives(self, **kwargs):
         """
@@ -598,7 +613,7 @@ class DagNode(DependNode):
         """
         Returns the minimum string representation in case of other objects with same name.
         """
-        return self.MFn.partialPathName()
+        return self.MDagPath.partialPathName()
 
     @name.setter
     def name(self, value):
@@ -989,13 +1004,18 @@ class GeometryFilter(DependNode):
 
 
 class WeightGeometryFilter(GeometryFilter):
+    # TODO : update all inheriting classes to get weights or array attr values directly; Or not because not used array
+    #  plugs don't exist yet
     def __init__(self, MObject):
         super(WeightGeometryFilter, self).__init__(MObject)
 
     @property
     def weights(self):
+        geometry = self.geometry
+        if not geometry:
+            raise RuntimeError("Deformer is not connected to a geometry")
         weightsAttr = self.weightsAttr
-        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(self.geometry)))
+        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(geometry)))
 
     @weights.setter
     def weights(self, weights):
@@ -1006,7 +1026,7 @@ class WeightGeometryFilter(GeometryFilter):
     @property
     def weightsAttr(self):
         """
-        Gets an easy access to the standard deformer weight attribute
+        Gets easy access to the standard deformer weight attribute.
         :return: Attribute
         """
         return self.weightList[0].weights
@@ -1020,26 +1040,63 @@ class Cluster(WeightGeometryFilter):
         """
         Adds a 'root' node as parent of the cluster. The root can be moved around without the cluster having an
         influence on the deformed shape.
-        :return: the new root node of the cluster.
+        :return: the new root transform of the cluster.
         """
         handle_shape = self.handleShape
         if not handle_shape:
             raise RuntimeError('No clusterHandle found connected to ' + self.name)
 
-        root_grp = createNode('transform', name=self.shortName + '_clusterRoot')
-        cluster_grp = createNode('transform', name=self.shortName + '_cluster')
+        root_grp = createNode('transform', name=self.shortName + '_clusterRoot', parent=handle_shape.parent.parent)
+        cluster_grp = createNode('transform', name=self.shortName + '_cluster', parent=root_grp)
 
         cluster_grp.worldMatrix[0].connectTo(self.matrix, force=True)
         cluster_grp.matrix.connectTo(self.weightedMatrix, force=True)
-        root_grp.worldInverseMatrix[0].connectTo(self.bindPreMatrix, force=True)
-        root_grp.worldInverseMatrix[0].connectTo(self.preMatrix, force=True)
+        cluster_grp.parentInverseMatrix[0].connectTo(self.bindPreMatrix, force=True)
+        cluster_grp.parentMatrix[0].connectTo(self.preMatrix, force=True)
         self.clusterXforms.breakConnections()
-        cmds.delete(handle_shape)
+        cmds.delete(handle_shape.parent.name)
         return root_grp
 
     @property
     def handleShape(self):
-        return self.clusterXforms.sourceConnection(plugs=False)
+        return self.clusterXforms.source.node
+
+
+class SoftMod(WeightGeometryFilter):
+    def __init__(self, MObject):
+        super(SoftMod, self).__init__(MObject)
+
+    def convertToRoot(self):
+        """
+        Adds a 'root' node as parent of the softMod. The root can be moved around to change from where the softMod
+        starts its influence.
+        :return: the new root transform of the softMod.
+        """
+        handle_shape = self.handleShape
+        if not handle_shape:
+            raise RuntimeError('No softModHandle found connected to ' + self.name)
+
+        root_grp = createNode('transform', name=self.shortName + '_softModRoot', parent=handle_shape.parent.parent)
+        softMod_grp = createNode('transform', name=self.shortName + '_softMod', parent=root_grp)
+        falloffRadius = softMod_grp.addAttr('falloffRadius', attributeType='double', keyable=True, hasMinValue=True,
+                                            minValue=0.0, defaultValue=self.falloffRadius.value)
+        falloffRadius.connectTo(self.falloffRadius, force=True)
+
+        softMod_grp.matrix.connectTo(self.weightedMatrix, force=True)
+        softMod_grp.parentInverseMatrix[0].connectTo(self.bindPreMatrix, force=True)
+        softMod_grp.parentMatrix[0].connectTo(self.preMatrix, force=True)
+        softMod_grp.worldMatrix[0].connectTo(self.matrix, force=True)
+        dmx = createNode('decomposeMatrix', name=self.shortName + '_DMX')
+        softMod_grp.parentMatrix.connectTo(dmx.inputMatrix)
+        dmx.outputTranslate.connectTo(self.falloffCenter, force=True)
+
+        self.softModXforms.breakConnections()
+        cmds.delete(handle_shape.parent.name)
+        return root_grp
+
+    @property
+    def handleShape(self):
+        return self.softModXforms.source.node
 
 
 class SkinCluster(GeometryFilter):
@@ -1073,7 +1130,7 @@ class SkinCluster(GeometryFilter):
         :param influence: int or Joint object
         :param geo: om.MDagPath of the deformed geometry
         :param components: om.MObject of the deformed components
-        :return: WeightList
+        :return: WeightsList
         """
         if hasattr(influence, 'isAYamNode') or isinstance(influence, string_types):
             influence = self.influences().index(influence)
@@ -1163,7 +1220,6 @@ class SkinCluster(GeometryFilter):
         :param influence: DependNode
         :return: YamList of components
         """
-        import components
         if influence in self.influences():
             influence = influence.MDagPath
         else:
@@ -1283,9 +1339,16 @@ class BlendShape(WeightGeometryFilter):
         self._targets_names = {}
         self.getTargets()
 
+    def __getitem__(self, item):
+        # TODO: add support for string, shape name, getting
+        return self.getTarget(item)
+
     def getTargets(self):
         from . import attributes as attrs
-        targets = cmds.listAttr(self.name + '.weight[:]')
+        try:
+            targets = cmds.listAttr(self.name + '.weight[:]')
+        except ValueError:
+            targets = []
         self._targets = YamList()
         self._targets.no_check = True
         self._targets_names = {}
@@ -1296,12 +1359,21 @@ class BlendShape(WeightGeometryFilter):
         return self._targets
 
     def getTarget(self, target):
-        if isinstance(target, int):
-            return self._targets[target]
-        elif isinstance(target, string_types):
-            return self._targets_names[target]
-        else:
-            raise KeyError(target)
+        try:
+            if isinstance(target, int):
+                return self._targets[target]
+            elif isinstance(target, string_types):
+                return self._targets_names[target]
+            else:
+                raise KeyError(target)
+        except IndexError:
+            self.getTargets()
+            if isinstance(target, int):
+                return self._targets[target]
+            elif isinstance(target, string_types):
+                return self._targets_names[target]
+            else:
+                raise KeyError(target)
 
     @property
     def weightsAttr(self):
@@ -1350,6 +1422,7 @@ class SupportedTypes(object):
                 (WeightGeometryFilter, om.MFn.kWeightGeometryFilt): {
                     (Cluster, om.MFn.kClusterFilter): {},
                     (BlendShape, om.MFn.kBlendShape): {},
+                    (SoftMod, om.MFn.kSoftModFilter): {},
                 },
                 (SkinCluster, om.MFn.kSkinClusterFilter): {},
             },
@@ -1380,6 +1453,7 @@ class SupportedTypes(object):
         om.MFn.kSkinClusterFilter: SkinCluster,  # 682
         om.MFn.kBlendShape: BlendShape,  # 336
         om.MFn.kCamera: Shape,  # 250
+        om.MFn.kSoftModFilter: SoftMod  # 348
     }
     # Some of the most commonly used DependNode classes for faster assigned class lookup
     supported_dependNodes = {
@@ -1428,6 +1502,7 @@ class SupportedTypes(object):
         'cluster': Cluster,
         'skinCluster': SkinCluster,
         'blendShape': BlendShape,
+        'softMod': SoftMod,
     }
     # Some of the most commonly used DependNode classes for faster assigned class lookup
     dependNodes_str = {
@@ -1478,7 +1553,7 @@ class YamList(list):
             self._check_all()
 
     def __repr__(self):
-        return "{}{}".format(self.__class__.__name__, list(self))
+        return "{}({})".format(self.__class__.__name__, super(YamList, self).__repr__())
 
     def __str__(self):
         return "{}{}".format(self.__class__.__name__, self.names)
@@ -1570,18 +1645,24 @@ class YamList(list):
             return [getattr(x, attr)() for x in self]
         return [getattr(x, attr) for x in self]
 
-    def keepType(self, node_type):
+    def keepType(self, nodeType):
         """
         Remove all nodes that are not of the given type.
         :param node_type: str or list, e.g.: 'joint' or ['blendShape', 'skinCluster']
         """
-        if isinstance(node_type, string_types):
-            node_type = [node_type]
+        if not isinstance(nodeType, (tuple, list)):
+            nodeType = [nodeType]
+        if not all(isinstance(x, string_types) or hasattr(x, 'isAYamObject') for x in nodeType):
+            raise TypeError("Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{}'".format(nodeType))
         for i, item in reversed(list(enumerate(self))):
             inherited_types = item.inheritedTypes()
-            for type_ in node_type:
-                if type_ not in inherited_types:
-                    self.pop(i)
+            for type_ in nodeType:
+                if hasattr(type_, 'isAYamObject'):
+                    if not isinstance(item, type_):
+                        self.pop(i)
+                else:
+                    if type_ not in inherited_types:
+                        self.pop(i)
 
     def popType(self, nodeType):
         """
@@ -1591,15 +1672,19 @@ class YamList(list):
         :return: YamList of the removed nodes
         """
         popped = YamList()
-        if isinstance(nodeType, string_types):
+        if not isinstance(nodeType, (tuple, list)):
             nodeType = [nodeType]
-        assert all(isinstance(x, string_types) for x in nodeType), "arg 'type' expected : 'str' or 'list(str, ...)' " \
-                                                                   "but was given '{}'".format(nodeType)
+        if not all(isinstance(x, string_types) or hasattr(x, 'isAYamObject') for x in nodeType):
+            raise TypeError("Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{}'".format(nodeType))
         for i, item in reversed(list(enumerate(self))):
             inherited_types = item.inheritedTypes()
             for type_ in nodeType:
-                if type_ in inherited_types:
-                    popped.append(self.pop(i))
+                if hasattr(type_, 'isAYamObject'):
+                    if not isinstance(item, type_):
+                        self.pop(i)
+                else:
+                    if type_ in inherited_types:
+                        popped.append(self.pop(i))
         return popped
 
     def copy(self):
