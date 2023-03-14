@@ -1,8 +1,10 @@
 # encoding: utf8
 
 from six import string_types
+from copy import copy
 from maya import cmds, mel
-from . import nodes, decorators
+
+from . import nodes, decorators, components, config, weightslist
 
 
 def getSkinCluster(obj, firstOnly=True):
@@ -57,19 +59,30 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
     master = nodes.yam(objs[0])
     slaves = mut.hierarchize(objs[1:], reverse=True)
 
+    free_slaves = []
     for slave in slaves:
-        shapes = []
-        for shape in slave.shapes(noIntermediate=False):
-            if shape.intermediateObject.value:
-                shapes.append(shape)
-        if shapes:
-            result = cmds.confirmDialog(title='Confirm', message='These slaves already have intermediate shapes on '
-                                                                 'them : {}\nDo you want to continue ?'.format(shapes),
-                                        button=['Yes', 'No'], defaultButton='Yes', cancelButton='No',
-                                        dismissString='No')
-            if result == 'No':
+        # Checking for already attached skin on slave
+        if getSkinCluster(slave):
+            if config.verbose:
+                cmds.warning(slave + ' already has a skinCluster attached')
+            continue
+        else:
+            free_slaves.append(slave)
+
+        # Checking for intermediate shapes on slave
+        intermediate_shapes = [shape for shape in slave.shapes(noIntermediate=False) if shape.intermediateObject.value]
+        if intermediate_shapes:
+            result = cmds.confirmDialog(title="Confirm",
+                                        message="These slaves already have intermediate shapes on them : {}\n"
+                                                "Do you want to continue ?".format(intermediate_shapes),
+                                        button=["Yes", "Cancel", "Delete them"], defaultButton="Yes",
+                                        cancelButton="Cancel", dismissString="Cancel")
+            if result == "Cancel":
                 cmds.warning("SkinAs operation cancelled")
                 return
+            elif result == "Delete them":
+                cmds.delete(intermediate_shapes)
+                return skinAs(objs, masterNamespace, slaveNamespace, useObjectNamespace)
 
     masterskn = getSkinCluster(master)
     if not masterskn:
@@ -98,12 +111,7 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
               'includeHiddenSelections': True,
               'toSelectedBones': True,
               }
-    for slave in slaves:
-
-        if getSkinCluster(slave):
-            print(slave + ' already has a skinCluster attached')
-            continue
-
+    for slave in free_slaves:
         if useObjectNamespace:  # getting slave influences namespace per slave
             slaveNamespace = ':'.join(slave.name.split(':')[:-1])
             if masterNamespace:
@@ -142,14 +150,14 @@ def mirrorWeights(weights, table):
     :param table: mirror table from mayautils.getSymmetryTable
     :return: dict of {'index': weight}
     """
-    mir_weights = weights.copy()
+    mir_weights = copy(weights)
     for l_cp in table:
         mir_weights[table[l_cp]] = weights[l_cp]
     return mir_weights
 
 
 def flipWeights(weights, table):
-    flip_weights = weights.copy()
+    flip_weights = copy(weights)
     for l_cp in table:
         flip_weights[l_cp] = weights[table[l_cp]]
         flip_weights[table[l_cp]] = weights[l_cp]
@@ -177,6 +185,7 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
     assert hasattr(destinationDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
                                                     "".format(destinationDeformer, type(destinationDeformer).__name__)
 
+    # Creating temp geos
     temp_source_geo, temp_dest_geo = nodes.yams(cmds.duplicate(sourceGeo.name, destinationGeo.name))
     temp_source_geo.name = 'temp_source_geo'
     temp_dest_geo.name = 'temp_dest_geo'
@@ -184,6 +193,7 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
     cmds.delete([x.name for x in temp_source_geo.shapes(noIntermediate=False) if x.intermediateObject.value])
     cmds.delete([x.name for x in temp_dest_geo.shapes(noIntermediate=False) if x.intermediateObject.value])
 
+    # Creating temp skinclusters to copy weights
     source_jnt = nodes.createNode('joint', name='temp_source_jnt')
     nodes.select(source_jnt, temp_source_geo)
     source_skn = nodes.yam(cmds.skinCluster(name='temp_source_skn', skinMethod=0, normalizeWeights=0,
@@ -199,14 +209,14 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
     destination_skn.envelope.value = 0
 
     source_weights = sourceDeformer.weights
-    source_skn.weights = {i: {0: source_weights[i]} for i in source_weights}
+    source_skn.weights = [weightslist.WeightsList([weight]) for weight in source_weights]
 
     cmds.copySkinWeights(sourceSkin=source_skn.name, destinationSkin=destination_skn.name, noMirror=True,
                          surfaceAssociation='closestPoint', influenceAssociation=('oneToOne', 'label', 'closestJoint'),
                          smooth=True, normalize=False)
 
     destination_skn_weights = destination_skn.weights
-    destinationDeformer.weights = {i: destination_skn_weights[i][0] for i in destination_skn_weights}
+    destinationDeformer.weights = weightslist.WeightsList([weight[0] for weight in destination_skn_weights])
 
     cmds.delete(source_skn.name, destination_skn.name)
     cmds.delete(source_jnt.name, destination_jnt.name)
@@ -218,11 +228,15 @@ def hammerShells(vertices=None, reverse=False):
     """
     Hammer weights on the selected or given vertices even if they're part of different shells or mesh.
     :param vertices: list of MeshVertex components. If None, uses selected vertices.
-    :param reverse: By default False, hammer weigths on the selected vertices. If True hammer weights on all other not
+    :param reverse: False by default, hammer weights on the selected vertices. If True hammer weights on all other not
                     selected vertices per shell.
     """
     if not vertices:
         vertices = nodes.selected()
+        vertices.keepType(components.Component)
+        if not vertices:
+            raise RuntimeError("No vertices given or selected")
+
     data = {}
     for vtx in vertices:
         node = vtx.node.name  # Uses name as dict key instead of node itself for performance.
