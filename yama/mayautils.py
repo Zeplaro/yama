@@ -91,6 +91,7 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False, raiseError
     :param s: if True resets the scale value to 1
     :param v: if True resets the visibility value to 1
     :param user: if True resets the user attributes values to their respective default values.
+    :param raiseErrors: If True, raises the encountered errors; skips them if False
     """
     if not objs:
         objs = nodes.selected(type='transform')

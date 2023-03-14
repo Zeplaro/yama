@@ -89,6 +89,7 @@ def match(objs=None, t=True, r=True, s=False, m=False, ws=True):
     :param t: bool, True to match translation.
     :param r: bool, True to match rotation.
     :param s: bool, True to match scale.
+    :param m: bool, True to match matrix.
     :param ws:  bool, True to match in world space.
     """
     if not objs:
@@ -201,7 +202,8 @@ def extractXYZ(neutral, pose, axis=('y', 'xz'), ws=False):
     Extracts the vertex position difference between two shapes per each given axis or axis combination.
     :param neutral: neutral shape.
     :param pose: posed shape.
-    :param extract: the axis or combination of axis to extract from.
+    :param axis: the axis or combination of axis to extract from.
+    :param ws: Space in which to query the positions.
     :return: dictionary containing list of vertex positions per extracted axis
 
     TODO: Add support for other than world axis

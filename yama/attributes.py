@@ -60,7 +60,7 @@ class Attribute(nodes.Yam):
         super(Attribute, self).__init__()
         assert isinstance(MPlug, om.MPlug), (
             "MPlug arg should be of type OpenMaya.MPlug not : '{}'".format(MPlug.__class__.__name__))
-        assert not MPlug.isNull, ("Given MPlug is Null and does not containt a valid attribute.")
+        assert not MPlug.isNull, "Given MPlug is Null and does not contain a valid attribute."
         if node:
             assert isinstance(node, nodes.DependNode), "Given node arg should be of type DependNode not : {}".format(
                 type(node).__name__)
@@ -205,8 +205,8 @@ class Attribute(nodes.Yam):
     def name(self):
         """
         The full node.attribute name.
-        Not using self.MPlug.name() because, unlike node.name, it does not returned the node's  minimum string
-        representation which will uniquely identify the path, in case the node has a non unique name.
+        Not using self.MPlug.name() because, unlike node.name, it does not return the node's  minimum string
+        representation which will uniquely identify the path, in case the node has a non-unique name.
         :return: str
         """
         return self.node.name + '.' + self.attribute
@@ -234,7 +234,7 @@ class Attribute(nodes.Yam):
                     cmds.warning("Attribute was not generated with _getChildren but still exists ? "
                                  r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
 
-        # Regular MPlug getting if not using singelton or children attribute not generated.
+        # Regular MPlug getting if not using singleton or children attribute not generated.
         MPlug = getMPlug(self.name + '.' + attr)
         attribute = Attribute(MPlug, self.node)
         self._attributes[attr] = attribute
@@ -345,7 +345,7 @@ class Attribute(nodes.Yam):
 
     def disconnect(self, attr):
         """
-        Disconnect the the connection between self (source) and attr (destination)
+        Disconnect the connection between self (source) and attr (destination)
         :param attr: str or Attribute
         """
         if isinstance(attr, Attribute):
@@ -356,7 +356,7 @@ class Attribute(nodes.Yam):
         """
         List the connections to this attribute via cmds.listConnections.
         By default, 'skipConversionNodes' and 'plugs' kwargs are set to True.
-        :param kwargs: kwards to pass on to cmds.listConnections
+        :param kwargs: kwargs to pass on to cmds.listConnections
         :return: YamList of Attribute or Yam node objects.
         """
         if 'scn' not in kwargs and 'skipConversionNodes' not in kwargs:
@@ -392,7 +392,7 @@ class Attribute(nodes.Yam):
     def listAttr(self, **kwargs):
         """
         List the attributes of this attribute via cmds.listAttr.
-        :param kwargs: kwards to pass on to cmds.listAttr.
+        :param kwargs: kwargs to pass on to cmds.listAttr.
         :return: YamList of Attribute objects.
         """
         return nodes.listAttr(self, **kwargs)
@@ -529,9 +529,9 @@ class Attribute(nodes.Yam):
         return self._hashCode
 
 
-class BlendshapeTarget(Attribute):
+class BlendShapeTarget(Attribute):
     def __init__(self, MPlug, node, index):
-        super(BlendshapeTarget, self).__init__(MPlug, node)
+        super(BlendShapeTarget, self).__init__(MPlug, node)
         self._index = index
 
     @property
@@ -544,8 +544,11 @@ class BlendshapeTarget(Attribute):
 
     @property
     def weights(self):
+        geometry = self.node.geometry
+        if not geometry:
+            raise RuntimeError("Deformer is not connected to a geometry")
         weightsAttr = self.weightsAttr
-        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(self.node.geometry)))
+        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(geometry)))
 
     @weights.setter
     def weights(self, weights):
@@ -557,7 +560,7 @@ class BlendshapeTarget(Attribute):
 def getAttr(attr):
     """
     Gets the attribute value.
-    :param attr: Attibute object
+    :param attr: Attribute object
     :return: the value of the attribute.
     """
     MPlug = attr.MPlug
@@ -663,6 +666,6 @@ def setMPlugValue(MPlug, value):
         MPlug.setMDataHandle(data_handle)
     elif MPlug.isCompound:
         for child_index in range(MPlug.numChildren()):
-            setMPlugValue(MPlug.child(child_index, value[child_index]))
+            setMPlugValue(MPlug.child(child_index), value[child_index])
     else:
         raise TypeError("Attribute '{}' of type '{}' not supported".format(MPlug.name(), attr_type))

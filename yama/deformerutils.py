@@ -167,7 +167,7 @@ def flipWeights(weights, table):
 @decorators.keepsel
 def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, destinationGeo=None):
     """
-    For two geometries with diffferent topologies, copies a given deformer weight to another given deformer.
+    For two geometries with different topologies, copies a given deformer weight to another given deformer.
     :param sourceDeformer: the deformer to copy the weights from, the given object needs to have a weights attribute
     :param destinationDeformer: the deformer to copy the weights on, the given object needs to have a weights attribute
     :param sourceGeo: the geo on which the sourceDeformer is applied; if None, the geo is taken from the sourceDeformer
@@ -193,7 +193,7 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
     cmds.delete([x.name for x in temp_source_geo.shapes(noIntermediate=False) if x.intermediateObject.value])
     cmds.delete([x.name for x in temp_dest_geo.shapes(noIntermediate=False) if x.intermediateObject.value])
 
-    # Creating temp skinclusters to copy weights
+    # Creating temp skinClusters to copy weights
     source_jnt = nodes.createNode('joint', name='temp_source_jnt')
     nodes.select(source_jnt, temp_source_geo)
     source_skn = nodes.yam(cmds.skinCluster(name='temp_source_skn', skinMethod=0, normalizeWeights=0,

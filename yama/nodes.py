@@ -85,7 +85,7 @@ def yam(node):  # type: (Yam, str, om.MObject, om.MDagPath, om.MPlug) -> Yam
 
 def yams(nodes):  # type: ([Yam, str, om.MObject, om.MDagPath, om.MPlug]) -> YamList
     """
-    Returns each nodes or attributes initialized as their appropriate DependNode or Attribute. See 'yam' function.
+    Returns each node or attributes initialized as their appropriate DependNode or Attribute. See 'yam' function.
     :param nodes: (list) list of str of existing nodes.
     :return: list of DependNode
     """
@@ -480,7 +480,7 @@ class DependNode(Yam):
     def listConnections(self, **kwargs):
         """
         Returns the maya cmds.listConnections as DependNode, Attribute or Component objects.
-        By default if not in kwargs, 'skipConversionNodes' is passed as True.
+        'skipConversionNodes' set to True by default if not in kwargs.
         :param kwargs: kwargs passed on to cmds.listConnections
         :return: list[Attribute, ...]
         """
@@ -1344,7 +1344,7 @@ class BlendShape(WeightGeometryFilter):
         return self.getTarget(item)
 
     def getTargets(self):
-        from . import attributes as attrs
+        from . import attributes
         try:
             targets = cmds.listAttr(self.name + '.weight[:]')
         except ValueError:
@@ -1353,7 +1353,7 @@ class BlendShape(WeightGeometryFilter):
         self._targets.no_check = True
         self._targets_names = {}
         for index, target in enumerate(targets):
-            bs_target = attrs.BlendshapeTarget(attrs.getMPlug(self.name + '.' + target), self, index)
+            bs_target = attributes.BlendShapeTarget(attributes.getMPlug(self.name + '.' + target), self, index)
             self._targets.append(bs_target)
             self._targets_names[target] = bs_target
         return self._targets
@@ -1668,7 +1668,7 @@ class YamList(list):
         """
         Removes all nodes of given type from current object and returns them in a new YamList.
         :param nodeType: str or list, e.g.: 'joint' or ['blendShape', 'skinCluster']
-        :param inherited: bool, if True keep nodes who's type is inheriting from given type.
+        :param inherited: bool, if True keep nodes whose type is inheriting from given type.
         :return: YamList of the removed nodes
         """
         popped = YamList()
