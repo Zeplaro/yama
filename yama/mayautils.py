@@ -2,7 +2,7 @@
 
 from maya import cmds, mel
 import maya.api.OpenMaya as om
-from . import nodes, xformutils, utils, decorators
+from . import nodes, xformutils, decorators
 
 
 def createHook(node, parent=None, suffix='hook'):
@@ -15,6 +15,8 @@ def createHook(node, parent=None, suffix='hook'):
     :return: the hook node
     """
     node = nodes.yam(node)
+    if not isinstance(node, nodes.Transform):
+        raise ValueError("Given node is not a transform")
     hook = nodes.createNode('transform', name='{}_{}'.format(node.shortName, suffix))
     mmx = nodes.createNode('multMatrix', n='mmx_{}_{}'.format(node.shortName, suffix))
     dmx = nodes.createNode('decomposeMatrix', n='dmx_{}_{}'.format(node.shortName, suffix))
@@ -96,7 +98,7 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False, raiseError
     if not objs:
         objs = nodes.selected(type='transform')
         if not objs:
-            raise RuntimeError("No object given and no 'transform' selected")
+            raise RuntimeError("No object given or transform selected")
     objs = nodes.yams(objs)
 
     tr = ''
@@ -281,65 +283,6 @@ class SymTable(dict):
         self.clear()
         for key, value in inv.items():
             self[key] = value
-
-
-def mirrorPos(obj, table):
-    for l_cp in table:
-        l_pos = obj.cp[l_cp].getPosition()
-        r_pos = utils.multList(l_pos, table.axis_mult)
-        obj.cp[table[l_cp]].setPosition(r_pos)
-
-    mid_mult = table.axis_mult[:]
-    mid_mult['xyz'.index(table.axis)] *= 0
-    for mid in table.mids:
-        pos = utils.multList(obj.cp[mid].getPosition(), mid_mult)
-        obj.cp[mid].setPosition(pos)
-
-
-def flipPos(obj, table, reverse_face_normal=True):
-    for l_cp in table:
-        l_pos = obj.cp[l_cp].getPosition()
-        r_pos = obj.cp[table[l_cp]].getPosition()
-
-        obj.cp[l_cp].setPosition(utils.multList(l_pos, table.axis_mult))
-        obj.cp[table[l_cp]].setPosition(utils.multList(r_pos, table.axis_mult))
-
-    for mid in table.mids:
-        pos = obj.cp[mid].getPosition()
-        pos = utils.multList(pos, table.axis_mult)
-        obj.cp[mid].setPosition(pos)
-
-    if reverse_face_normal:
-        cmds.polyNormal(obj.name, normalMode=3, constructionHistory=False)  # Flipping the face normals
-
-
-def snapAlongCurve(curve=None, objs=None):
-    """
-    Snaps given objs along given curve.
-    If no objs or no curve is given then selection is used, the curve needs to be first in selection.
-    :param curve: str, a nurbsCurve or transform containing a nurbsCurve
-    :param objs: list of transform objects
-    """
-    if not objs or not curve:
-        objs = nodes.selected()
-        if not objs:
-            raise RuntimeError("No object given and object selected")
-        if len(objs) < 2:
-            raise RuntimeError("Not enough object given or selected")
-        curve = objs.pop(0)
-
-    if isinstance(curve, nodes.Transform):
-        curve = curve.shape
-    assert isinstance(curve, nodes.NurbsCurve), "First object '{}' is not or doesn't contain a NurbsCurve".format(curve)
-
-    arclen = curve.arclen(ws=False)
-    step = arclen / (len(objs) - 1.0)
-    len_step = 0.0
-    for i, obj in enumerate(objs):
-        param = curve.MFn.findParamFromLength(len_step)
-        x, y, z, _ = curve.MFn.getPointAtParam(param, om.MSpace.kWorld)
-        obj.setPosition([x, y, z], ws=True)
-        len_step += step
 
 
 def sortOutliner(objs=None, key=str):
