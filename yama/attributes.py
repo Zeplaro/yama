@@ -58,18 +58,17 @@ class Attribute(nodes.Yam):
         :param attr (OpenMaya.MPlug):
         """
         super(Attribute, self).__init__()
-        assert isinstance(MPlug, om.MPlug), (
-            "MPlug arg should be of type OpenMaya.MPlug not : '{}'".format(MPlug.__class__.__name__))
-        assert not MPlug.isNull, "Given MPlug is Null and does not contain a valid attribute."
+        assert isinstance(MPlug, om.MPlug), "MPlug arg should be of type OpenMaya.MPlug not : '{}'".format(MPlug.__class__.__name__)
+        assert not MPlug.isNull, "Given MPlug is Null and does not containt a valid attribute."
         if node:
-            assert isinstance(node, nodes.DependNode), "Given node arg should be of type DependNode not : {}".format(
-                type(node).__name__)
+            assert isinstance(node, nodes.DependNode), "Given node arg should be of type DependNode not : {}".format(type(node).__name__)
             self.node = node
         else:
             self.node = nodes.yam(MPlug.node())
         self.MPlug = MPlug
         self._MPlug1 = None
-        self._attributes = {}
+        self._attributes = {}  # Dict of attribute children names and short names to MPlug
+        self._children = []  # List of all children Attributes
         self._children_generated = False
         self._hashCode = None
 
@@ -250,6 +249,8 @@ class Attribute(nodes.Yam):
         """
         if not self.MPlug.isCompound:
             raise AttributeError("'{}' is not an compound attribute and has no children attribute".format(self))
+        self._attributes = {}
+        self._children = []
         for index in range(self.MPlug.numChildren()):
             child = self.MPlug.child(index)
             attribute = Attribute(child, self.node)
@@ -257,6 +258,7 @@ class Attribute(nodes.Yam):
             short_name = child.partialName(includeInstancedIndices=True).split('.')[-1]
             self._attributes[name] = attribute
             self._attributes[short_name] = attribute
+            self._children.append(attribute)
         self._children_generated = True
 
     @property
@@ -528,10 +530,19 @@ class Attribute(nodes.Yam):
             self._hashCode = om.MObjecHandle(self.MPlug.attribute()).hashCode()
         return self._hashCode
 
+    def children(self):
+        if not self.MPlug.isCompound:
+            raise RuntimeError("'{}' is not an compound attribute and has no children attribute".format(self))
+        if self.MPlug.isArray:
+            return self[0].children()
+        if not self._children_generated or self.MPlug.numElements() != len(self._children):
+            self._getChildren()
+        return nodes.YamList(self._children)
 
-class BlendShapeTarget(Attribute):
+
+class BlendshapeTarget(Attribute):
     def __init__(self, MPlug, node, index):
-        super(BlendShapeTarget, self).__init__(MPlug, node)
+        super(BlendshapeTarget, self).__init__(MPlug, node)
         self._index = index
 
     @property
@@ -546,7 +557,7 @@ class BlendShapeTarget(Attribute):
     def weights(self):
         geometry = self.node.geometry
         if not geometry:
-            raise RuntimeError("Deformer is not connected to a geometry")
+            raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self.node))
         weightsAttr = self.weightsAttr
         return weightlist.WeightList(weightsAttr[x].value for x in range(len(geometry)))
 
@@ -599,7 +610,7 @@ def setAttr(attr, value, **kwargs):
     elif attr_type in ['matrix', 'string']:
         cmds.setAttr(attr.name, value, type=attr_type)
     elif attr_type in ['TdataCompound', ]:
-        cmds.setAttr(attr.name + '[:]', *value, size=len(value))
+        cmds.setAttr(attr.name+'[:]', *value, size=len(value))
     else:
         cmds.setAttr(attr.name, value, **kwargs)
 
@@ -609,23 +620,23 @@ def getMPlugValue(MPlug):
         return [getMPlugValue(MPlug.elementByLogicalIndex(i)) for i in range(MPlug.numElements())]
     attribute = MPlug.attribute()
     attr_type = attribute.apiTypeStr
-    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute',):
+    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
         return MPlug.asDouble()
-    elif attr_type in ('kEnumAttribute',):
+    elif attr_type in ('kEnumAttribute', ):
         return MPlug.asInt()
-    elif attr_type in ('kDistance',):
+    elif attr_type in ('kDistance', ):
         return MPlug.asMDistance().asUnits(om.MDistance.uiUnit())
     elif attr_type in ('kAngle', 'kDoubleAngleAttribute'):
         return MPlug.asMAngle().asUnits(om.MAngle.uiUnit())
-    elif attr_type in ('kTypedAttribute',):
+    elif attr_type in ('kTypedAttribute', ):
         mfn = om.MFnTypedAttribute(attribute)
-        if mfn.attrType() in (om.MFnData.kMatrix,):
+        if mfn.attrType() in (om.MFnData.kMatrix, ):
             mfn = om.MFnMatrixData(MPlug.asMObject())
             return mfn.matrix()
         return MPlug.asString()
-    elif attr_type in ('kTimeAttribute',):
+    elif attr_type in ('kTimeAttribute', ):
         return MPlug.asMTime().asUnits(om.MTime.uiUnit())
-    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute',):
+    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute', ):
         data_handle = MPlug.asMDataHandle()
         if attr_type == 'kMatrixAttribute':
             return data_handle.asMatrix()
@@ -645,19 +656,19 @@ def setMPlugValue(MPlug, value):
         return [setMPlugValue(MPlug.elementByLogicalIndex(i), value) for i in range(MPlug.numElements())]
     attribute = MPlug.attribute()
     attr_type = attribute.apiTypeStr
-    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute',):
+    if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
         MPlug.setDouble(value)
-    elif attr_type in ('kEnumAttribute',):
+    elif attr_type in ('kEnumAttribute', ):
         return MPlug.setInt(value)
-    elif attr_type in ('kDistance',):
+    elif attr_type in ('kDistance', ):
         MPlug.setMDistance(om.MDistance(value, om.MDistance.uiUnit()))
     elif attr_type in ('kAngle', 'kDoubleAngleAttribute'):
         MPlug.setMAngle(om.MAngle(value, om.MAngle.uiUnit()))
-    elif attr_type in ('kTypedAttribute',):
+    elif attr_type in ('kTypedAttribute', ):
         MPlug.setString(value)
-    elif attr_type in ('kTimeAttribute',):
+    elif attr_type in ('kTimeAttribute', ):
         MPlug.setMTime(om.MTime(value, om.MTime.uiUnit()))
-    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute',):
+    elif attr_type in ('kMatrixAttribute', 'kFloatMatrixAttribute', ):
         data_handle = MPlug.asMDataHandle()
         if attr_type == 'kMatrixAttribute':
             data_handle.setMMatrix(value)
@@ -666,6 +677,6 @@ def setMPlugValue(MPlug, value):
         MPlug.setMDataHandle(data_handle)
     elif MPlug.isCompound:
         for child_index in range(MPlug.numChildren()):
-            setMPlugValue(MPlug.child(child_index), value[child_index])
+            setMPlugValue(MPlug.child(child_index, value[child_index]))
     else:
         raise TypeError("Attribute '{}' of type '{}' not supported".format(MPlug.name(), attr_type))
