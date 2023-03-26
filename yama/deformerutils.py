@@ -209,14 +209,14 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
     destination_skn.envelope.value = 0
 
     source_weights = sourceDeformer.weights
-    source_skn.weights = [weightlist.WeightList([weight]) for weight in source_weights]
+    source_skn.weights = [[value] for value in source_weights]
 
     cmds.copySkinWeights(sourceSkin=source_skn.name, destinationSkin=destination_skn.name, noMirror=True,
                          surfaceAssociation='closestPoint', influenceAssociation=('oneToOne', 'label', 'closestJoint'),
                          smooth=True, normalize=False)
 
     destination_skn_weights = destination_skn.weights
-    destinationDeformer.weights = weightlist.WeightList([weight[0] for weight in destination_skn_weights])
+    destinationDeformer.weights = weightlist.WeightList([value[0] for value in destination_skn_weights])
 
     cmds.delete(source_skn.name, destination_skn.name)
     cmds.delete(source_jnt.name, destination_jnt.name)
@@ -274,6 +274,17 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
     influence_indexes = []
     all_influences = skinCluster.influences()
 
+    # Checks the target influence
+    target_influence = nodes.yam(target_influence)
+    if target_influence in all_influences:
+        target_index = skinCluster.indexForInfluenceObject(target_influence)
+    elif add_missing_target:
+        cmds.skinCluster(skinCluster.name, e=True, addInfluence=target_influence.name, lockWeights=True, weight=0.0)
+        target_index = skinCluster.indexForInfluenceObject(target_influence)
+    else:
+        cmds.warning("Target influence not found in skinCluster '{}': '{}'".format(skinCluster, target_influence))
+        return False
+
     # Checks the influences
     missing_influences = []
     for inf in influences:
@@ -287,17 +298,6 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
         return False
     if missing_influences:
         cmds.warning("Influences not found in skinCluster '{}': {}".format(skinCluster, missing_influences))
-
-    # Checks the target influence
-    target_influence = nodes.yam(target_influence)
-    if target_influence in all_influences:
-        target_index = skinCluster.indexForInfluenceObject(target_influence)
-    elif add_missing_target:
-        cmds.skinCluster(skinCluster.name, e=True, addInfluence=target_influence.name, lockWeights=True, weight=0.0)
-        target_index = skinCluster.indexForInfluenceObject(target_influence)
-    else:
-        cmds.warning("Target influence not found in skinCluster '{}': '{}'".format(skinCluster, target_influence))
-        return False
 
     for inf, index in influence_indexes:
         for vtx in skinCluster.getPointsAffectedByInfluence(inf):
