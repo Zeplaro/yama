@@ -301,10 +301,12 @@ class DependNode(Yam):
     Links the node to its maya api 2.0 MObject to access many of the faster api functions and classes (MFn), and also in
     case the node name changes.
 
-    All implemented maya api functions and variables are from api 2.0; for api 1.0 the functions and variables are
-    defined with a '1' suffix;
-    e.g.: >>> node.MObject  <-- gives a api 2.0 object
-    -     >>> node.MObject1 <-- gives a api 1.0 object
+    All implemented maya api functions and variables are from api 2.0; api 1.0 functions and variables that are
+    implemented, are defined with a '1' suffix.
+    e.g.:
+    >>> node = yam('pCube1')
+    >>> node.MObject   # <-- returns a api 2.0 object
+    >>> node.MObject1  # <-- returns a api 1.0 object
     """
 
     def __init__(self, MObject):
@@ -532,8 +534,8 @@ class DependNode(Yam):
     def inheritedTypes(self):
         """
         Lists the inherited maya types.
-        e.g.: for a joint -> ['']
-        :return:
+        e.g.: for a joint -> ['containerBase', 'entity', 'dagNode', 'transform', 'joint']
+        :return: list of inherited maya types
         """
         return cmds.nodeType(self.name, inherited=True)
 
@@ -570,7 +572,7 @@ class DagNode(DependNode):
         Gets the associated api 2.0 MDagPath
         :return: api 2.0 MDagPath
         """
-        if self._MDagPath is None:
+        if self._MDagPath is None or not self._MDagPath.isValid():
             self._MDagPath = om.MDagPath.getAPathTo(self.MObject)
         return self._MDagPath
 
@@ -811,7 +813,16 @@ class ControlPoint(Shape):
             return super(ControlPoint, self).attr(attr)
 
 
-class Mesh(ControlPoint):
+class SurfaceShape(ControlPoint):
+    """
+    Handles control point shapes that have a surface; e.g.: Mesh and NurbsSurface
+    Mainly used to check object isinstance.
+    """
+    def __init__(self, MObject):
+        super(SurfaceShape, self).__init__(MObject)
+
+
+class Mesh(SurfaceShape):
     def __init__(self, MObject):
         super(Mesh, self).__init__(MObject)
         self._MFnFnc = om.MFnMesh
@@ -912,7 +923,7 @@ class NurbsCurve(ControlPoint):
         return self.MFn.form
 
 
-class NurbsSurface(ControlPoint):
+class NurbsSurface(SurfaceShape):
     def __init__(self, MObject):
         super(NurbsSurface, self).__init__(MObject)
         self._MFnFnc = om.MFnNurbsSurface
@@ -1013,7 +1024,7 @@ class WeightGeometryFilter(GeometryFilter):
     def weights(self):
         geometry = self.geometry
         if not geometry:
-            raise RuntimeError("Deformer is not connected to a geometry")
+            raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self.node))
         weightsAttr = self.weightsAttr
         return weightlist.WeightList(weightsAttr[x].value for x in range(len(geometry)))
 
@@ -1394,6 +1405,83 @@ class BlendShape(WeightGeometryFilter):
             target.weights = data['targetWeights'][i]
 
 
+class UVPin(DependNode):
+    def __init__(self, MObject):
+        super(UVPin, self).__init__(MObject)
+
+    @staticmethod
+    def createUVPin(mesh, name=None):
+        mesh = yam(mesh)
+        if isinstance(mesh, Transform) and mesh.shape:
+            mesh = mesh.shape
+        assert isinstance(mesh, SurfaceShape), "Target object must be a surface shape"
+
+        if name is None:
+            name = '{}_UVP'.format(mesh)
+        pin = createNode('uvPin', name=name)
+        pin.geometry = mesh
+        return pin
+
+    @property
+    def geometry(self):
+        connection = self.deformedGeometry.sourceConnection()
+        if connection:
+            return connection.node
+
+    @geometry.setter
+    def geometry(self, geo):
+        geo = yam(geo)
+        if isinstance(geo, Transform):
+            geo = geo.shape
+        if not isinstance(geo, SurfaceShape):
+            raise ValueError("Geometry must be a SurfaceShape; got {} -> {}".format(geo, type(geo).__name__))
+
+        if isinstance(geo, Mesh):
+            out_attr = geo.worldMesh
+        elif isinstance(geo, NurbsSurface):
+            out_attr = geo.worldSpace
+        else:
+            raise NotImplementedError("Geometry '{}' of type '{}' not implemeted.".format(geo, type(geo).__name__))
+
+        out_attr.connectTo(self.deformedGeometry, force=True)
+
+    def connectTransform(self, target, coordinates, index=None):
+        target = yam(target)
+        assert isinstance(target, Transform), "Target must be a transform"
+        assert len(coordinates) == 2, "Invalid UV coordinates given"
+
+        if index is None:
+            index = len(self.coordinate)
+        self.coordinate[index].coordinateU.value = coordinates[0]
+        self.coordinate[index].coordinateV.value = coordinates[1]
+        mmx = createNode('multMatrix', name='{}_MMX'.format(self))
+        dmx = createNode('decomposeMatrix', name='{}_DMX'.format(self))
+        self.outputMatrix[index].connectTo(mmx.matrixIn[0])
+        target.parentInverseMatrix.connectTo(mmx.matrixIn[1])
+        mmx.matrixSum.connectTo(dmx.inputMatrix)
+        dmx.outputTranslate.connectTo(target.translate, force=True)
+        dmx.outputRotate.connectTo(target.rotate, force=True)
+        dmx.outputScale.connectTo(target.scale, force=True)
+        dmx.outputShear.connectTo(target.shear, force=True)
+
+    def attachToClosestPoint(self, target):
+        target = yam(target)
+        assert isinstance(target, Transform), "Given target is not a transform"
+        assert self.geometry, "No geometry connected to the uvPin"
+
+        geo = self.geometry
+        point = om.MPoint(target.getXform(t=True, ws=True))
+        if isinstance(geo, Mesh):
+            u, v, _ = geo.MFn.getUVAtPoint(point, space=om.MSpace.kWorld)
+        elif isinstance(geo, NurbsSurface):
+            point, _, _ = geo.MFn.closestPoint(point, space=om.MSpace.kObject)  # TODO : fails to do it world space
+            u, v = geo.MFn.getParamAtPoint(point, True)
+        else:
+            raise NotImplementedError("Geometry '{}' of type '{}' not implemeted.".format(geo, type(geo).__name__))
+        self.normalizedIsoParms.value = False
+        self.connectTransform(target, [u, v])
+
+
 class SupportedTypes(object):
     """
     Data of supported types of maya nodes.
@@ -1426,6 +1514,7 @@ class SupportedTypes(object):
                 },
                 (SkinCluster, om.MFn.kSkinClusterFilter): {},
             },
+            (UVPin, om.MFn.kUVPin): {},
         },
     }
 
@@ -1453,7 +1542,8 @@ class SupportedTypes(object):
         om.MFn.kSkinClusterFilter: SkinCluster,  # 682
         om.MFn.kBlendShape: BlendShape,  # 336
         om.MFn.kCamera: Shape,  # 250
-        om.MFn.kSoftModFilter: SoftMod  # 348
+        om.MFn.kSoftModFilter: SoftMod,  # 348
+        om.MFn.kUVPin: UVPin,  # 990; 986 in Maya 2020 ?! ¯\_(ツ)_/¯
     }
     # Some of the most commonly used DependNode classes for faster assigned class lookup
     supported_dependNodes = {
@@ -1503,6 +1593,7 @@ class SupportedTypes(object):
         'skinCluster': SkinCluster,
         'blendShape': BlendShape,
         'softMod': SoftMod,
+        'uvPin': UVPin,
     }
     # Some of the most commonly used DependNode classes for faster assigned class lookup
     dependNodes_str = {
@@ -1699,10 +1790,11 @@ class Yum(object):
     far on the keyboard and need the shift modifier.
     This expects that Yum was initialized at import and stored in variable yum
 
-    Initialize it on a variable (usually already done at import of yama module), e.g. :
-    yum = Yum()
+    Initialize it on a variable (usually already done at import of yama module)
+    e.g. :
+    >>> yum = Yum()
     And get node :
-    yum.nodeName
+    >>> yum.nodeName
     """
     def __init__(self):
         super(Yum, self).__init__()
