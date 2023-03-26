@@ -5,7 +5,7 @@ Contains all the class and functions for maya components.
 """
 # TODO : Improve getComponent func
 # TODO : fixed setPositionsOM on cvs ?
-
+import sys
 from abc import ABCMeta, abstractmethod
 from maya import cmds
 import maya.api.OpenMaya as om
@@ -90,10 +90,12 @@ class Components(nodes.Yam):
         if item == '*':
             item = slice(None)
         if isinstance(item, slice):
-            # Maya component slice includes the stop index, e.g.: mesh.vtx[2:12] <-- includes vertex #12
-            item = slice(item.start, item.stop+1, item.step)
             return ComponentsSlice(self.node, self, item)
         return self.index(item)
+
+    if sys.version_info.major == 2:
+        def __getslice__(self, start, stop):
+            return ComponentsSlice(self.node, self, slice(start, stop+1))
 
     def __len__(self):
         return len(self.node)
@@ -400,13 +402,40 @@ class ComponentsSlice(nodes.Yam):
         super(ComponentsSlice, self).__init__()
         self.node = node
         self.components = components
-        self.slice = components_slice
-        if components_slice.step is not None:
-            self._indices = tuple(range(components_slice.start, components_slice.stop, components_slice.step))
+        self._slice = components_slice
+
+    @property
+    def start(self):
+        return self._slice.start or 0
+
+    @property
+    def stop(self):
+        if self._slice.stop is None:
+            stop = len(self.components)
         else:
-            self._indices = tuple(range(components_slice.start, components_slice.stop))
+            if self._slice.stop < 0:
+                # If using negative number for stop, then using python behavior of stopping at len(components)-stop
+                stop = len(self.components) + self._slice.stop-1
+            else:
+                # Unlike Python, Maya slices includes the stop index, e.g.: mesh.vtx[2:12] <-- includes vertex #12
+                stop = self._slice.stop + 1
+        return stop
+
+    @property
+    def step(self):
+        return self._slice.step or 1
+
+    @property
+    def slice(self):
+        return slice(self.start, self.stop, self.step)
+
+    @property
+    def indices(self):
+        return tuple(range(self.start, self.stop, self.step))
 
     def __str__(self):
+        if self.step != 1:
+            return str(self.names)
         return self.name
 
     def __repr__(self):
@@ -416,37 +445,40 @@ class ComponentsSlice(nodes.Yam):
     def __getitem__(self, item):
         if isinstance(item, slice):
             raise RuntimeError("cannot slice a ComponentsSlice object")
-        return self.components.index(self._indices[item])
+        return self.components.index(self.indices[item])
 
     def __len__(self):
-        return len(self._indices)
+        return len(self.indices)
 
     def __iter__(self):
-        for i in self._indices:
+        for i in self.indices:
             yield self.components.index(i)
 
     def __eq__(self, other):
         if isinstance(other, ComponentsSlice):
-            return self._indices == other.indices
+            return self.indices == other.indices
         return False
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.hashCode, self.components.api_type, self._indices))
+        return hash((self.node.hashCode, self.components.api_type, self.indices))
 
     @property
     def name(self):
-        start_stop = [str(s) if s is not None else '' for s in (self.slice.start, self.slice.stop - 1)]
-        return self.node + '.' + self.components.component_name + '[' + ':'.join(start_stop) + ']'
+        if self.step != 1:
+            raise RuntimeError("ComponentSlice that including a step different than 1 can not be represented by a "
+                               "single Maya valid name. Use .names instead")
+        return '{}.{}[{}:{}]'.format(self.node, self.components.component_name, self.start, self.stop)
+
+    @property
+    def names(self):
+        return [cp.name for cp in self]
 
     @property
     def index(self):
         return self.slice
-
-    def indices(self):
-        return self._indices
 
     def type(self):
         return self.components.api_type
