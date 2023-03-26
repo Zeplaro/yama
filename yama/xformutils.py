@@ -4,7 +4,7 @@ from __future__ import division
 from maya import cmds
 import maya.api.OpenMaya as om
 
-from . import nodes, components, decorators
+from . import nodes, components, decorators, utils
 
 
 def align(objs=None, t=True, r=True):
@@ -164,37 +164,62 @@ def getCenter(objs):
     return [x, y, z]
 
 
-def snapAlongCurve(objs=None, curve=None, inverse=False):
+def snapAlongCurve(objs=None, curve=None, reverse=False):
     """
     Snap a list of given objects along a given curve.
     If no objects or curve are not given : works on current selection with last selected being the curve.
     :param objs: list, A list of objects to be snapped along the curve.
     :param curve: nodes.NurbsCurve, A nurbs curve object along which the objects will be snapped.
-    :param inverse: bool, If set to True, the objects will be snapped in reverse order. Default is True.
+    :param reverse: bool, If set to True, the objects will be snapped in reverse order. Default is False.
     """
     if not objs or not curve:
-        cmds.warning("No objs or curve given : working with current selection.")
         objs = nodes.selected()
-        curve = objs.pop(-1)
-    else:
-        objs = nodes.yams(objs)
-    if inverse:
-        objs = objs[::-1]
-    curve = nodes.yam(curve)
-    if not isinstance(curve, nodes.NurbsCurve):
-        if curve.shape:
-            curve = curve.shape
-        if not isinstance(curve, nodes.NurbsCurve):
-            raise RuntimeError("Curve '{}' must be of type or have a shape of type 'NurbsCurve' "
-                               "not '{}'".format(curve, type(curve).__name__))
+        if not objs:
+            raise RuntimeError("No object given and object selected")
+        if len(objs) < 2:
+            raise RuntimeError("Not enough object given or selected")
+        curve = objs.pop()
 
-    num_objs = len(objs)
-    param_length = curve.MFn.findParamFromLength(curve.arclen())
-    step = param_length / (num_objs - 1)
+    if isinstance(curve, nodes.Transform):
+        curve = curve.shape
+    assert isinstance(curve, nodes.NurbsCurve), "No NurbsCurve found under given curve".format(curve)
+
+    if reverse:
+        objs = objs[::-1]
+    step = curve.MFn.findParamFromLength(curve.arclen()) / (len(objs)-1.0)
     for i, obj in enumerate(objs):
-        param = step * i
-        point = curve.MFn.getPointAtParam(param, om.MSpace.kWorld)
-        obj.setPosition([point.x, point.y, point.z], ws=True)
+        x, y, z, _ = curve.MFn.getPointAtParam(step * i, om.MSpace.kWorld)
+        obj.setPosition([x, y, z], ws=True)
+
+
+def mirrorPos(obj, table):
+    for l_cp in table:
+        l_pos = obj.cp[l_cp].getPosition()
+        r_pos = utils.multList(l_pos, table.axis_mult)
+        obj.cp[table[l_cp]].setPosition(r_pos)
+
+    mid_mult = table.axis_mult[:]
+    mid_mult['xyz'.index(table.axis)] *= 0
+    for mid in table.mids:
+        pos = utils.multList(obj.cp[mid].getPosition(), mid_mult)
+        obj.cp[mid].setPosition(pos)
+
+
+def flipPos(obj, table, reverse_face_normal=True):
+    for l_cp in table:
+        l_pos = obj.cp[l_cp].getPosition()
+        r_pos = obj.cp[table[l_cp]].getPosition()
+
+        obj.cp[l_cp].setPosition(utils.multList(l_pos, table.axis_mult))
+        obj.cp[table[l_cp]].setPosition(utils.multList(r_pos, table.axis_mult))
+
+    for mid in table.mids:
+        pos = obj.cp[mid].getPosition()
+        pos = utils.multList(pos, table.axis_mult)
+        obj.cp[mid].setPosition(pos)
+
+    if reverse_face_normal:
+        cmds.polyNormal(obj.name, normalMode=3, constructionHistory=False)  # Flipping the face normals
 
 
 def extractXYZ(neutral, pose, axis=('y', 'xz'), ws=False):
