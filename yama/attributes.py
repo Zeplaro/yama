@@ -367,7 +367,7 @@ class Attribute(nodes.Yam):
             kwargs['plugs'] = True
         return nodes.yams(cmds.listConnections(self.name, **kwargs) or [])
 
-    def sourceConnection(self, **kwargs):
+    def input(self, **kwargs):
         connection = self.listConnections(destination=False, **kwargs)
         if connection:
             return connection[0]
@@ -379,7 +379,7 @@ class Attribute(nodes.Yam):
         except AssertionError:
             raise RuntimeError("Attribute {} does not have a source connection".format(self))
 
-    def destinationConnections(self, **kwargs):
+    def outputs(self, **kwargs):
         return self.listConnections(source=False, **kwargs)
 
     def breakConnections(self, source=True, destination=False):
@@ -390,6 +390,12 @@ class Attribute(nodes.Yam):
         if destination:
             for c in self.destinationConnections():
                 self.disconnect(c)
+
+    def breakInput(self):
+        self.breakConnections(source=True, destination=False)
+
+    def breakOutputs(self):
+        self.breakConnections(source=False, destination=True)
 
     def listAttr(self, **kwargs):
         """
@@ -540,9 +546,9 @@ class Attribute(nodes.Yam):
         return nodes.YamList(self._children)
 
 
-class BlendshapeTarget(Attribute):
+class BlendShapeTarget(Attribute):
     def __init__(self, MPlug, node, index):
-        super(BlendshapeTarget, self).__init__(MPlug, node)
+        super(BlendShapeTarget, self).__init__(MPlug, node)
         self._index = index
 
     @property
