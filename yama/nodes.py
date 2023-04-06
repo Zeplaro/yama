@@ -1520,6 +1520,7 @@ class SupportedTypes(object):
 
     # dict of MFn id to assigned yam class
     classes_MFn = {
+        om.MFn.kDependencyNode: DependNode,  # 4
         om.MFn.kDagNode: DagNode,  # 107
         om.MFn.kTransform: Transform,  # 110
         om.MFn.kJoint: Transform,  # 121
@@ -1531,6 +1532,7 @@ class SupportedTypes(object):
         om.MFn.kAimConstraint: Transform,  # 111
         om.MFn.kShape: Shape,  # 248
         om.MFn.kCluster: Shape,  # 251
+        om.MFn.kSurface: SurfaceShape,  # 293
         om.MFn.kMesh: Mesh,  # 296
         om.MFn.kNurbsCurve: NurbsCurve,  # 267
         om.MFn.kNurbsSurface: NurbsSurface,  # 294
@@ -1580,6 +1582,7 @@ class SupportedTypes(object):
         'scaleConstraint': Transform,
         'aimConstraint': Transform,
         'shape': Shape,
+        'surfaceShape': SurfaceShape,
         'controlPoint': ControlPoint,
         'mesh': Mesh,
         'nurbsCurve': NurbsCurve,
@@ -1624,7 +1627,7 @@ class SupportedTypes(object):
     diff = set(classes_MFn.values()) - all_classes
     if diff:
         cmds.warning("#" * 82)
-        cmds.warning("There is a node class in classes_MFn dict that is not listed in classes_str : '{}'")
+        cmds.warning("There is a node class in classes_MFn dict that is not listed in classes_str : '{}'".format(diff))
         cmds.warning("#" * 82)
 
 
