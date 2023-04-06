@@ -33,19 +33,7 @@ def createHook(node, parent=None, suffix='hook'):
 
 def hierarchize(objs, reverse=False):
     """Returns a list of objects ordered by their hierarchy in the scene"""
-    objs = {obj.longName: obj for obj in nodes.yams(objs)}
-    longnames = list(objs)
-    done = False
-    while not done:
-        done = True
-        for i in range(len(longnames) - 1):
-            if longnames[i].startswith(longnames[i + 1]):
-                longnames.insert(i, longnames.pop(i + 1))
-                done = False
-    ordered = nodes.YamList([objs[x] for x in longnames])
-    if reverse:
-        ordered.reverse()
-    return ordered
+    return nodes.YamList(sorted(objs, key=lambda x: x.longName, reverse=reverse))
 
 
 def mxConstraint(master=None, slave=None):
