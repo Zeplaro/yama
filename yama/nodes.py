@@ -145,12 +145,12 @@ def select(*args, **kwargs):
     for arg in args:
         if isinstance(arg, YamList):
             sel.append(arg.names)
-        elif hasattr(arg, 'isAYamNode'):
+        elif hasattr(arg, 'isAYamObject'):
             sel.append(str(arg))
         elif isinstance(arg, (list, tuple, dict, set)):
             new = []
             for arg_ in arg:
-                if hasattr(arg_, 'isAYamNode'):
+                if hasattr(arg_, 'isAYamObject'):
                     new.append(str(arg_))
                 else:
                     new.append(arg_)
@@ -170,6 +170,54 @@ def listAttr(obj, **kwargs):
     if not hasattr(obj, 'isAYamNode'):
         obj = yam(obj)
     return YamList(obj.attr(attr) for attr in cmds.listAttr(obj.name, **kwargs) or [])
+
+
+def constraint(*args, **kwargs):
+    if 'constraintType' in kwargs:
+        constraintType = kwargs['constraintType']
+        del kwargs['constraintType']
+    else:
+        raise RuntimeError("No constraintType given")
+
+    if constraintType == 'parentConstraint':
+        func = cmds.parentConstraint
+    elif constraintType == 'pointConstraint':
+        func = cmds.pointConstraint
+    elif constraintType == 'orientConstraint':
+        func = cmds.orientConstraint
+    elif constraintType == 'scaleConstraint':
+        func = cmds.scaleConstraint
+    elif constraintType == 'aimConstraint':
+        func = cmds.aimConstraint
+    else:
+        raise NotImplementedError("Given constraint type not implemented : {}".format(constraintType))
+
+    return yam(func(*args, **kwargs)[0])
+
+
+def parentConstraint(*args, **kwargs):
+    kwargs['constraintType'] = 'parentConstraint'
+    return constraint(*args, **kwargs)
+
+
+def pointConstraint(*args, **kwargs):
+    kwargs['constraintType'] = 'pointConstraint'
+    return constraint(*args, **kwargs)
+
+
+def orientConstraint(*args, **kwargs):
+    kwargs['constraintType'] = 'orientConstraint'
+    return constraint(*args, **kwargs)
+
+
+def scaleConstraint(*args, **kwargs):
+    kwargs['constraintType'] = 'scaleConstraint'
+    return constraint(*args, **kwargs)
+
+
+def aimConstraint(*args, **kwargs):
+    kwargs['constraintType'] = 'aimConstraint'
+    return constraint(*args, **kwargs)
 
 
 class Singleton(object):
@@ -214,6 +262,10 @@ class Singleton(object):
 
         Raises an error if no corresponding class was found, not even DependNode, meaning that
         MObject.hasFn(om.MFn.KDependencyNode) returned : False.
+
+        Has been found to be faster than getting a reversed om.MGlobal.getFunctionSetList(MObject) and returning the
+        first matched MFn from SupportedTypes.classes_MFn.
+
         :param MObject: A valid OpenMaya.MObject
         :return: assigned class
         """
@@ -764,6 +816,71 @@ class Transform(DagNode):
         pos, obj_pos = self.getPosition(ws=True), obj.getPosition(ws=True)
         dist = sqrt(pow(pos[0] - obj_pos[0], 2) + pow(pos[1] - obj_pos[1], 2) + pow(pos[2] - obj_pos[2], 2))
         return dist
+
+
+class Constraint(Transform):
+    """
+    Base class for constraint nodes.
+    Should not be instanced on its own and only used as inherited class for actual
+    constraint type nodes, e.g.: 'parentConstraint', 'orientConstraint', etc...
+    """
+
+    def __init__(self, MObject):
+        super(Constraint, self).__init__(MObject)
+        self._cmds_func = None
+
+    def _raise_no_func(self):
+        raise RuntimeError("No associated cmds constraint function found for : '{}'. Constraint should not be "
+                           "instanced on its own, only used as inherited class for actual constraint type nodes, "
+                           "e.g.: 'parentConstraint', 'orientConstraint', etc...".format(self.name))
+
+    def weightAttrs(self):
+        """
+        Gets the node's constraint weight attributes.
+        :return: YamList([Attribute, ])
+        """
+        if not self._cmds_func:
+            self._raise_no_func()
+        return YamList(self.attr(attr) for attr in self._cmds_func(self.name, q=True, weightAliasList=True))
+
+    def weightTargets(self):
+        """
+        Gets the node's constraint 'target' (is how maya calls them), the nodes that control the constrained node.
+        :return: YamList([Transform, ])
+        """
+        if not self._cmds_func:
+            self._raise_no_func()
+        return yams(self._cmds_func(self.name, q=True, targetList=True))
+
+
+class ParentConstraint(Constraint):
+    def __init__(self, MObject):
+        super(ParentConstraint, self).__init__(MObject)
+        self._cmds_func = cmds.parentConstraint
+
+
+class OrientConstraint(Constraint):
+    def __init__(self, MObject):
+        super(OrientConstraint, self).__init__(MObject)
+        self._cmds_func = cmds.orientConstraint
+
+
+class PointConstraint(Constraint):
+    def __init__(self, MObject):
+        super(PointConstraint, self).__init__(MObject)
+        self._cmds_func = cmds.pointConstraint
+
+
+class ScaleConstraint(Constraint):
+    def __init__(self, MObject):
+        super(ScaleConstraint, self).__init__(MObject)
+        self._cmds_func = cmds.scaleConstraint
+
+
+class AimConstraint(Constraint):
+    def __init__(self, MObject):
+        super(AimConstraint, self).__init__(MObject)
+        self._cmds_func = cmds.aimConstraint
 
 
 class Shape(DagNode):
@@ -1346,54 +1463,49 @@ class SkinCluster(GeometryFilter):
 class BlendShape(WeightGeometryFilter):
     def __init__(self, MObject):
         super(BlendShape, self).__init__(MObject)
-        self._targets = []
-        self._targets_names = {}
-        self.getTargets()
 
     def __getitem__(self, item):
-        # TODO: add support for string, shape name, getting
-        return self.getTarget(item)
+        return self.target(item)
 
-    def getTargets(self):
-        from . import attributes
-        try:
-            targets = cmds.listAttr(self.name + '.weight[:]')
-        except ValueError:
-            targets = []
-        self._targets = YamList()
-        self._targets.no_check = True
-        self._targets_names = {}
-        for index, target in enumerate(targets):
-            bs_target = attributes.BlendShapeTarget(attributes.getMPlug(self.name + '.' + target), self, index)
-            self._targets.append(bs_target)
-            self._targets_names[target] = bs_target
-        return self._targets
+    def targets(self):
+        from .attributes import BlendShapeTarget
+        return YamList(BlendShapeTarget(self.weight[x].MPlug, self) for x in self.targetIndices())
 
-    def getTarget(self, target):
+    def target(self, index):
+        targets = self.targets()
+
+        # checking for alias names per targets
+        if isinstance(index, string_types):
+            try:
+                index = targets.getattrs('alias').index(index)
+            except ValueError:
+                raise ValueError("'{}' not in blendShape target list".format(index))
+
         try:
-            if isinstance(target, int):
-                return self._targets[target]
-            elif isinstance(target, string_types):
-                return self._targets_names[target]
-            else:
-                raise KeyError(target)
+            return targets[index]
         except IndexError:
-            self.getTargets()
-            if isinstance(target, int):
-                return self._targets[target]
-            elif isinstance(target, string_types):
-                return self._targets_names[target]
-            else:
-                raise KeyError(target)
+            raise IndexError("BlendShape target index out of range : {}".format(index))
 
     @property
     def weightsAttr(self):
         return self.inputTarget[0].baseWeights
 
+    def targetIndices(self):
+        return list(self.weight.MPlug.getExistingArrayAttributeIndices())
+
+    def addTarget(self, target, index=None, topologyCheck=False):
+        if index is None:
+            index = self.targetIndices()[-1] + 1
+        cmds.blendShape(self.name, e=True, t=(self.geometry.name, index, target, 1.0), topologyCheck=topologyCheck)
+
+    def addInBetween(self, target, index, value):
+        index = self.target(index).index
+        cmds.blendShape(self.name, e=True, inBetween=True, t=(self.geometry.name, index, target, value))
+
     @property
     def data(self):
         targets = self.getTargets()
-        return {'targets': self._targets_names.keys(),
+        return {'targets': self.targets().getattrs('alias'),
                 'weights': self.weights,
                 'targetWeights': [target.weights for target in targets],
                 }
@@ -1401,7 +1513,7 @@ class BlendShape(WeightGeometryFilter):
     @data.setter
     def data(self, data):
         self.weights = data['weights']
-        for i, target in enumerate(self.getTargets()):
+        for i, target in enumerate(self.targets()):
             target.weights = data['targetWeights'][i]
 
 
@@ -1487,8 +1599,9 @@ class SupportedTypes(object):
     Data of supported types of maya nodes.
 
     Any new node class should be added to the inheritance_tree dict to be able to get it from the yam method and to
-    classes_MFn dict for faster type lookup. New node class should also be added to the classes_str dict to be
-    compatible with getclass_cnds.
+    classes_MFn dict for faster type lookup.
+    New node class should also be added to the classes_str dict to be
+    compatible with getclass_cmds.
 
     classes_MFn syntax is : {om.MFn.kNodeMFnType: class,} where om.MFn.kNodeMFnType is a valid corresponding value from om.MFn
     classes_str syntax is : {'mayaType': class,} where 'mayaType' is the type you get when using cmds.nodeType('node').
@@ -1498,11 +1611,21 @@ class SupportedTypes(object):
     inheritance_tree = {
         (DependNode, om.MFn.kDependencyNode): {
             (DagNode, om.MFn.kDagNode): {
-                (Transform, om.MFn.kTransform): {},
+                (Transform, om.MFn.kTransform): {
+                    (Constraint, om.MFn.kConstraint): {
+                        (ParentConstraint, om.MFn.kParentConstraint): {},
+                        (OrientConstraint, om.MFn.kOrientConstraint): {},
+                        (PointConstraint, om.MFn.kPointConstraint): {},
+                        (ScaleConstraint, om.MFn.kScaleConstraint): {},
+                        (AimConstraint, om.MFn.kAimConstraint): {},
+                    },
+                },
                 (Shape, om.MFn.kShape): {
-                    (Mesh, om.MFn.kMesh): {},
+                    (SurfaceShape, om.MFn.kSurface): {
+                        (Mesh, om.MFn.kMesh): {},
+                        (NurbsSurface, om.MFn.kNurbsSurface): {},
+                    },
                     (NurbsCurve, om.MFn.kNurbsCurve): {},
-                    (NurbsSurface, om.MFn.kNurbsSurface): {},
                     (Lattice, om.MFn.kLattice): {},
                 },
             },
@@ -1524,12 +1647,12 @@ class SupportedTypes(object):
         om.MFn.kDagNode: DagNode,  # 107
         om.MFn.kTransform: Transform,  # 110
         om.MFn.kJoint: Transform,  # 121
-        om.MFn.kConstraint: Transform,  # 928
-        om.MFn.kParentConstraint: Transform,  # 242
-        om.MFn.kPointConstraint: Transform,  # 240
-        om.MFn.kOrientConstraint: Transform,  # 239
-        om.MFn.kScaleConstraint: Transform,  # 244
-        om.MFn.kAimConstraint: Transform,  # 111
+        om.MFn.kConstraint: Constraint,  # 932; 928 in Maya 2020 ?! ¯\_(ツ)_/¯
+        om.MFn.kParentConstraint: ParentConstraint,  # 242
+        om.MFn.kPointConstraint: PointConstraint,  # 240
+        om.MFn.kOrientConstraint: OrientConstraint,  # 239
+        om.MFn.kScaleConstraint: ScaleConstraint,  # 244
+        om.MFn.kAimConstraint: AimConstraint,  # 111
         om.MFn.kShape: Shape,  # 248
         om.MFn.kCluster: Shape,  # 251
         om.MFn.kSurface: SurfaceShape,  # 293
@@ -1575,12 +1698,12 @@ class SupportedTypes(object):
         'dagNode': DagNode,
         'transform': Transform,
         'joint': Transform,
-        'constraint': Transform,
-        'parentConstraint': Transform,
-        'pointConstraint': Transform,
-        'orientConstraint': Transform,
-        'scaleConstraint': Transform,
-        'aimConstraint': Transform,
+        'constraint': Constraint,
+        'parentConstraint': ParentConstraint,
+        'pointConstraint': PointConstraint,
+        'orientConstraint': OrientConstraint,
+        'scaleConstraint': ScaleConstraint,
+        'aimConstraint': AimConstraint,
         'shape': Shape,
         'surfaceShape': SurfaceShape,
         'controlPoint': ControlPoint,
@@ -1736,8 +1859,13 @@ class YamList(list):
 
     def getattrs(self, attr, call=False):
         if call:
-            return [getattr(x, attr)() for x in self]
-        return [getattr(x, attr) for x in self]
+            attrs = [getattr(x, attr)() for x in self]
+        else:
+            attrs = [getattr(x, attr) for x in self]
+        try:
+            return YamList(attrs)
+        except TypeError:
+            return attrs
 
     def keepType(self, nodeType):
         """
