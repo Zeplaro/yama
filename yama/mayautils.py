@@ -32,7 +32,7 @@ def createHook(node, parent=None, suffix='hook'):
 
 
 def hierarchize(objs, reverse=False):
-    """Returns a list of objects ordered by their hierarchy in the scene"""
+    """Returns a list of objects sorted by their hierarchy in the scene"""
     return nodes.YamList(sorted(objs, key=lambda x: x.longName, reverse=reverse))
 
 
