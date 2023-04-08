@@ -1,5 +1,5 @@
 # encoding: utf8
 
 undoable = True
-use_singleton = True
+use_singleton = False
 verbose = True
