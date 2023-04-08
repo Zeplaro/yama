@@ -183,8 +183,7 @@ class MeshVertices(SingleIndexed):
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        mps = [om.MPoint(x) for x in values]
-        self.node.MFn.setPoints(mps, space)
+        self.node.MFn.setPoints([om.MPoint(x) for x in values], space)
 
 
 class CurveCVs(SingleIndexed):
