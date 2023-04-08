@@ -531,6 +531,14 @@ class Attribute(nodes.Yam):
         return om.MFnAttribute(self.MPlug.attribute()).shortName
 
     @property
+    def alias(self):
+        return self.MPlug.partialName(useAlias=True)
+
+    @alias.setter
+    def alias(self, alias):
+        cmds.aliasAttr(alias, self.name)
+
+    @property
     def hashCode(self):
         if self._hashCode is None:
             self._hashCode = om.MObjecHandle(self.MPlug.attribute()).hashCode()
@@ -547,17 +555,12 @@ class Attribute(nodes.Yam):
 
 
 class BlendShapeTarget(Attribute):
-    def __init__(self, MPlug, node, index):
+    def __init__(self, MPlug, node=None):
         super(BlendShapeTarget, self).__init__(MPlug, node)
-        self._index = index
 
     @property
     def weightsAttr(self):
         return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights
-
-    @property
-    def index(self):
-        return self._index
 
     @property
     def weights(self):
