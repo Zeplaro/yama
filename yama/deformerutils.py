@@ -54,8 +54,7 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
 
         objs = [objs[0]] + getSkinnable(objs[1:])
     if len(objs) < 2:
-        cmds.warning("Please select at least two objects")
-        return
+        raise ValueError("Please select at least two objects")
     master = nodes.yam(objs[0])
     slaves = mut.hierarchize(objs[1:], reverse=True)
 
@@ -86,8 +85,7 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
 
     masterskn = getSkinCluster(master)
     if not masterskn:
-        cmds.warning('First object as no skinCluster attached')
-        return
+        raise ValueError('First object as no skinCluster attached')
     master_infs = masterskn.influences()
     slave_infs = master_infs
 
@@ -102,7 +100,7 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
         else:
             slave_infs = nodes.yams(slaveNamespace + ':' + inf for inf in master_infs)
 
-    done = []
+    skins = []
     kwargs = {'skinMethod': masterskn.skinningMethod.value,
               'maximumInfluences': masterskn.maxInfluences.value,
               'normalizeWeights': masterskn.normalizeWeights.value,
@@ -128,9 +126,10 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
         slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave.shortName), **kwargs)[0])
         cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint', smooth=True,
                              ia=('oneToOne', 'label', 'closestJoint'))
-        print(slave + ' skinned -> ' + slaveskn.name)
-        done.append(slave)
-    return done
+        if config.verbose:
+            print(slave + ' skinned -> ' + slaveskn.name)
+        skins.append(slaveskn)
+    return skins
 
 
 def reskin(objs=None):
@@ -305,3 +304,36 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
                 index].value
             skinCluster.weightList[vtx.index].weights[index].value = 0.0
     return True
+
+
+def skinAsNurbs(source=None, target=None):
+    if not source or not target:
+        source, target = nodes.selected()
+    else:
+        source, target = nodes.yams([source, target])
+    if not source.shape or not target.shape:
+        raise RuntimeError("Given source and/or target does not have a shape")
+    if not isinstance(target.shape, nodes.NurbsSurface):
+        raise TypeError("Given target does not contain a nurbsSurface")
+
+    plane, poly = nodes.yams(cmds.polyPlane(sx=target.shape.lenU(), sy=target.shape.lenV()))
+
+    # Using a try except do be sure to delete the temp plane
+    try:
+        plane.shape.vtx.setPositions(target.shape.cv.getPositions(ws=True), ws=True)
+
+        plane_skin = skinAs([source, plane])[0]
+        if getSkinCluster(target):
+            raise RuntimeError("Given target already has a skinCluster attached : {}; {}".format(target, getSkinCluster(target)))
+
+        target_skin = skinAs([source, target])
+        target_skin = target_skin[0]
+
+        for i, _ in enumerate(target.shape.cv):
+            for j, _ in enumerate(plane_skin.influences()):
+                target_skin.weightList[i].weights[j].value = plane_skin.weightList[i].weights[j].value
+    except Exception as e:
+        raise e
+    # Making sure the temp plane gets deleted
+    finally:
+        cmds.delete(plane.name)
