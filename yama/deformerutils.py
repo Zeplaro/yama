@@ -10,11 +10,11 @@ from . import nodes, decorators, components, config, weightlist
 def getSkinCluster(obj, firstOnly=True):
     # type: (nodes.Yam, bool) -> nodes.SkinCluster | nodes.YamList[nodes.SkinCluster] | None
     """TODO: which way is better : listHistory or ls ?"""
-    skns = cmds.listHistory(str(obj), pdo=True)
-    skns = cmds.ls(skns, type='skinCluster')
+    skinClusters = cmds.listHistory(str(obj), pdo=True)
+    skinClusters = cmds.ls(skinClusters, type='skinCluster')
     if firstOnly:
-        return nodes.yam(skns[0]) if skns else None
-    return nodes.yams(skns) if skns else nodes.YamList()
+        return nodes.yam(skinClusters[0]) if skinClusters else None
+    return nodes.yams(skinClusters) if skinClusters else nodes.YamList()
 
 
 def getSkinClusters(objs, firstOnly=True):
