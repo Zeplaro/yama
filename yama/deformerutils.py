@@ -8,6 +8,8 @@ from . import nodes, decorators, components, config, weightlist
 
 
 def getSkinCluster(obj, firstOnly=True):
+    # type: (nodes.Yam, bool) -> nodes.SkinCluster | nodes.YamList[nodes.SkinCluster] | None
+    """TODO: which way is better : listHistory or ls ?"""
     skns = cmds.listHistory(str(obj), pdo=True)
     skns = cmds.ls(skns, type='skinCluster')
     if firstOnly:
@@ -83,11 +85,11 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
                 cmds.delete(intermediate_shapes)
                 return skinAs(objs, masterNamespace, slaveNamespace, useObjectNamespace)
 
-    masterskn = getSkinCluster(master)
-    if not masterskn:
+    master_skn = getSkinCluster(master)
+    if not master_skn:
         raise ValueError('First object as no skinCluster attached')
-    master_infs = masterskn.influences()
-    slave_infs = master_infs
+    master_influences = master_skn.influences()
+    slave_influences = master_influences
 
     if useObjectNamespace:
         masterNamespace = ':'.join(master.name.split(':')[:-1])
@@ -96,16 +98,16 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
             replace_args = [masterNamespace + ':', '']
             if slaveNamespace:
                 replace_args[1] = slaveNamespace + ':'
-            slave_infs = nodes.yams(inf.name.replace(*replace_args) for inf in master_infs)
+            slave_influences = nodes.yams(inf.name.replace(*replace_args) for inf in master_influences)
         else:
-            slave_infs = nodes.yams(slaveNamespace + ':' + inf for inf in master_infs)
+            slave_influences = nodes.yams(slaveNamespace + ':' + inf for inf in master_influences)
 
     skins = []
-    kwargs = {'skinMethod': masterskn.skinningMethod.value,
-              'maximumInfluences': masterskn.maxInfluences.value,
-              'normalizeWeights': masterskn.normalizeWeights.value,
-              'obeyMaxInfluences': masterskn.maintainMaxInfluences.value,
-              'weightDistribution': masterskn.weightDistribution.value,
+    kwargs = {'skinMethod': master_skn.skinningMethod.value,
+              'maximumInfluences': master_skn.maxInfluences.value,
+              'normalizeWeights': master_skn.normalizeWeights.value,
+              'obeyMaxInfluences': master_skn.maintainMaxInfluences.value,
+              'weightDistribution': master_skn.weightDistribution.value,
               'includeHiddenSelections': True,
               'toSelectedBones': True,
               }
@@ -116,15 +118,15 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
                 replace_args = [masterNamespace + ':', '']
                 if slaveNamespace:
                     replace_args[1] = slaveNamespace + ':'
-                slave_infs = nodes.yams(inf.name.replace(*replace_args) for inf in master_infs)
+                slave_influences = nodes.yams(inf.name.replace(*replace_args) for inf in master_influences)
             elif slaveNamespace:
-                slave_infs = nodes.yams(slaveNamespace + ':' + inf for inf in master_infs)
+                slave_influences = nodes.yams(slaveNamespace + ':' + inf for inf in master_influences)
             else:
-                slave_infs = master_infs
+                slave_influences = master_influences
 
-        nodes.select(slave_infs, slave)
+        nodes.select(slave_influences, slave)
         slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave.shortName), **kwargs)[0])
-        cmds.copySkinWeights(ss=masterskn.name, ds=slaveskn.name, nm=True, sa='closestPoint', smooth=True,
+        cmds.copySkinWeights(ss=master_skn.name, ds=slaveskn.name, nm=True, sa='closestPoint', smooth=True,
                              ia=('oneToOne', 'label', 'closestJoint'))
         if config.verbose:
             print(slave + ' skinned -> ' + slaveskn.name)
@@ -179,10 +181,12 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
     if destinationGeo is None:
         destinationGeo = destinationDeformer.geometry
 
-    assert hasattr(sourceDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
-                                               "".format(sourceDeformer, type(sourceDeformer).__name__)
-    assert hasattr(destinationDeformer, 'weights'), "'{}' of type '{}' has no 'weights' attributes." \
-                                                    "".format(destinationDeformer, type(destinationDeformer).__name__)
+    if not hasattr(sourceDeformer, 'weights'):
+        raise TypeError("'{}' of type '{}' has no 'weights' attributes."
+                        "".format(sourceDeformer, type(sourceDeformer).__name__))
+    if not hasattr(destinationDeformer, 'weights'):
+        raise TypeError("'{}' of type '{}' has no 'weights' attributes."
+                        "".format(destinationDeformer, type(destinationDeformer).__name__))
 
     # Creating temp geos
     temp_source_geo, temp_dest_geo = nodes.yams(cmds.duplicate(sourceGeo.name, destinationGeo.name))
@@ -323,8 +327,9 @@ def skinAsNurbs(source=None, target=None):
         plane.shape.vtx.setPositions(target.shape.cv.getPositions(ws=True), ws=True)
 
         plane_skin = skinAs([source, plane])[0]
-        if getSkinCluster(target):
-            raise RuntimeError("Given target already has a skinCluster attached : {}; {}".format(target, getSkinCluster(target)))
+        target_skn = getSkinCluster(target)
+        if target_skn:
+            raise RuntimeError("Given target already has a skinCluster attached : {}; {}".format(target, target_skn))
 
         target_skin = skinAs([source, target])
         target_skin = target_skin[0]

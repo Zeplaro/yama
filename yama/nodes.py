@@ -17,7 +17,8 @@ import maya.OpenMaya as om1
 from . import weightlist, config, checks
 
 
-def getMObject(node):  # type: (str) -> om.MObject
+def getMObject(node):
+    # type: (str) -> om.MObject
     """
     Gets the associated OpenMaya.MObject for the given node.
     :param node: str, node unique name
@@ -40,7 +41,8 @@ def getMObject(node):  # type: (str) -> om.MObject
 gmo = getMObject
 
 
-def yam(node):  # type: (Yam, str, om.MObject, om.MDagPath, om.MPlug) -> Yam
+def yam(node):
+    # type: (Yam | string_types | om.MObject | om.MDagPath | om.MPlug) -> DependNode | 'attributes.Attribute'
     """
     Handles all node class assignment to assign the proper class depending on the node type.
     Also works with passing a 'node.attribute'.
@@ -74,7 +76,7 @@ def yam(node):  # type: (Yam, str, om.MObject, om.MDagPath, om.MPlug) -> Yam
         return attributes.Attribute(MPlug=node)
 
     else:
-        raise TypeError("yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected,"
+        raise TypeError("yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected;"
                         " got {}.".format(node.__class__.__name__))
 
     yam_node = Singleton(MObject)
@@ -83,7 +85,8 @@ def yam(node):  # type: (Yam, str, om.MObject, om.MDagPath, om.MPlug) -> Yam
     return yam_node
 
 
-def yams(nodes):  # type: ([Yam, str, om.MObject, om.MDagPath, om.MPlug]) -> YamList
+def yams(nodes):
+    # type: ([Yam | str | om.MObject | om.MDagPath | om.MPlug]) -> YamList
     """
     Returns each node or attributes initialized as their appropriate DependNode or Attribute. See 'yam' function.
     :param nodes: (list) list of str of existing nodes.
@@ -228,6 +231,7 @@ class Singleton(object):
     _instances = {}
 
     def __new__(cls, MObject):
+        # type: (Singleton, om.MObject) -> DependNode
         """
         Returns the node instance corresponding to the given MObject if it has already been instantiated, otherwise it
         returns a new instance of the given nodeClass corresponding to the given MObject.
@@ -274,9 +278,9 @@ class Singleton(object):
                 if MObject.hasFn(fn):
                     return getit(sub_data, child)
             return assigned
-        assigned = getit(SupportedTypes.inheritance_tree)
-        if assigned:
-            return assigned
+        node_class = getit(SupportedTypes.inheritance_tree)
+        if node_class:
+            return node_class
         raise ValueError("Given MObject does not contain a valid dependencyNode.")
 
     @classmethod
@@ -1005,9 +1009,11 @@ class NurbsCurve(ControlPoint):
     def create(cvs, knots, degree, form, parent):
         if isinstance(parent, string_types):
             parent = yam(parent).MObject
-        elif isinstance(parent, DependNode):
+        elif isinstance(parent, Transform):
             parent = parent.MObject
-        assert isinstance(parent, om.MObject)
+        else:
+            raise TypeError("Expected parent of type str or Transform, "
+                            "got : {}, {}".format(parent, type(parent).__name__))
         curve = om.MFnNurbsCurve().create(cvs, knots, degree, form, False, True, parent)
         return yam(curve)
 
@@ -1526,7 +1532,8 @@ class UVPin(DependNode):
         mesh = yam(mesh)
         if isinstance(mesh, Transform) and mesh.shape:
             mesh = mesh.shape
-        assert isinstance(mesh, SurfaceShape), "Target object must be a surface shape"
+        if not isinstance(mesh, SurfaceShape):
+            raise TypeError("Target object must be a surface shape")
 
         if name is None:
             name = '{}_UVP'.format(mesh)
@@ -1559,8 +1566,10 @@ class UVPin(DependNode):
 
     def connectTransform(self, target, coordinates, index=None):
         target = yam(target)
-        assert isinstance(target, Transform), "Target must be a transform"
-        assert len(coordinates) == 2, "Invalid UV coordinates given"
+        if not isinstance(target, Transform):
+            raise TypeError("Target must be a transform; got : {}, {}".format(target, type(target).__name__))
+        if not len(coordinates) == 2:
+            raise ValueError("Invalid UV coordinates given; {}".format(coordinates))
 
         if index is None:
             index = len(self.coordinate)
@@ -1578,8 +1587,10 @@ class UVPin(DependNode):
 
     def attachToClosestPoint(self, target):
         target = yam(target)
-        assert isinstance(target, Transform), "Given target is not a transform"
-        assert self.geometry, "No geometry connected to the uvPin"
+        if not isinstance(target, Transform):
+            raise TypeError("Target must be a transform; got : {}, {}".format(target, type(target).__name__))
+        if not self.geometry:
+            raise RuntimeError("No geometry connected to the uvPin")
 
         geo = self.geometry
         point = om.MPoint(target.getXform(t=True, ws=True))
@@ -1603,8 +1614,8 @@ class SupportedTypes(object):
     New node class should also be added to the classes_str dict to be
     compatible with getclass_cmds.
 
-    classes_MFn syntax is : {om.MFn.kNodeMFnType: class,} where om.MFn.kNodeMFnType is a valid corresponding value from om.MFn
-    classes_str syntax is : {'mayaType': class,} where 'mayaType' is the type you get when using cmds.nodeType('node').
+    classes_MFn : {om.MFn.kNodeMFnType: class,} where om.MFn.kNodeMFnType is a valid corresponding value from om.MFn
+    classes_str : {'mayaType': class,} where 'mayaType' is the type you get when using cmds.nodeType('node').
     """
 
     # Inheritance tree for all defined classes and their MFn types relative to each others.
@@ -1870,7 +1881,7 @@ class YamList(list):
     def keepType(self, nodeType):
         """
         Remove all nodes that are not of the given type.
-        :param node_type: str or list, e.g.: 'joint' or ['blendShape', 'skinCluster']
+        :param nodeType: str or list, e.g.: 'joint' or ['blendShape', 'skinCluster']
         """
         if not isinstance(nodeType, (tuple, list)):
             nodeType = [nodeType]
@@ -1890,7 +1901,6 @@ class YamList(list):
         """
         Removes all nodes of given type from current object and returns them in a new YamList.
         :param nodeType: str or list, e.g.: 'joint' or ['blendShape', 'skinCluster']
-        :param inherited: bool, if True keep nodes whose type is inheriting from given type.
         :return: YamList of the removed nodes
         """
         popped = YamList()
@@ -1932,6 +1942,3 @@ class Yum(object):
 
     def __getattr__(self, item):
         return yam(item)
-
-
-yum = Yum()

@@ -4,7 +4,7 @@ from __future__ import division
 from maya import cmds
 import maya.api.OpenMaya as om
 
-from . import nodes, components, decorators, utils
+from . import nodes, components, decorators, utils, checks
 
 
 def align(objs=None, t=True, r=True):
@@ -12,9 +12,12 @@ def align(objs=None, t=True, r=True):
         if cmds.selectPref(q=True, tso=True) == 0:  # Allows you to get components order of selection
             cmds.selectPref(tso=True)
         objs = nodes.selected()
-    assert objs and len(objs) > 2, "Not enough object selected"
+    if not objs and len(objs) > 2:
+        raise ValueError("Not enough object selected")
     objs = nodes.yams(objs)
     poses = [x.getPosition(ws=True) for x in objs]
+
+    t_step, t_start, r_step, r_start = None, None, None, None
     if t:
         t_start, t_end = poses[0], poses[-1]
         t_step = [(t_end[x] - t_start[x]) / (len(objs) - 1.0) for x in range(3)]
@@ -36,9 +39,8 @@ def align(objs=None, t=True, r=True):
 
 
 @decorators.keepsel
-def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None, worldUpVector=(0, 1, 0)):
+def aim(objs=None, aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None, worldUpVector=(0, 1, 0)):
     """
-    (objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None, worldUpVector=(0, 1, 0))
     Args:
         objs: [str, ...]
         aimVector: [float, float, float]
@@ -46,14 +48,18 @@ def aim(objs=None, aimVector=(0, 0, 1), upVector=(0, 1, 0), worldUpType='scene',
         worldUpType: str, One of 5 values : "scene", "object", "objectrotation", "vector", or "none"
         worldUpObject: str, Use for worldUpType "object" and "objectrotation"
         worldUpVector: [float, float, float], Use for worldUpType "scene" and "objectrotation"
+
+    e.g.:
+    >>> aim(objs='locator1', aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None, worldUpVector=(0, 1, 0))
     """
     if worldUpType == 'object':
         if not worldUpObject:
             raise Exception("worldUpObject is required for worldUpType 'object'")
-        assert cmds.objExists(worldUpObject), "Object '{}' does not exist".format(worldUpObject)
+        checks.objExists(worldUpObject, raiseError=True)
     if not objs:
         objs = nodes.selected()
-    assert objs and len(objs) > 1, "Not enough object selected"
+    if not objs and len(objs) > 1:
+        raise ValueError("Not enough object selected")
     objs = nodes.yams(objs)
     poses = [x.getXform(t=True, ws=True) for x in objs]
     nulls = nodes.YamList(nodes.createNode('transform') for _ in objs)
@@ -94,14 +100,18 @@ def match(objs=None, t=True, r=True, s=False, m=False, ws=True):
     """
     if not objs:
         objs = nodes.selected()
-    assert len(objs) > 1, "Less than 2 objects selected"
+    if not objs and len(objs) > 1:
+        raise ValueError("Not enough object selected")
     objs = nodes.yams(objs)
 
     master, slaves = objs[0], objs[1:]
-    pos = master.getPosition(ws=ws)
     if isinstance(master, components.Component):
         r = False
         s = False
+
+    pos, rot, scale, matrix = None, None, None, None
+    if t:
+        pos = master.getPosition(ws=ws)
     else:
         if r:
             rot = master.getXform(ro=True, ws=ws)
@@ -118,13 +128,13 @@ def match(objs=None, t=True, r=True, s=False, m=False, ws=True):
                 slave.setXform(ro=rot, ws=ws)
             if s:
                 slave.setXform(s=scale, ws=ws)
+            if m:
+                slave.setXform(m=matrix, ws=ws)
         elif isinstance(slave, components.Component):
             if t:
                 slave.setPosition(pos, ws=ws)
-        if m:
-            slave.setXform(m=matrix, ws=ws)
         else:
-            print("Cannot match '{}' of type '{}'".format(slave, type(slave).__name__))
+            raise RuntimeError("Cannot match '{}' of type '{}'".format(slave, type(slave).__name__))
 
 
 @decorators.keepsel
@@ -147,7 +157,6 @@ def matchComponents(comps=None, slave=None, ws=False):
 
 
 def getCenter(objs):
-    assert objs, "No objects given"
     objs = nodes.yams(objs)
     xs, ys, zs = [], [], []
     for obj in objs:
@@ -155,12 +164,12 @@ def getCenter(objs):
         xs.append(x)
         ys.append(y)
         zs.append(z)
-    minx, maxx = min(xs), max(xs)
-    miny, maxy = min(ys), max(ys)
-    minz, maxz = min(zs), max(zs)
-    x = (minx + maxx) / 2
-    y = (miny + maxy) / 2
-    z = (minz + maxz) / 2
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    min_z, max_z = min(zs), max(zs)
+    x = (min_x + max_x) / 2
+    y = (min_y + max_y) / 2
+    z = (min_z + max_z) / 2
     return [x, y, z]
 
 
@@ -182,7 +191,9 @@ def snapAlongCurve(objs=None, curve=None, reverse=False):
 
     if isinstance(curve, nodes.Transform):
         curve = curve.shape
-    assert isinstance(curve, nodes.NurbsCurve), "No NurbsCurve found under given curve".format(curve)
+
+    if not isinstance(curve, nodes.NurbsCurve):
+        raise TypeError("No NurbsCurve found under given curve".format(curve))
 
     if reverse:
         objs = objs[::-1]
@@ -235,6 +246,8 @@ def extractXYZ(neutral, pose, axis=('y', 'xz'), ws=False):
     """
     neutral = nodes.yam(neutral)
     pose = nodes.yam(pose)
+    if not isinstance(neutral, nodes.Mesh) or not isinstance(pose, nodes.Mesh):
+        raise TypeError("Given neutral and/or pose object are not mesh objects")
     n_pose = neutral.vtx.getPositions(ws=ws)
     pose_pos = pose.vtx.getPositions(ws=ws)
     data = {x: [] for x in axis}
