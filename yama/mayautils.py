@@ -122,7 +122,8 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False, raiseError
 
 
 def insertGroup(obj, suffix='GRP'):
-    assert obj, "No obj given; Use 'insertGroups' to work on selection"
+    if not obj:
+        raise ValueError("No obj given; Use 'insertGroups' to work on selection")
     obj = nodes.yam(obj)
     grp = nodes.createNode('transform', name='{}_{}'.format(obj.shortName, suffix))
     world_matrix = obj.getXform(m=True, ws=True)
@@ -258,7 +259,7 @@ class SymTable(dict):
 
     def __invert__(self):
         """
-        Retuns a flipped symmetry table.
+        Returns a flipped symmetry table.
         :return: the flipped symmetry table object
         """
         return SymTable({value: key for key, value in self.items()})

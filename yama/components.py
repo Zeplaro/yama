@@ -10,7 +10,7 @@ from abc import ABCMeta, abstractmethod
 from maya import cmds
 import maya.api.OpenMaya as om
 
-from . import config, nodes
+from . import config, nodes, checks
 
 
 def getComponent(node, attr):
@@ -79,8 +79,9 @@ class Components(nodes.Yam):
 
     def __init__(self, node, apiType):
         super(Components, self).__init__()
-        assert isinstance(node, nodes.ControlPoint), "component node should be of type 'ControlPoint', " \
-                                                     "instead node type is '{}'".format(type(node).__name__)
+        if not isinstance(node, nodes.ControlPoint):
+            raise TypeError("component node should be of type 'ControlPoint', "
+                            "instead node type is '{}'".format(type(node).__name__))
         self.node = node
         self.api_type = apiType
         self.component_name = SupportedTypes.MFnid_component_class[apiType][0]
@@ -116,7 +117,7 @@ class Components(nodes.Yam):
         else:
             try:
                 return self == nodes.yam(other)
-            except Exception:
+            except (TypeError, checks.ObjExistsError):
                 return False
 
     def __ne__(self, other):
@@ -283,7 +284,8 @@ class Component(nodes.Yam):
         """
         todo : work with slices
         """
-        assert isinstance(item, int)
+        if not isinstance(item, int):
+            raise TypeError("Expected item of type int, got : {}, {}".format(item, type(item).__name__))
         if isinstance(self.components, SingleIndexed):
             raise IndexError("'{}' is a single index component and cannot get a second index".format(self))
 
@@ -307,7 +309,7 @@ class Component(nodes.Yam):
         return hash((self.node.hashCode, self.type(), self.indices()))
 
     def exists(self):
-        return cmds.objExists(self.name)
+        return checks.objExists(self.name)
 
     @property
     def name(self):

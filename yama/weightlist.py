@@ -32,7 +32,8 @@ class WeightList(list):
 
     @classmethod
     def fromLengthValue(cls, length, value=0.0, force_clamp=True, min_value=0.0, max_value=1.0):
-        assert isinstance(length, int), "length must be int; got : {}, {}".format(length, type(length).__name__)
+        if not isinstance(length, int):
+            raise TypeError("length must be int; got : {}, {}".format(length, type(length).__name__))
         try:
             value = float(value)
         except ValueError:
