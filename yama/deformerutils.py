@@ -21,21 +21,24 @@ def getSkinClusters(objs, firstOnly=True):
     return nodes.YamList([getSkinCluster(obj, firstOnly=firstOnly) for obj in objs])
 
 
-def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamespace=False):
+def skinAs(objs=None, sourceNamespace=None, targetNamespace=None, useObjectNamespace=False, prompt=True):
+    # type: ([str | nodes.Transform | nodes.Shape], str, str, bool, bool) -> nodes.YamList[nodes.SkinCluster] | None
     """
     Copies the skinning and skinCLuster settings of one skinned object to any other objects with a different topology.
     First object given in objs is the skinned object to copy from and the rest being the objects to copy the skin to, if
     no objects are given then this works on current scene selection.
 
     If the first object influences have a namespace and the other objects influences have a different namespace or don't
-    have one then you can use masterNamespace to remove from the original influences, and/or slaveNamespace to add to
+    have one then you can use sourceNamespace to remove from the original influences, and/or targetNamespace to add to
     the new influences. To get the namespace from the list of objects then set useObjectNamespace to True, in this case
-    the masterNamespace and slaveNamespace are ignored and the namespace to remove from the original influences and to
+    the sourceNamespace and targetNamespace are ignored and the namespace to remove from the original influences and to
     add to the new influences is determined per each object namespace.
-    :param objs: list
-    :param masterNamespace: str
-    :param slaveNamespace: str
-    :param useObjectNamespace: bool
+    :param objs: List of objects. The first object's skinCluster is copied to the other objects.
+    :param sourceNamespace: Namespace of the joints skinning the source object.
+    :param targetNamespace: Namespace to use to find the joints that will skin the target objects.
+    :param useObjectNamespace: If True: uses each objects namespace to determine the source and target namespaces.
+    :param prompt: If True: will show a dialogue box asking to delete the intermediate shapes before skinning if
+                   intermediate shapes are found on the target objects
     """
     from . import mayautils as mut
 
@@ -57,24 +60,24 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
         objs = [objs[0]] + getSkinnable(objs[1:])
     if len(objs) < 2:
         raise ValueError("Please select at least two objects")
-    master = nodes.yam(objs[0])
-    slaves = mut.hierarchize(objs[1:], reverse=True)
+    source = nodes.yam(objs[0])
+    targets = mut.hierarchize(objs[1:], reverse=True)
 
-    free_slaves = []
-    for slave in slaves:
-        # Checking for already attached skin on slave
-        if getSkinCluster(slave):
+    free_targets = []
+    for target in targets:
+        # Checking for already attached skin on target
+        if getSkinCluster(target):
             if config.verbose:
-                cmds.warning(slave + ' already has a skinCluster attached')
+                cmds.warning(target + ' already has a skinCluster attached')
             continue
         else:
-            free_slaves.append(slave)
+            free_targets.append(target)
 
-        # Checking for intermediate shapes on slave
-        intermediate_shapes = [shape for shape in slave.shapes(noIntermediate=False) if shape.intermediateObject.value]
-        if intermediate_shapes:
+        # Checking for intermediate shapes on target
+        intermediate_shapes = [shape for shape in target.shapes(noIntermediate=False) if shape.intermediateObject.value]
+        if intermediate_shapes and prompt:
             result = cmds.confirmDialog(title="Confirm",
-                                        message="These slaves already have intermediate shapes on them : {}\n"
+                                        message="These targets already have intermediate shapes on them : {}\n"
                                                 "Do you want to continue ?".format(intermediate_shapes),
                                         button=["Yes", "Cancel", "Delete them"], defaultButton="Yes",
                                         cancelButton="Cancel", dismissString="Cancel")
@@ -83,55 +86,55 @@ def skinAs(objs=None, masterNamespace=None, slaveNamespace=None, useObjectNamesp
                 return
             elif result == "Delete them":
                 cmds.delete(intermediate_shapes)
-                return skinAs(objs, masterNamespace, slaveNamespace, useObjectNamespace)
+                return skinAs(objs, sourceNamespace, targetNamespace, useObjectNamespace)
 
-    master_skn = getSkinCluster(master)
-    if not master_skn:
+    source_skn = getSkinCluster(source)
+    if not source_skn:
         raise ValueError('First object as no skinCluster attached')
-    master_influences = master_skn.influences()
-    slave_influences = master_influences
+    source_influences = source_skn.influences()
+    target_influences = source_influences
 
     if useObjectNamespace:
-        masterNamespace = ':'.join(master.name.split(':')[:-1])
-    elif masterNamespace or slaveNamespace:
-        if masterNamespace:
-            replace_args = [masterNamespace + ':', '']
-            if slaveNamespace:
-                replace_args[1] = slaveNamespace + ':'
-            slave_influences = nodes.yams(inf.name.replace(*replace_args) for inf in master_influences)
+        sourceNamespace = ':'.join(source.name.split(':')[:-1])
+    elif sourceNamespace or targetNamespace:
+        if sourceNamespace:
+            replace_args = [sourceNamespace + ':', '']
+            if targetNamespace:
+                replace_args[1] = targetNamespace + ':'
+            target_influences = nodes.yams(inf.name.replace(*replace_args) for inf in source_influences)
         else:
-            slave_influences = nodes.yams(slaveNamespace + ':' + inf for inf in master_influences)
+            target_influences = nodes.yams(targetNamespace + ':' + inf for inf in source_influences)
 
-    skins = []
-    kwargs = {'skinMethod': master_skn.skinningMethod.value,
-              'maximumInfluences': master_skn.maxInfluences.value,
-              'normalizeWeights': master_skn.normalizeWeights.value,
-              'obeyMaxInfluences': master_skn.maintainMaxInfluences.value,
-              'weightDistribution': master_skn.weightDistribution.value,
+    skinClusters = nodes.YamList()
+    kwargs = {'skinMethod': source_skn.skinningMethod.value,
+              'maximumInfluences': source_skn.maxInfluences.value,
+              'normalizeWeights': source_skn.normalizeWeights.value,
+              'obeyMaxInfluences': source_skn.maintainMaxInfluences.value,
+              'weightDistribution': source_skn.weightDistribution.value,
               'includeHiddenSelections': True,
               'toSelectedBones': True,
               }
-    for slave in free_slaves:
-        if useObjectNamespace:  # getting slave influences namespace per slave
-            slaveNamespace = ':'.join(slave.name.split(':')[:-1])
-            if masterNamespace:
-                replace_args = [masterNamespace + ':', '']
-                if slaveNamespace:
-                    replace_args[1] = slaveNamespace + ':'
-                slave_influences = nodes.yams(inf.name.replace(*replace_args) for inf in master_influences)
-            elif slaveNamespace:
-                slave_influences = nodes.yams(slaveNamespace + ':' + inf for inf in master_influences)
+    for target in free_targets:
+        if useObjectNamespace:  # getting target influences namespace per target
+            targetNamespace = ':'.join(target.name.split(':')[:-1])
+            if sourceNamespace:
+                replace_args = [sourceNamespace + ':', '']
+                if targetNamespace:
+                    replace_args[1] = targetNamespace + ':'
+                target_influences = nodes.yams(inf.name.replace(*replace_args) for inf in source_influences)
+            elif targetNamespace:
+                target_influences = nodes.yams(targetNamespace + ':' + inf for inf in source_influences)
             else:
-                slave_influences = master_influences
+                target_influences = source_influences
 
-        nodes.select(slave_influences, slave)
-        slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave.shortName), **kwargs)[0])
-        cmds.copySkinWeights(ss=master_skn.name, ds=slaveskn.name, nm=True, sa='closestPoint', smooth=True,
+        nodes.select(target_influences, target)
+        target_skinCluster = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(target.shortName), **kwargs)[0])
+        cmds.copySkinWeights(ss=source_skn.name, ds=target_skinCluster.name, nm=True, sa='closestPoint', smooth=True,
                              ia=('oneToOne', 'label', 'closestJoint'))
         if config.verbose:
-            print(slave + ' skinned -> ' + slaveskn.name)
-        skins.append(slaveskn)
-    return skins
+            print(target + ' skinned -> ' + target_skinCluster.name)
+        skinClusters.append(target_skinCluster)
+    return skinClusters
 
 
 def reskin(objs=None):
@@ -169,8 +172,8 @@ def flipWeights(weights, table):
 def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, destinationGeo=None):
     """
     For two geometries with different topologies, copies a given deformer weight to another given deformer.
-    :param sourceDeformer: the deformer to copy the weights from, the given object needs to have a weights attribute
-    :param destinationDeformer: the deformer to copy the weights on, the given object needs to have a weights attribute
+    :param sourceDeformer: the deformer to copy the weights from, the object needs to have a 'weights' attribute
+    :param destinationDeformer: the deformer to copy the weights on, the object needs to have a 'weights' attribute
     :param sourceGeo: the geo on which the sourceDeformer is applied; if None, the geo is taken from the sourceDeformer
     :param destinationGeo: the geo on which the destinationDeformer is applied; if None, the geo is taken from the
                            destinationDeformer
