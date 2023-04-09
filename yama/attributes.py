@@ -58,10 +58,14 @@ class Attribute(nodes.Yam):
         :param attr (OpenMaya.MPlug):
         """
         super(Attribute, self).__init__()
-        assert isinstance(MPlug, om.MPlug), "MPlug arg should be of type OpenMaya.MPlug not : '{}'".format(MPlug.__class__.__name__)
-        assert not MPlug.isNull, "Given MPlug is Null and does not containt a valid attribute."
+        if not isinstance(MPlug, om.MPlug):
+            raise TypeError("MPlug arg should be of type OpenMaya.MPlug not : {}".format(MPlug.__class__.__name__))
+        if MPlug.isNull:
+            raise ValueError("Given MPlug is Null and does not contain a valid attribute.")
+
         if node:
-            assert isinstance(node, nodes.DependNode), "Given node arg should be of type DependNode not : {}".format(type(node).__name__)
+            if not isinstance(node, nodes.DependNode):
+                raise TypeError("Given node arg should be of type DependNode not : {}".format(type(node).__name__))
             self.node = node
         else:
             self.node = nodes.yam(MPlug.node())
@@ -173,12 +177,13 @@ class Attribute(nodes.Yam):
             raise TypeError("'{}' is not iterable".format(self))
 
     def __eq__(self, other):
+        from . import checks
         if hasattr(other, 'MPlug'):
             return self.MPlug == other.MPlug
         else:
             try:
                 return self.MPlug == nodes.yam(other).MPlug
-            except Exception:
+            except (TypeError, checks.ObjExistsError, AttributeError):
                 return False
 
     def __ne__(self, other):
@@ -194,10 +199,10 @@ class Attribute(nodes.Yam):
         :return: api 1.0 MPlug
         """
         if self._MPlug1 is None:
-            l = om1.MSelectionList()
-            l.add(self.name)
+            om_list = om1.MSelectionList()
+            om_list.add(self.name)
             self._MPlug1 = om1.MPlug()
-            l.getPlug(0, self._MPlug1)
+            om_list.getPlug(0, self._MPlug1)
         return self._MPlug1
 
     @property
@@ -302,7 +307,7 @@ class Attribute(nodes.Yam):
         Checks if the attribute exists.
         :return: bool
         """
-        return cmds.objExists(self.name)
+        return checks.objExists(self.name)
 
     @property
     def index(self):
@@ -592,8 +597,9 @@ def getAttr(attr):
             print("## failed to get MPlug value on '{}': {}".format(MPlug.name(), e))
 
     value = cmds.getAttr(attr.name)
-    # To simply return the tuple in the list that cmds returns for attribute like '.translate', '.rotate', etc...
-    if value.__class__ == list and len(value) == 1 and value[0].__class__ == tuple:  # Not using isinstance() for efficiency
+    # Fixing cmds.getattr to simply return the tuple in the list that cmds returns for attribute like '.translate',
+    # '.rotate', etc...
+    if value.__class__ == list and len(value) == 1 and value[0].__class__ == tuple:  # Not isinstance() for efficiency
         return value[0]
     return value
 
@@ -686,6 +692,6 @@ def setMPlugValue(MPlug, value):
         MPlug.setMDataHandle(data_handle)
     elif MPlug.isCompound:
         for child_index in range(MPlug.numChildren()):
-            setMPlugValue(MPlug.child(child_index, value[child_index]))
+            setMPlugValue(MPlug.child(child_index), value[child_index])
     else:
         raise TypeError("Attribute '{}' of type '{}' not supported".format(MPlug.name(), attr_type))
