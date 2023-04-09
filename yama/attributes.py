@@ -3,11 +3,12 @@
 """
 Contains all the class and functions for maya attributes.
 """
+import sys
 
 from maya import cmds
 import maya.api.OpenMaya as om
 import maya.OpenMaya as om1
-from . import config, nodes, weightslist, checks
+from . import config, nodes, weightlist, checks
 
 
 def getAttribute(node, attr):
@@ -57,15 +58,21 @@ class Attribute(nodes.Yam):
         :param attr (OpenMaya.MPlug):
         """
         super(Attribute, self).__init__()
-        assert isinstance(MPlug, om.MPlug), ("MPlug arg should be of type OpenMaya.MPlug not : '{}'".format(MPlug.__class__.__name__))
+        if not isinstance(MPlug, om.MPlug):
+            raise TypeError("MPlug arg should be of type OpenMaya.MPlug not : {}".format(MPlug.__class__.__name__))
+        if MPlug.isNull:
+            raise ValueError("Given MPlug is Null and does not contain a valid attribute.")
+
         if node:
-            assert isinstance(node, nodes.DependNode)
+            if not isinstance(node, nodes.DependNode):
+                raise TypeError("Given node arg should be of type DependNode not : {}".format(type(node).__name__))
             self.node = node
         else:
             self.node = nodes.yam(MPlug.node())
         self.MPlug = MPlug
         self._MPlug1 = None
-        self._attributes = {}
+        self._attributes = {}  # Dict of attribute children names and short names to MPlug
+        self._children = []  # List of all children Attributes
         self._children_generated = False
         self._hashCode = None
 
@@ -94,12 +101,16 @@ class Attribute(nodes.Yam):
             return nodes.YamList(self[i] for i in range(len(self))[item])
 
         try:
-            if item not in self._attributes:
-                MPlug = self.MPlug.selectAncestorLogicalIndex(item)
+            if not config.use_singleton or item not in self._attributes or self._attributes[item].MPlug.isNull:
+                MPlug = self.MPlug.elementByLogicalIndex(item)
                 self._attributes[item] = Attribute(MPlug, self.node)
             return self._attributes[item]
         except RuntimeError:
             raise TypeError("'{}' is not an array attribute and cannot use __getitem__".format(self))
+
+    if sys.version_info.major == 2:
+        def __getslice__(self, start, stop):
+            return nodes.YamList(self[i] for i in range(len(self))[start:stop])
 
     def __add__(self, other):
         """
@@ -158,18 +169,21 @@ class Attribute(nodes.Yam):
 
     def __iter__(self):
         if self.MPlug.isArray:
+            node = self.node
             for i in range(len(self)):
-                yield self.node.attr(self.MPlug.selectAncestorLogicalIndex(i))
+                MPlug = self.MPlug.elementByLogicalIndex(i)
+                yield Attribute(MPlug, node)
         else:
             raise TypeError("'{}' is not iterable".format(self))
 
     def __eq__(self, other):
+        from . import checks
         if hasattr(other, 'MPlug'):
             return self.MPlug == other.MPlug
         else:
             try:
                 return self.MPlug == nodes.yam(other).MPlug
-            except Exception:
+            except (TypeError, checks.ObjExistsError, AttributeError):
                 return False
 
     def __ne__(self, other):
@@ -185,18 +199,18 @@ class Attribute(nodes.Yam):
         :return: api 1.0 MPlug
         """
         if self._MPlug1 is None:
-            l = om1.MSelectionList()
-            l.add(self.name)
+            om_list = om1.MSelectionList()
+            om_list.add(self.name)
             self._MPlug1 = om1.MPlug()
-            l.getPlug(0, self._MPlug1)
+            om_list.getPlug(0, self._MPlug1)
         return self._MPlug1
 
     @property
     def name(self):
         """
         The full node.attribute name.
-        Not using self.MPlug.name() because, unlike node.name, it does not returned the node's  minimum string
-        representation which will uniquely identify the path, in case the node has a non unique name.
+        Not using self.MPlug.name() because, unlike node.name, it does not return the node's  minimum string
+        representation which will uniquely identify the path, in case the node has a non-unique name.
         :return: str
         """
         return self.node.name + '.' + self.attribute
@@ -207,21 +221,28 @@ class Attribute(nodes.Yam):
         :param attr: str
         :return: Attribute object
         """
-        if attr in self._attributes:
-            return self._attributes[attr]
-        elif self.MPlug.isArray:
+        if self.MPlug.isArray:  # If array attribute returns the attribute under the array index 0.
             return self[0].attr(attr)
-        elif not self._children_generated:
-            self._getChildren()
-            return self.attr(attr)
-        else:
-            MPlug = getMPlug(self.name + '.' + attr)
-            attribute = Attribute(MPlug, self.node)
-            if config.verbose:
-                cmds.warning("Attribute was not generated with _getChildren but still exists ? "
-                             r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
-            self._attributes[attr] = attribute
-            return self.attr(attr)
+
+        if config.use_singleton:
+            if attr in self._attributes:
+                if not self._attributes[attr].MPlug.isNull:  # Making sure the stored Plug is still valid.
+                    return self._attributes[attr]
+
+            elif not self._children_generated:
+                self._getChildren()  # Generates children attributes in stored attributes.
+                return self.attr(attr)
+
+            else:  # Using singleton and children are generated but attr still isn't in the stored attributes.
+                if config.verbose:
+                    cmds.warning("Attribute was not generated with _getChildren but still exists ? "
+                                 r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
+
+        # Regular MPlug getting if not using singleton or children attribute not generated.
+        MPlug = getMPlug(self.name + '.' + attr)
+        attribute = Attribute(MPlug, self.node)
+        self._attributes[attr] = attribute
+        return attribute
 
     def _getChildren(self):
         """
@@ -233,6 +254,8 @@ class Attribute(nodes.Yam):
         """
         if not self.MPlug.isCompound:
             raise AttributeError("'{}' is not an compound attribute and has no children attribute".format(self))
+        self._attributes = {}
+        self._children = []
         for index in range(self.MPlug.numChildren()):
             child = self.MPlug.child(index)
             attribute = Attribute(child, self.node)
@@ -240,6 +263,7 @@ class Attribute(nodes.Yam):
             short_name = child.partialName(includeInstancedIndices=True).split('.')[-1]
             self._attributes[name] = attribute
             self._attributes[short_name] = attribute
+            self._children.append(attribute)
         self._children_generated = True
 
     @property
@@ -283,7 +307,7 @@ class Attribute(nodes.Yam):
         Checks if the attribute exists.
         :return: bool
         """
-        return cmds.objExists(self.name)
+        return checks.objExists(self.name)
 
     @property
     def index(self):
@@ -328,7 +352,7 @@ class Attribute(nodes.Yam):
 
     def disconnect(self, attr):
         """
-        Disconnect the the connection between self (source) and attr (destination)
+        Disconnect the connection between self (source) and attr (destination)
         :param attr: str or Attribute
         """
         if isinstance(attr, Attribute):
@@ -339,7 +363,7 @@ class Attribute(nodes.Yam):
         """
         List the connections to this attribute via cmds.listConnections.
         By default, 'skipConversionNodes' and 'plugs' kwargs are set to True.
-        :param kwargs: kwards to pass on to cmds.listConnections
+        :param kwargs: kwargs to pass on to cmds.listConnections
         :return: YamList of Attribute or Yam node objects.
         """
         if 'scn' not in kwargs and 'skipConversionNodes' not in kwargs:
@@ -348,16 +372,19 @@ class Attribute(nodes.Yam):
             kwargs['plugs'] = True
         return nodes.yams(cmds.listConnections(self.name, **kwargs) or [])
 
-    def sourceConnection(self, **kwargs):
+    def input(self, **kwargs):
         connection = self.listConnections(destination=False, **kwargs)
         if connection:
             return connection[0]
 
     @property
     def source(self):
-        return Attribute(self.MPlug.source())
+        try:
+            return Attribute(self.MPlug.source())
+        except AssertionError:
+            raise RuntimeError("Attribute {} does not have a source connection".format(self))
 
-    def destinationConnections(self, **kwargs):
+    def outputs(self, **kwargs):
         return self.listConnections(source=False, **kwargs)
 
     def breakConnections(self, source=True, destination=False):
@@ -369,10 +396,16 @@ class Attribute(nodes.Yam):
             for c in self.destinationConnections():
                 self.disconnect(c)
 
+    def breakInput(self):
+        self.breakConnections(source=True, destination=False)
+
+    def breakOutputs(self):
+        self.breakConnections(source=False, destination=True)
+
     def listAttr(self, **kwargs):
         """
         List the attributes of this attribute via cmds.listAttr.
-        :param kwargs: kwards to pass on to cmds.listAttr.
+        :param kwargs: kwargs to pass on to cmds.listAttr.
         :return: YamList of Attribute objects.
         """
         return nodes.listAttr(self, **kwargs)
@@ -490,7 +523,7 @@ class Attribute(nodes.Yam):
 
     @property
     def niceName(self):
-        return cmds.attributeQuery(self.attribute, node=self.node, niceName=True)
+        return cmds.attributeQuery(self.attribute, node=self.node.name, niceName=True)
 
     @niceName.setter
     def niceName(self, newName):
@@ -503,29 +536,44 @@ class Attribute(nodes.Yam):
         return om.MFnAttribute(self.MPlug.attribute()).shortName
 
     @property
+    def alias(self):
+        return self.MPlug.partialName(useAlias=True)
+
+    @alias.setter
+    def alias(self, alias):
+        cmds.aliasAttr(alias, self.name)
+
+    @property
     def hashCode(self):
         if self._hashCode is None:
             self._hashCode = om.MObjecHandle(self.MPlug.attribute()).hashCode()
         return self._hashCode
 
+    def children(self):
+        if not self.MPlug.isCompound:
+            raise RuntimeError("'{}' is not an compound attribute and has no children attribute".format(self))
+        if self.MPlug.isArray:
+            return self[0].children()
+        if not self._children_generated or self.MPlug.numElements() != len(self._children):
+            self._getChildren()
+        return nodes.YamList(self._children)
 
-class BlendshapeTarget(Attribute):
-    def __init__(self, MPlug, node, index):
-        super(BlendshapeTarget, self).__init__(MPlug, node)
-        self._index = index
+
+class BlendShapeTarget(Attribute):
+    def __init__(self, MPlug, node=None):
+        super(BlendShapeTarget, self).__init__(MPlug, node)
 
     @property
     def weightsAttr(self):
         return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights
 
     @property
-    def index(self):
-        return self._index
-
-    @property
     def weights(self):
+        geometry = self.node.geometry
+        if not geometry:
+            raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self.node))
         weightsAttr = self.weightsAttr
-        return weightslist.WeightsList(weightsAttr[x].value for x in range(len(self.node.geometry)))
+        return weightlist.WeightList(weightsAttr[x].value for x in range(len(geometry)))
 
     @weights.setter
     def weights(self, weights):
@@ -537,10 +585,11 @@ class BlendshapeTarget(Attribute):
 def getAttr(attr):
     """
     Gets the attribute value.
-    :param attr: Attibute object
+    :param attr: Attribute object
     :return: the value of the attribute.
     """
     MPlug = attr.MPlug
+    # if not MPlug.isArray:  # Getting full array is usually faster using cmds
     try:
         return getMPlugValue(MPlug)
     except Exception as e:
@@ -548,8 +597,9 @@ def getAttr(attr):
             print("## failed to get MPlug value on '{}': {}".format(MPlug.name(), e))
 
     value = cmds.getAttr(attr.name)
-    # To simply return the tuple in the list that cmds returns for attribute like '.translate', '.rotate', etc...
-    if value.__class__ == list and len(value) == 1 and value[0].__class__ == tuple:  # Not using isinstance() for efficiency
+    # Fixing cmds.getattr to simply return the tuple in the list that cmds returns for attribute like '.translate',
+    # '.rotate', etc...
+    if value.__class__ == list and len(value) == 1 and value[0].__class__ == tuple:  # Not isinstance() for efficiency
         return value[0]
     return value
 
@@ -561,7 +611,7 @@ def setAttr(attr, value, **kwargs):
     :param value: the value to set on the attribute
     :param kwargs: passed onto cmds.setAttr
     """
-    if not config.undoable:
+    if not config.undoable:  # and not attr.MPlug.isArray:
         try:
             setMPlugValue(attr.MPlug, value)
             return
@@ -570,15 +620,19 @@ def setAttr(attr, value, **kwargs):
                 print("## failed to set MPlug value: {}".format(e))
 
     attr_type = attr.type()
-    if attr_type in ('double2', 'double3', 'float2', 'float3', 'long2', 'long3', 'short2'):
+    if attr_type in ['double2', 'double3', 'float2', 'float3', 'long2', 'long3', 'short2']:
         cmds.setAttr(attr.name, *value, type=attr_type)
     elif attr_type in ['matrix', 'string']:
         cmds.setAttr(attr.name, value, type=attr_type)
+    elif attr_type in ['TdataCompound', ]:
+        cmds.setAttr(attr.name+'[:]', *value, size=len(value))
     else:
         cmds.setAttr(attr.name, value, **kwargs)
 
 
 def getMPlugValue(MPlug):
+    if MPlug.isArray:
+        return [getMPlugValue(MPlug.elementByLogicalIndex(i)) for i in range(MPlug.numElements())]
     attribute = MPlug.attribute()
     attr_type = attribute.apiTypeStr
     if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
@@ -613,6 +667,8 @@ def getMPlugValue(MPlug):
 
 
 def setMPlugValue(MPlug, value):
+    if MPlug.isArray:
+        return [setMPlugValue(MPlug.elementByLogicalIndex(i), value) for i in range(MPlug.numElements())]
     attribute = MPlug.attribute()
     attr_type = attribute.apiTypeStr
     if attr_type in ('kNumericAttribute', 'kDoubleLinearAttribute', ):
@@ -636,6 +692,6 @@ def setMPlugValue(MPlug, value):
         MPlug.setMDataHandle(data_handle)
     elif MPlug.isCompound:
         for child_index in range(MPlug.numChildren()):
-            setMPlugValue(MPlug.child(child_index, value[child_index]))
+            setMPlugValue(MPlug.child(child_index), value[child_index])
     else:
         raise TypeError("Attribute '{}' of type '{}' not supported".format(MPlug.name(), attr_type))

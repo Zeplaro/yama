@@ -5,12 +5,12 @@ Contains all the class and functions for maya components.
 """
 # TODO : Improve getComponent func
 # TODO : fixed setPositionsOM on cvs ?
-
+import sys
 from abc import ABCMeta, abstractmethod
 from maya import cmds
 import maya.api.OpenMaya as om
 
-from . import config, nodes
+from . import config, nodes, checks
 
 
 def getComponent(node, attr):
@@ -58,7 +58,7 @@ def getComponent(node, attr):
     indices = []
     for index in split:
         index = index[:-1]  # Removing the closing ']'
-        if index == '*':  # if using the maya wildcard symbol
+        if index in ['*', ':']:  # if using the maya wildcard symbols
             indices.append(slice(None))
         elif ':' in index:  # if using a slice to list multiple components
             slice_args = [int(x) if x else None for x in
@@ -79,8 +79,9 @@ class Components(nodes.Yam):
 
     def __init__(self, node, apiType):
         super(Components, self).__init__()
-        assert isinstance(node, nodes.ControlPoint), "component node should be of type 'ControlPoint', " \
-                                                     "instead node type is '{}'".format(type(node).__name__)
+        if not isinstance(node, nodes.ControlPoint):
+            raise TypeError("component node should be of type 'ControlPoint', "
+                            "instead node type is '{}'".format(type(node).__name__))
         self.node = node
         self.api_type = apiType
         self.component_name = SupportedTypes.MFnid_component_class[apiType][0]
@@ -90,10 +91,12 @@ class Components(nodes.Yam):
         if item == '*':
             item = slice(None)
         if isinstance(item, slice):
-            # Maya component slice includes the stop index, e.g.: mesh.vtx[2:12] <-- includes vertex #12
-            item = slice(item.start, item.stop+1, item.step)
             return ComponentsSlice(self.node, self, item)
         return self.index(item)
+
+    if sys.version_info.major == 2:
+        def __getslice__(self, start, stop):
+            return ComponentsSlice(self.node, self, slice(start, stop+1))
 
     def __len__(self):
         return len(self.node)
@@ -114,7 +117,7 @@ class Components(nodes.Yam):
         else:
             try:
                 return self == nodes.yam(other)
-            except Exception:
+            except (TypeError, checks.ObjExistsError):
                 return False
 
     def __ne__(self, other):
@@ -162,8 +165,6 @@ class MeshVertices(SingleIndexed):
     """
     def __init__(self, *args, **kwargs):
         super(MeshVertices, self).__init__(*args, **kwargs)
-        if not config.undoable:
-            self.setPositions = self.setPositionsOM
 
     def getPositions(self, ws=False):
         if ws:
@@ -172,13 +173,18 @@ class MeshVertices(SingleIndexed):
             space = om.MSpace.kObject
         return [[p.x, p.y, p.z] for p in self.node.MFn.getPoints(space)]
 
+    def setPositions(self, values, ws=False):
+        if not config.undoable:
+            self.setPositionsOM(values, ws)
+        else:
+            super(MeshVertices, self).setPositions(values, ws)
+
     def setPositionsOM(self, values, ws=False):
         if ws:
             space = om.MSpace.kWorld
         else:
             space = om.MSpace.kObject
-        mps = [om.MPoint(x) for x in values]
-        self.node.MFn.setPoints(mps, space)
+        self.node.MFn.setPoints([om.MPoint(x) for x in values], space)
 
 
 class CurveCVs(SingleIndexed):
@@ -187,8 +193,6 @@ class CurveCVs(SingleIndexed):
     """
     def __init__(self, *args, **kwargs):
         super(CurveCVs, self).__init__(*args, **kwargs)
-        if not config.undoable:
-            self.setPositions = self.setPositionsOM
 
     def getPositions(self, ws=False):
         if ws:
@@ -197,7 +201,14 @@ class CurveCVs(SingleIndexed):
             space = om.MSpace.kObject
         return [[p.x, p.y, p.z] for p in self.node.MFn.cvPositions(space)]
 
+    def setPositions(self, values, ws=False):
+        if not config.undoable:
+            self.setPositionsOM(values, ws)
+        else:
+            super(CurveCVs, self).setPositions(values, ws)
+
     def setPositionsOM(self, values, ws=False):
+        # TODO: doesn't work ? Does but has a refresh issue ?
         if ws:
             space = om.MSpace.kWorld
         else:
@@ -250,8 +261,8 @@ class Component(nodes.Yam):
 
     @property
     def isAYamComponent(self):
-        """Used to check if an object is an instance of Component with the faster hasattr instead of slower
-        isinstance."""
+        """Used to check if an object is an instance of Component using the faster hasattr method instead of the slower
+        isinstance method."""
         return True
 
     def __str__(self):
@@ -273,7 +284,8 @@ class Component(nodes.Yam):
         """
         todo : work with slices
         """
-        assert isinstance(item, int)
+        if not isinstance(item, int):
+            raise TypeError("Expected item of type int, got : {}, {}".format(item, type(item).__name__))
         if isinstance(self.components, SingleIndexed):
             raise IndexError("'{}' is a single index component and cannot get a second index".format(self))
 
@@ -297,7 +309,7 @@ class Component(nodes.Yam):
         return hash((self.node.hashCode, self.type(), self.indices()))
 
     def exists(self):
-        return cmds.objExists(self.name)
+        return checks.objExists(self.name)
 
     @property
     def name(self):
@@ -331,8 +343,6 @@ class Component(nodes.Yam):
 class MeshVertex(Component):
     def __init__(self, *args, **kwargs):
         super(MeshVertex, self).__init__(*args, **kwargs)
-        if not config.undoable:
-            self.setPosition = self.setPositionOM
 
     def getPosition(self, ws=False):
         if ws:
@@ -341,6 +351,12 @@ class MeshVertex(Component):
             space = om.MSpace.kObject
         p = self.node.MFn.getPoint(self.index, space)
         return [p.x, p.y, p.z]
+
+    def setPosition(self, values, ws=False):
+        if not config.undoable:
+            self.setPositionOM(values, ws)
+        else:
+            super(MeshVertex, self).setPosition(values, ws)
 
     def setPositionOM(self, value, ws=False):
         if ws:
@@ -354,8 +370,6 @@ class MeshVertex(Component):
 class CurveCV(Component):
     def __init__(self, *args, **kwargs):
         super(CurveCV, self).__init__(*args, **kwargs)
-        if not config.undoable:
-            self.setPosition = self.setPositionOM
 
     def getPosition(self, ws=False):
         if ws:
@@ -364,6 +378,12 @@ class CurveCV(Component):
             space = om.MSpace.kObject
         p = self.node.MFn.cvPosition(self.index, space)
         return [p.x, p.y, p.z]
+
+    def setPosition(self, value, ws=False):
+        if not config.undoable:
+            self.setPositionOM(value, ws)
+        else:
+            super(CurveCV, self).setPosition(value, ws)
 
     def setPositionOM(self, value, ws=False):
         if ws:
@@ -383,13 +403,40 @@ class ComponentsSlice(nodes.Yam):
         super(ComponentsSlice, self).__init__()
         self.node = node
         self.components = components
-        self.slice = components_slice
-        if components_slice.step is not None:
-            self._indices = tuple(range(components_slice.start, components_slice.stop, components_slice.step))
+        self._slice = components_slice
+
+    @property
+    def start(self):
+        return self._slice.start or 0
+
+    @property
+    def stop(self):
+        if self._slice.stop is None:
+            stop = len(self.components)
         else:
-            self._indices = tuple(range(components_slice.start, components_slice.stop))
+            if self._slice.stop < 0:
+                # If using negative number for stop, then using python behavior of stopping at len(components)-stop
+                stop = len(self.components) + self._slice.stop-1
+            else:
+                # Unlike Python, Maya slices includes the stop index, e.g.: mesh.vtx[2:12] <-- includes vertex #12
+                stop = self._slice.stop + 1
+        return stop
+
+    @property
+    def step(self):
+        return self._slice.step or 1
+
+    @property
+    def slice(self):
+        return slice(self.start, self.stop, self.step)
+
+    @property
+    def indices(self):
+        return tuple(range(self.start, self.stop, self.step))
 
     def __str__(self):
+        if self.step != 1:
+            return str(self.names)
         return self.name
 
     def __repr__(self):
@@ -399,37 +446,40 @@ class ComponentsSlice(nodes.Yam):
     def __getitem__(self, item):
         if isinstance(item, slice):
             raise RuntimeError("cannot slice a ComponentsSlice object")
-        return self.components.index(self._indices[item])
+        return self.components.index(self.indices[item])
 
     def __len__(self):
-        return len(self._indices)
+        return len(self.indices)
 
     def __iter__(self):
-        for i in self._indices:
+        for i in self.indices:
             yield self.components.index(i)
 
     def __eq__(self, other):
         if isinstance(other, ComponentsSlice):
-            return self._indices == other.indices
+            return self.indices == other.indices
         return False
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((self.node.hashCode, self.components.api_type, self._indices))
+        return hash((self.node.hashCode, self.components.api_type, self.indices))
 
     @property
     def name(self):
-        start_stop = [str(s) if s is not None else '' for s in (self.slice.start, self.slice.stop - 1)]
-        return self.node + '.' + self.components.component_name + '[' + ':'.join(start_stop) + ']'
+        if self.step != 1:
+            raise RuntimeError("ComponentSlice that including a step different than 1 can not be represented by a "
+                               "single Maya valid name. Use .names instead")
+        return '{}.{}[{}:{}]'.format(self.node, self.components.component_name, self.start, self.stop)
+
+    @property
+    def names(self):
+        return [cp.name for cp in self]
 
     @property
     def index(self):
         return self.slice
-
-    def indices(self):
-        return self._indices
 
     def type(self):
         return self.components.api_type

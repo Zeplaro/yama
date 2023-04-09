@@ -2,7 +2,7 @@
 
 from maya import cmds, mel
 import maya.api.OpenMaya as om
-from . import nodes, xformutils, utils, decorators
+from . import nodes, xformutils, decorators
 
 
 def createHook(node, parent=None, suffix='hook'):
@@ -15,6 +15,8 @@ def createHook(node, parent=None, suffix='hook'):
     :return: the hook node
     """
     node = nodes.yam(node)
+    if not isinstance(node, nodes.Transform):
+        raise ValueError("Given node is not a transform")
     hook = nodes.createNode('transform', name='{}_{}'.format(node.shortName, suffix))
     mmx = nodes.createNode('multMatrix', n='mmx_{}_{}'.format(node.shortName, suffix))
     dmx = nodes.createNode('decomposeMatrix', n='dmx_{}_{}'.format(node.shortName, suffix))
@@ -30,20 +32,8 @@ def createHook(node, parent=None, suffix='hook'):
 
 
 def hierarchize(objs, reverse=False):
-    """Returns a list of objects ordered by their hierarchy in the scene"""
-    objs = {obj.longName: obj for obj in nodes.yams(objs)}
-    longnames = list(objs)
-    done = False
-    while not done:
-        done = True
-        for i in range(len(longnames) - 1):
-            if longnames[i].startswith(longnames[i + 1]):
-                longnames.insert(i, longnames.pop(i + 1))
-                done = False
-    ordered = nodes.YamList([objs[x] for x in longnames])
-    if reverse:
-        ordered.reverse()
-    return ordered
+    """Returns a list of objects sorted by their hierarchy in the scene"""
+    return nodes.YamList(sorted(objs, key=lambda x: x.longName, reverse=reverse))
 
 
 def mxConstraint(master=None, slave=None):
@@ -82,7 +72,7 @@ def mxConstraint(master=None, slave=None):
     cmds.delete(master_tmp.name, slave_tmp.name)
 
 
-def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
+def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False, raiseErrors=True):
     """
     Resets the objs translate, rotate, scale, visibility and/or user defined attributes to their default values.
     :param objs: list of objects to reset the attributes on. If None then the selected objects are reset.
@@ -91,11 +81,12 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
     :param s: if True resets the scale value to 1
     :param v: if True resets the visibility value to 1
     :param user: if True resets the user attributes values to their respective default values.
+    :param raiseErrors: If True, raises the encountered errors; skips them if False
     """
     if not objs:
         objs = nodes.selected(type='transform')
         if not objs:
-            raise RuntimeError("No object given and no 'transform' selected")
+            raise RuntimeError("No object given or transform selected")
     objs = nodes.yams(objs)
 
     tr = ''
@@ -122,11 +113,17 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False):
             for attr in attrs:
                 if not attr.isSettable():
                     continue
-                attr.value = attr.defaultValue
+                try:
+                    attr.value = attr.defaultValue
+                except Exception as e:
+                    if raiseErrors:
+                        raise e
+                    cmds.warning("Failed to set defaultValue on {} : {}".format(attr, e))
 
 
 def insertGroup(obj, suffix='GRP'):
-    assert obj, "No obj given; Use 'insertGroups' to work on selection"
+    if not obj:
+        raise ValueError("No obj given; Use 'insertGroups' to work on selection")
     obj = nodes.yam(obj)
     grp = nodes.createNode('transform', name='{}_{}'.format(obj.shortName, suffix))
     world_matrix = obj.getXform(m=True, ws=True)
@@ -151,6 +148,15 @@ def insertGroups(objs=None, suffix='GRP'):
 
 
 def wrapMesh(objs=None, ws=True):
+    """
+    Wraps the meshes of all but the first object to the first object's mesh.
+
+    If no objects are passed, the function takes the selected objects. If no 'transform' or 'mesh' is selected, a
+    'RuntimeError' will be raised.
+
+    :param objs: (list of nodes) List of objects to be wrapped. Default is None.
+    :param ws: (bool) If True, the matching is done in world space. Otherwise, the matching is done in object space.
+    """
     if not objs:
         objs = nodes.selected(type=['transform', 'mesh'])
         if not objs:
@@ -195,12 +201,11 @@ def matrixRowToMaya(matrix):
 
 
 @decorators.keepsel
-def getSymmetryTable(obj=None, axis='x'):
+def getSymmetryTable(obj=None):
     """
     Returns a SymTable object containing the symmetry table of the given object.
-    :param obj: the object to get the symmetry table from
-    :param axis: the axis to use for the symmetry table
-    :return: a SymTable object
+    :param obj: the object to get the symmetry table from.
+    :return: SymTable object
     """
 
     def selected():
@@ -210,9 +215,12 @@ def getSymmetryTable(obj=None, axis='x'):
         return int(vtx.split('[')[-1][:-1])
 
     if not obj:
-        obj = selected()[0]
+        obj = selected()
+        if not obj:
+            raise RuntimeError("No mesh given")
+        obj = obj[0]
     cmds.select(str(obj))
-    table = SymTable(axis=axis)
+    table = SymTable()
     cmds.select(sys=1)
     r_vtxs = selected()
     for r_vtx in r_vtxs:
@@ -241,98 +249,29 @@ class SymTable(dict):
     being the right vertices index.
     """
 
-    def __init__(self, axis='x'):
-        assert axis in ('x', 'y', 'z')
-        super(SymTable, self).__init__()
-        self.axis = axis
-        self.axis_mult = [1, 1, 1]
-        self.axis_mult['xyz'.index(axis)] *= -1
+    def __init__(self, *args):
+        super(SymTable, self).__init__(*args)
+        self.axis_mult = [-1, 1, 1]
         self.mids = []
 
     def __repr__(self):
-        return "<{}>".format(self)
-
-    def __str__(self):
-        str_ = ''
-        for key, value in self.items():
-            str_ += '{}: {}, '.format(key, value)
-        return "SymTable({})".format('{' + str_[:-2] + '}')
+        return "SymTable({})".format(super(SymTable, self).__repr__())
 
     def __invert__(self):
         """
-        Retuns a flipped symmetry table.
+        Returns a flipped symmetry table.
         :return: the flipped symmetry table object
         """
-        inv = SymTable(axis=self.axis)
-        for key, value in self.items():
-            inv[value] = key
-        return inv
+        return SymTable({value: key for key, value in self.items()})
 
     def invert(self):
         """
         Flips the symmetry table.
         """
-        for key, value in self.items():
-            self[value] = key
-
-
-def mirrorPos(obj, table):
-    for l_cp in table:
-        l_pos = obj.cp[l_cp].getPosition()
-        r_pos = utils.multList(l_pos, table.axis_mult)
-        obj.cp[table[l_cp]].setPosition(r_pos)
-
-    mid_mult = table.axis_mult[:]
-    mid_mult['xyz'.index(table.axis)] *= 0
-    for mid in table.mids:
-        pos = utils.multList(obj.cp[mid].getPosition(), mid_mult)
-        obj.cp[mid].setPosition(pos)
-
-
-def flipPos(obj, table, reverse_face_normal=True):
-    for l_cp in table:
-        l_pos = obj.cp[l_cp].getPosition()
-        r_pos = obj.cp[table[l_cp]].getPosition()
-
-        obj.cp[l_cp].setPosition(utils.multList(l_pos, table.axis_mult))
-        obj.cp[table[l_cp]].setPosition(utils.multList(r_pos, table.axis_mult))
-
-    for mid in table.mids:
-        pos = obj.cp[mid].getPosition()
-        pos = utils.multList(pos, table.axis_mult)
-        obj.cp[mid].setPosition(pos)
-
-    if reverse_face_normal:
-        cmds.polyNormal(obj.name, normalMode=3, constructionHistory=False)  # Flipping the face normals
-
-
-def snapAlongCurve(curve=None, objs=None):
-    """
-    Snaps given objs along given curve.
-    If no objs or no curve is given then selection is used, the curve needs to be first in selection.
-    :param curve: str, a nurbsCurve or transform containing a nurbsCurve
-    :param objs: list of transform objects
-    """
-    if not objs or not curve:
-        objs = nodes.selected()
-        if not objs:
-            raise RuntimeError("No object given and object selected")
-        if len(objs) < 2:
-            raise RuntimeError("Not enough object given or selected")
-        curve = objs.pop(0)
-
-    if isinstance(curve, nodes.Transform):
-        curve = curve.shape
-    assert isinstance(curve, nodes.NurbsCurve), "First object '{}' is not or doesn't contain a NurbsCurve".format(curve)
-
-    arclen = curve.arclen(ws=False)
-    step = arclen / (len(objs) - 1.0)
-    len_step = 0.0
-    for i, obj in enumerate(objs):
-        param = curve.MFn.findParamFromLength(len_step)
-        x, y, z, _ = curve.MFn.getPointAtParam(param, om.MSpace.kWorld)
-        obj.setPosition([x, y, z], ws=True)
-        len_step += step
+        inv = ~self
+        self.clear()
+        for key, value in inv.items():
+            self[key] = value
 
 
 def sortOutliner(objs=None, key=str):
@@ -345,3 +284,42 @@ def sortOutliner(objs=None, key=str):
         i.parent = grp
         i.parent = parent
     cmds.delete(grp.name)
+
+
+def getActiveCamera():
+    return nodes.yam(cmds.modelEditor(cmds.getPanel(withFocus=True), q=True, activeView=True, camera=True)).shape
+
+
+def unlockTRSV(objs=None, unlock=True, breakConnections=True, keyable=True, t=True, r=True, s=True, v=True):
+    if not objs:
+        objs = nodes.selected()
+    else:
+        objs = nodes.yams(objs)
+
+    trs = ''
+    trs += 't' if t else ''
+    trs += 'r' if r else ''
+    trs += 's' if s else ''
+
+    for obj in objs:
+        for attr in trs:
+            if unlock:
+                obj.attr(attr).locked = False
+            if keyable:
+                obj.attr(attr).keyable = True
+            if breakConnections:
+                obj.attr(attr).breakConnections()
+            for xyz in 'xyz':
+                if unlock:
+                    obj.attr(attr + xyz).locked = False
+                if keyable:
+                    obj.attr(attr + xyz).keyable = True
+                if breakConnections:
+                    obj.attr(attr + xyz).breakConnections()
+        if v:
+            if unlock:
+                obj.v.locked = False
+            if keyable:
+                obj.v.keyable = True
+            if breakConnections:
+                obj.v.breakConnections()
