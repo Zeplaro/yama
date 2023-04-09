@@ -29,9 +29,9 @@ def skinAs(objs=None, sourceNamespace=None, targetNamespace=None, useObjectNames
     no objects are given then this works on current scene selection.
 
     If the first object influences have a namespace and the other objects influences have a different namespace or don't
-    have one then you can use masterNamespace to remove from the original influences, and/or slaveNamespace to add to
+    have one then you can use sourceNamespace to remove from the original influences, and/or targetNamespace to add to
     the new influences. To get the namespace from the list of objects then set useObjectNamespace to True, in this case
-    the masterNamespace and slaveNamespace are ignored and the namespace to remove from the original influences and to
+    the sourceNamespace and targetNamespace are ignored and the namespace to remove from the original influences and to
     add to the new influences is determined per each object namespace.
     :param objs: List of objects. The first object's skinCluster is copied to the other objects.
     :param sourceNamespace: Namespace of the joints skinning the source object.
@@ -60,24 +60,24 @@ def skinAs(objs=None, sourceNamespace=None, targetNamespace=None, useObjectNames
         objs = [objs[0]] + getSkinnable(objs[1:])
     if len(objs) < 2:
         raise ValueError("Please select at least two objects")
-    master = nodes.yam(objs[0])
-    slaves = mut.hierarchize(objs[1:], reverse=True)
+    source = nodes.yam(objs[0])
+    targets = mut.hierarchize(objs[1:], reverse=True)
 
-    free_slaves = []
-    for slave in slaves:
-        # Checking for already attached skin on slave
-        if getSkinCluster(slave):
+    free_targets = []
+    for target in targets:
+        # Checking for already attached skin on target
+        if getSkinCluster(target):
             if config.verbose:
-                cmds.warning(slave + ' already has a skinCluster attached')
+                cmds.warning(target + ' already has a skinCluster attached')
             continue
         else:
-            free_slaves.append(slave)
+            free_targets.append(target)
 
-        # Checking for intermediate shapes on slave
-        intermediate_shapes = [shape for shape in slave.shapes(noIntermediate=False) if shape.intermediateObject.value]
+        # Checking for intermediate shapes on target
+        intermediate_shapes = [shape for shape in target.shapes(noIntermediate=False) if shape.intermediateObject.value]
         if intermediate_shapes and prompt:
             result = cmds.confirmDialog(title="Confirm",
-                                        message="These slaves already have intermediate shapes on them : {}\n"
+                                        message="These targets already have intermediate shapes on them : {}\n"
                                                 "Do you want to continue ?".format(intermediate_shapes),
                                         button=["Yes", "Cancel", "Delete them"], defaultButton="Yes",
                                         cancelButton="Cancel", dismissString="Cancel")
@@ -88,53 +88,53 @@ def skinAs(objs=None, sourceNamespace=None, targetNamespace=None, useObjectNames
                 cmds.delete(intermediate_shapes)
                 return skinAs(objs, sourceNamespace, targetNamespace, useObjectNamespace)
 
-    master_skn = getSkinCluster(master)
-    if not master_skn:
+    source_skn = getSkinCluster(source)
+    if not source_skn:
         raise ValueError('First object as no skinCluster attached')
-    master_influences = master_skn.influences()
-    slave_influences = master_influences
+    source_influences = source_skn.influences()
+    target_influences = source_influences
 
     if useObjectNamespace:
-        sourceNamespace = ':'.join(master.name.split(':')[:-1])
+        sourceNamespace = ':'.join(source.name.split(':')[:-1])
     elif sourceNamespace or targetNamespace:
         if sourceNamespace:
             replace_args = [sourceNamespace + ':', '']
             if targetNamespace:
                 replace_args[1] = targetNamespace + ':'
-            slave_influences = nodes.yams(inf.name.replace(*replace_args) for inf in master_influences)
+            target_influences = nodes.yams(inf.name.replace(*replace_args) for inf in source_influences)
         else:
-            slave_influences = nodes.yams(targetNamespace + ':' + inf for inf in master_influences)
+            target_influences = nodes.yams(targetNamespace + ':' + inf for inf in source_influences)
 
-    skins = []
-    kwargs = {'skinMethod': master_skn.skinningMethod.value,
-              'maximumInfluences': master_skn.maxInfluences.value,
-              'normalizeWeights': master_skn.normalizeWeights.value,
-              'obeyMaxInfluences': master_skn.maintainMaxInfluences.value,
-              'weightDistribution': master_skn.weightDistribution.value,
+    skinClusters = nodes.YamList()
+    kwargs = {'skinMethod': source_skn.skinningMethod.value,
+              'maximumInfluences': source_skn.maxInfluences.value,
+              'normalizeWeights': source_skn.normalizeWeights.value,
+              'obeyMaxInfluences': source_skn.maintainMaxInfluences.value,
+              'weightDistribution': source_skn.weightDistribution.value,
               'includeHiddenSelections': True,
               'toSelectedBones': True,
               }
-    for slave in free_slaves:
-        if useObjectNamespace:  # getting slave influences namespace per slave
-            targetNamespace = ':'.join(slave.name.split(':')[:-1])
+    for target in free_targets:
+        if useObjectNamespace:  # getting target influences namespace per target
+            targetNamespace = ':'.join(target.name.split(':')[:-1])
             if sourceNamespace:
                 replace_args = [sourceNamespace + ':', '']
                 if targetNamespace:
                     replace_args[1] = targetNamespace + ':'
-                slave_influences = nodes.yams(inf.name.replace(*replace_args) for inf in master_influences)
+                target_influences = nodes.yams(inf.name.replace(*replace_args) for inf in source_influences)
             elif targetNamespace:
-                slave_influences = nodes.yams(targetNamespace + ':' + inf for inf in master_influences)
+                target_influences = nodes.yams(targetNamespace + ':' + inf for inf in source_influences)
             else:
-                slave_influences = master_influences
+                target_influences = source_influences
 
-        nodes.select(slave_influences, slave)
-        slaveskn = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(slave.shortName), **kwargs)[0])
-        cmds.copySkinWeights(ss=master_skn.name, ds=slaveskn.name, nm=True, sa='closestPoint', smooth=True,
+        nodes.select(target_influences, target)
+        target_skinCluster = nodes.yam(cmds.skinCluster(name='{}_SKN'.format(target.shortName), **kwargs)[0])
+        cmds.copySkinWeights(ss=source_skn.name, ds=target_skinCluster.name, nm=True, sa='closestPoint', smooth=True,
                              ia=('oneToOne', 'label', 'closestJoint'))
         if config.verbose:
-            print(slave + ' skinned -> ' + slaveskn.name)
-        skins.append(slaveskn)
-    return skins
+            print(target + ' skinned -> ' + target_skinCluster.name)
+        skinClusters.append(target_skinCluster)
+    return skinClusters
 
 
 def reskin(objs=None):

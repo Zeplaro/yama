@@ -104,56 +104,56 @@ def match(objs=None, t=True, r=True, s=False, m=False, ws=True):
         raise ValueError("Not enough object selected")
     objs = nodes.yams(objs)
 
-    master, slaves = objs[0], objs[1:]
-    if isinstance(master, components.Component):
+    source, targets = objs[0], objs[1:]
+    if isinstance(source, components.Component):
         r = False
         s = False
 
     pos, rot, scale, matrix = None, None, None, None
     if t:
-        pos = master.getPosition(ws=ws)
+        pos = source.getPosition(ws=ws)
     else:
         if r:
-            rot = master.getXform(ro=True, ws=ws)
+            rot = source.getXform(ro=True, ws=ws)
         if s:
-            scale = master.getXform(s=True, ws=ws)
+            scale = source.getXform(s=True, ws=ws)
     if m:
-        matrix = master.getXform(m=True, ws=ws)
+        matrix = source.getXform(m=True, ws=ws)
 
-    for slave in slaves:
-        if isinstance(slave, nodes.Transform):
+    for target in targets:
+        if isinstance(target, nodes.Transform):
             if t:
-                slave.setXform(t=pos, ws=ws)
+                target.setXform(t=pos, ws=ws)
             if r:
-                slave.setXform(ro=rot, ws=ws)
+                target.setXform(ro=rot, ws=ws)
             if s:
-                slave.setXform(s=scale, ws=ws)
+                target.setXform(s=scale, ws=ws)
             if m:
-                slave.setXform(m=matrix, ws=ws)
-        elif isinstance(slave, components.Component):
+                target.setXform(m=matrix, ws=ws)
+        elif isinstance(target, components.Component):
             if t:
-                slave.setPosition(pos, ws=ws)
+                target.setPosition(pos, ws=ws)
         else:
-            raise RuntimeError("Cannot match '{}' of type '{}'".format(slave, type(slave).__name__))
+            raise RuntimeError("Cannot match '{}' of type '{}'".format(target, type(target).__name__))
 
 
 @decorators.keepsel
-def matchComponents(comps=None, slave=None, ws=False):
+def matchComponents(components=None, target=None, ws=False):
     """
-    Match the position, rotation and scale of the given/selected components to the slave object.
-    :param comps: [str, ...] or None to get selected components.
-    :param slave: str, Name of the slave object or None to get last selected object.
+    Match the position of the given/selected components to the target object.
+    :param components: [str, ...] or None to get selected components.
+    :param target: str, Name of the target object or None to get last selected object.
     :param ws: bool, True to match in world space.
     """
-    if not comps or not slave:
-        comps = nodes.selected(fl=False)
-        slave = comps.pop(-1)
+    if not components or not target:
+        components = nodes.selected(fl=False)
+        target = components.pop(-1)
     else:
-        comps = nodes.yams(comps)
-        slave = nodes.yam(slave)
+        components = nodes.yams(components)
+        target = nodes.yam(target)
 
-    for comp in comps:
-        slave.cp[comp.index].setPosition(comp.getPosition(ws=ws), ws=ws)
+    for comp in components:
+        target.cp[comp.index].setPosition(comp.getPosition(ws=ws), ws=ws)
 
 
 def getCenter(objs):

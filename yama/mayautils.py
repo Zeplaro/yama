@@ -36,40 +36,40 @@ def hierarchize(objs, reverse=False):
     return nodes.YamList(sorted(objs, key=lambda x: x.longName, reverse=reverse))
 
 
-def mxConstraint(master=None, slave=None):
-    if not master or not slave:
+def mxConstraint(source=None, target=None):
+    if not source or not target:
         sel = nodes.selected(type='transform')
         if len(sel) != 2:
             raise RuntimeError("two 'transform' needed; {} given".format(len(sel)))
-        master, slave = sel
+        source, target = sel
     else:
-        master, slave = nodes.yams([master, slave])
+        source, target = nodes.yams([source, target])
 
-    mmx = nodes.createNode('multMatrix', n='{}_mmx'.format(master.shortName))
-    dmx = nodes.createNode('decomposeMatrix', n='{}_dmx'.format(master.shortName))
-    cmx = nodes.createNode('composeMatrix', n='{}_cmx'.format(master.shortName))
+    mmx = nodes.createNode('multMatrix', n='{}_mmx'.format(source.shortName))
+    dmx = nodes.createNode('decomposeMatrix', n='{}_dmx'.format(source.shortName))
+    cmx = nodes.createNode('composeMatrix', n='{}_cmx'.format(source.shortName))
     cmx.outputMatrix.connectTo(mmx.matrixIn[0], f=True)
-    master.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
-    slave.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
+    source.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
+    target.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
     mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
 
-    master_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(master.shortName))
-    slave_tmp = nodes.createNode('transform', n='{}_mastertmp'.format(slave.shortName))
-    xformutils.match([master, master_tmp])
-    xformutils.match([slave, slave_tmp])
-    slave_tmp.parent = master_tmp
+    source_tmp = nodes.createNode('transform', n='{}_sourceTMP'.format(source.shortName))
+    target_tmp = nodes.createNode('transform', n='{}_targetTMP'.format(target.shortName))
+    xformutils.match([source, source_tmp])
+    xformutils.match([target, target_tmp])
+    target_tmp.parent = source_tmp
 
-    cmx.inputTranslate.value = slave_tmp.translate.value
-    cmx.inputRotate.value = slave_tmp.rotate.value
-    cmx.inputScale.value = slave_tmp.scale.value
-    cmx.inputShear.value = slave_tmp.shear.value
+    cmx.inputTranslate.value = target_tmp.translate.value
+    cmx.inputRotate.value = target_tmp.rotate.value
+    cmx.inputScale.value = target_tmp.scale.value
+    cmx.inputShear.value = target_tmp.shear.value
 
-    dmx.outputTranslate.connectTo(slave.translate, f=True)
-    dmx.outputRotate.connectTo(slave.rotate, f=True)
-    dmx.outputScale.connectTo(slave.scale, f=True)
-    dmx.outputShear.connectTo(slave.shear, f=True)
+    dmx.outputTranslate.connectTo(target.translate, f=True)
+    dmx.outputRotate.connectTo(target.rotate, f=True)
+    dmx.outputScale.connectTo(target.scale, f=True)
+    dmx.outputShear.connectTo(target.shear, f=True)
 
-    cmds.delete(master_tmp.name, slave_tmp.name)
+    cmds.delete(source_tmp.name, target_tmp.name)
 
 
 def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False, raiseErrors=True):
@@ -149,7 +149,7 @@ def insertGroups(objs=None, suffix='GRP'):
 
 def wrapMesh(objs=None, ws=True):
     """
-    Wraps the meshes of all but the first object to the first object's mesh.
+    Wraps the meshes of all but the first object to the first object's mesh by finding the closest point.
 
     If no objects are passed, the function takes the selected objects. If no 'transform' or 'mesh' is selected, a
     'RuntimeError' will be raised.
@@ -164,27 +164,27 @@ def wrapMesh(objs=None, ws=True):
         if len(objs) < 2:
             raise RuntimeError("Not enough object given or selected")
     objs = nodes.yams(objs)
-    master = objs[0]
-    slaves = objs[1:]
-    if isinstance(master, nodes.Transform):
-        master = master.shape
-        if not isinstance(master, nodes.Mesh):
-            raise RuntimeError("first object '{}' is not a 'mesh'".format(master))
-    master_mfn = master.MFn
+    source = objs[0]
+    targets = objs[1:]
+    if isinstance(source, nodes.Transform):
+        source = source.shape
+        if not isinstance(source, nodes.Mesh):
+            raise RuntimeError("first object '{}' is not a 'mesh'".format(source))
     if ws:
         space = om.MSpace.kworld
     else:
         space = om.MSpace.kObject
-    for slave in slaves:
-        if isinstance(slave, nodes.Transform):
-            slave = slave.shape
-            if not isinstance(slave, nodes.Mesh):
-                cmds.warning("cannot match '{}' of type '{}'".format(slave, type(slave).__name__))
+    source_mfn = source.MFn
+    for target in targets:
+        if isinstance(target, nodes.Transform):
+            target = target.shape
+            if not isinstance(target, nodes.Mesh):
+                cmds.warning("cannot match '{}' of type '{}'".format(target, type(target).__name__))
                 continue
-        slave_mfn = slave.MFn
-        for i in range(len(slave)):
-            x, y, z, _ = master_mfn.getClosestPoint(slave_mfn.getPoint(i), space)[0]
-            slave.vtx[i].setPosition([x, y, z], ws=True)
+        target_mfn = target.MFn
+        for i in range(len(target)):
+            x, y, z, _ = source_mfn.getClosestPoint(target_mfn.getPoint(i), space)[0]
+            target.vtx[i].setPosition([x, y, z], ws=True)
 
 
 def matrixMayaToRow(matrix):
