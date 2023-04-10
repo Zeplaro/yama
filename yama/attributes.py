@@ -177,7 +177,6 @@ class Attribute(nodes.Yam):
             raise TypeError("'{}' is not iterable".format(self))
 
     def __eq__(self, other):
-        from . import checks
         if hasattr(other, 'MPlug'):
             return self.MPlug == other.MPlug
         else:
