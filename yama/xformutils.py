@@ -112,11 +112,10 @@ def match(objs=None, t=True, r=True, s=False, m=False, ws=True):
     pos, rot, scale, matrix = None, None, None, None
     if t:
         pos = source.getPosition(ws=ws)
-    else:
-        if r:
-            rot = source.getXform(ro=True, ws=ws)
-        if s:
-            scale = source.getXform(s=True, ws=ws)
+    if r:
+        rot = source.getXform(ro=True, ws=ws)
+    if s:
+        scale = source.getXform(s=True, ws=ws)
     if m:
         matrix = source.getXform(m=True, ws=ws)
 
