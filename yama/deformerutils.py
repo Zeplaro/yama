@@ -245,16 +245,15 @@ def hammerShells(vertices=None, reverse=False):
 
     data = {}
     for vtx in vertices:
-        node = vtx.node.name  # Uses name as dict key instead of node itself for performance.
-        if node in data:
-            data[node].append(vtx)
+        node_name = vtx.node.name  # Uses name as dict key instead of node itself for performance.
+        if node_name in data:
+            data[node_name][1].append(vtx)
         else:
-            data[node] = [vtx]
+            data[node_name] = [vtx.node, [vtx]]
 
-    for node, vtxs in data.items():
-        node = nodes.yam(node)
+    for node_name, (node, vtxs) in data.items():
         shells = node.shells(indexOnly=True)  # Uses indexOnly for 'index in/not in shell' for much faster performance
-        print("Found {} shells for '{}'".format(len(shells), node))
+        print("Found {} shells for '{}'".format(len(shells), node_name))
         for shell in shells:
             if reverse:
                 vtxs_indexes = {vtx.index for vtx in vtxs}
