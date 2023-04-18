@@ -7,15 +7,15 @@ from . import io
 
 
 class WeightList(list):
-    def __init__(self, arg=None, force_clamp=True, min_value=0.0, max_value=1.0):
+    def __init__(self, data=None, force_clamp=True, min_value=0.0, max_value=1.0):
         super(WeightList, self).__init__()
         self.min_value = min_value
         self.max_value = max_value
         self.force_clamp = force_clamp
 
-        # Forces initial arg to go through __setitem__ to verify values are floats and clamped
-        if arg:
-            for i in arg:
+        # Forces initial data to go through __setitem__ to verify values are floats and clamped
+        if data:
+            for i in data:
                 self.append(i)
 
     def __repr__(self):
@@ -165,8 +165,8 @@ class WeightList(list):
                 self.append(i)
         return data
 
-    def emptyCopy(self, arg=None):
-        return WeightList(arg, force_clamp=self.force_clamp, min_value=self.min_value, max_value=self.max_value)
+    def emptyCopy(self, data=None):
+        return WeightList(data, force_clamp=self.force_clamp, min_value=self.min_value, max_value=self.max_value)
 
     def copy(self):
         return self.emptyCopy(self)
