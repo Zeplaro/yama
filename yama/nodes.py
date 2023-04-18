@@ -546,14 +546,14 @@ class DependNode(Yam):
             kwargs['scn'] = True
         return yams(cmds.listConnections(self.name, **kwargs) or [])
 
-    def sourceConnections(self, **kwargs):
+    def inputs(self, **kwargs):
         """
         Returns listConnections with destination connections disabled.
         See listConnections for more info.
         """
         return self.listConnections(destination=False, **kwargs)
 
-    def destinationConnections(self, **kwargs):
+    def outputs(self, **kwargs):
         """
         Returns listConnections with source connections disabled.
         See listConnections for more info.
@@ -1376,10 +1376,10 @@ class SkinCluster(GeometryFilter):
         Resets the skinCluster and mesh to the current influences position.
         """
         for inf in self.influences():
-            conns = (x for x in inf.worldMatrix.destinationConnections(type='skinCluster') if x.node == self)
+            conns = (x for x in inf.worldMatrix.outputs(type='skinCluster') if x.node == self)
             for conn in conns:
                 bpm = self.bindPreMatrix[conn.index]
-                if bpm.sourceConnection():
+                if bpm.input():
                     if config.verbose:
                         cmds.warning("{} is connected and can't be reset".format(bpm))
                     continue
@@ -1543,7 +1543,7 @@ class UVPin(DependNode):
 
     @property
     def geometry(self):
-        connection = self.deformedGeometry.sourceConnection()
+        connection = self.deformedGeometry.input()
         if connection:
             return connection.node
 
@@ -1560,7 +1560,7 @@ class UVPin(DependNode):
         elif isinstance(geo, NurbsSurface):
             out_attr = geo.worldSpace
         else:
-            raise NotImplementedError("Geometry '{}' of type '{}' not implemeted.".format(geo, type(geo).__name__))
+            raise NotImplementedError("Geometry '{}' of type '{}' not implemented.".format(geo, type(geo).__name__))
 
         out_attr.connectTo(self.deformedGeometry, force=True)
 
@@ -1614,8 +1614,8 @@ class SupportedTypes(object):
     New node class should also be added to the classes_str dict to be
     compatible with getclass_cmds.
 
-    classes_MFn : {om.MFn.kNodeMFnType: class,} where om.MFn.kNodeMFnType is a valid corresponding value from om.MFn
-    classes_str : {'mayaType': class,} where 'mayaType' is the type you get when using cmds.nodeType('node').
+    For classes_MFn : {om.MFn.kNodeMFnType: class,} where om.MFn.kNodeMFnType is a valid corresponding value from om.MFn
+    For classes_str : {'mayaType': class,} where 'mayaType' is the type you get when using cmds.nodeType('node').
     """
 
     # Inheritance tree for all defined classes and their MFn types relative to each others.
@@ -1795,10 +1795,9 @@ class YamList(list):
         return not self.__eq__(other)
 
     def __getitem__(self, item):
-        item = super(YamList, self).__getitem__(item)
-        if not hasattr(item, 'isAYamObject'):  # In case item is a slice, returns a new YamList
-            return YamList(item, no_init_check=True)
-        return item
+        if item.__class__ == slice:
+            return YamList(super(YamList, self).__getitem__(item), no_init_check=True)
+        return super(YamList, self).__getitem__(item)
 
     if PY2:  # if python 2, defining the __getslice__ method.
         def __getslice__(self, *args):
