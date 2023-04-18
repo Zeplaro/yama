@@ -388,11 +388,11 @@ class Attribute(nodes.Yam):
 
     def breakConnections(self, source=True, destination=False):
         if source:
-            connection = self.sourceConnection()
+            connection = self.input()
             if connection:
                 connection.disconnect(self)
         if destination:
-            for c in self.destinationConnections():
+            for c in self.outputs():
                 self.disconnect(c)
 
     def breakInput(self):
