@@ -169,7 +169,7 @@ def wrapMesh(objs=None, ws=True):
     if isinstance(source, nodes.Transform):
         source = source.shape
         if not isinstance(source, nodes.Mesh):
-            raise RuntimeError("first object '{}' is not a 'mesh'".format(source))
+            raise RuntimeError("First object '{}' is not a 'mesh'".format(source))
     if ws:
         space = om.MSpace.kworld
     else:
@@ -179,7 +179,7 @@ def wrapMesh(objs=None, ws=True):
         if isinstance(target, nodes.Transform):
             target = target.shape
             if not isinstance(target, nodes.Mesh):
-                cmds.warning("cannot match '{}' of type '{}'".format(target, type(target).__name__))
+                cmds.warning("Cannot match '{}' of type '{}'".format(target, type(target).__name__))
                 continue
         target_mfn = target.MFn
         for i in range(len(target)):

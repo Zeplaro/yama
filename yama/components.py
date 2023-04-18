@@ -80,8 +80,8 @@ class Components(nodes.Yam):
     def __init__(self, node, apiType):
         super(Components, self).__init__()
         if not isinstance(node, nodes.ControlPoint):
-            raise TypeError("component node should be of type 'ControlPoint', "
-                            "instead node type is '{}'".format(type(node).__name__))
+            raise TypeError("Expected component node of type ControlPoint, "
+                            "instead got : {}, {}".format(node, type(node).__name__))
         self.node = node
         self.api_type = apiType
         self.component_name = SupportedTypes.MFnid_component_class[apiType][0]
