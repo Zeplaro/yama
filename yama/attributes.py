@@ -177,7 +177,6 @@ class Attribute(nodes.Yam):
             raise TypeError("'{}' is not iterable".format(self))
 
     def __eq__(self, other):
-        from . import checks
         if hasattr(other, 'MPlug'):
             return self.MPlug == other.MPlug
         else:
@@ -389,11 +388,11 @@ class Attribute(nodes.Yam):
 
     def breakConnections(self, source=True, destination=False):
         if source:
-            connection = self.sourceConnection()
+            connection = self.input()
             if connection:
                 connection.disconnect(self)
         if destination:
-            for c in self.destinationConnections():
+            for c in self.outputs():
                 self.disconnect(c)
 
     def breakInput(self):
@@ -567,19 +566,27 @@ class BlendShapeTarget(Attribute):
     def weightsAttr(self):
         return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights
 
-    @property
-    def weights(self):
+    def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         geometry = self.node.geometry
         if not geometry:
             raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self.node))
         weightsAttr = self.weightsAttr
-        return weightlist.WeightList(weightsAttr[x].value for x in range(len(geometry)))
+        return weightlist.WeightList((weightsAttr[x].value for x in range(len(geometry))),
+                                     force_clamp=force_clamp, min_value=min_value, max_value=max_value,
+                                     round_value=round_value)
 
-    @weights.setter
-    def weights(self, weights):
+    def setWeights(self, weights):
         weightsAttr = self.weightsAttr
         for i, weight in enumerate(weights):
             weightsAttr[i].value = weight
+
+    @property
+    def weights(self):
+        return self.getWeights()
+
+    @weights.setter
+    def weights(self, weights):
+        self.setWeights(weights)
 
 
 def getAttr(attr):

@@ -546,14 +546,14 @@ class DependNode(Yam):
             kwargs['scn'] = True
         return yams(cmds.listConnections(self.name, **kwargs) or [])
 
-    def sourceConnections(self, **kwargs):
+    def inputs(self, **kwargs):
         """
         Returns listConnections with destination connections disabled.
         See listConnections for more info.
         """
         return self.listConnections(destination=False, **kwargs)
 
-    def destinationConnections(self, **kwargs):
+    def outputs(self, **kwargs):
         """
         Returns listConnections with source connections disabled.
         See listConnections for more info.
@@ -1143,19 +1143,27 @@ class WeightGeometryFilter(GeometryFilter):
     def __init__(self, MObject):
         super(WeightGeometryFilter, self).__init__(MObject)
 
-    @property
-    def weights(self):
+    def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         geometry = self.geometry
         if not geometry:
             raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self.node))
         weightsAttr = self.weightsAttr
-        return weightlist.WeightList(weightsAttr[x].value for x in range(len(geometry)))
+        return weightlist.WeightList((weightsAttr[x].value for x in range(len(geometry))),
+                                     force_clamp=force_clamp, min_value=min_value, max_value=max_value,
+                                     round_value=round_value)
 
-    @weights.setter
-    def weights(self, weights):
+    def setWeights(self, weights):
         weightsAttr = self.weightsAttr
         for i, weight in enumerate(weights):
             weightsAttr[i].value = weight
+
+    @property
+    def weights(self):
+        return self.getWeights()
+
+    @weights.setter
+    def weights(self, weights):
+        self.setWeights(weights)
 
     @property
     def weightsAttr(self):
@@ -1294,26 +1302,25 @@ class SkinCluster(GeometryFilter):
 
         self.MFn.setWeights(geo, components, om.MIntArray([inf_index]), om.MDoubleArray(weights))
 
-    @property
-    def weights(self):
+    def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         weights = []
         # Getting the weights
         weights_array, num_influences = self.MFn.getWeights(*self.getDeformerSetGeoAndComponents())
 
         for i in range(0, len(weights_array), num_influences):
-            weights.append(weightlist.WeightList(weights_array[i:i + num_influences]))
+            weights.append(weightlist.WeightList(weights_array[i:i + num_influences],
+                                                 force_clamp=force_clamp, min_value=min_value, max_value=max_value,
+                                                 round_value=round_value))
         return weights
 
-    @weights.setter
-    def weights(self, weights):
-        if config.undoable:
-            self.setWeights(weights)
-        else:
-            self.setWeightsOM(weights)
-
     def setWeights(self, weights):
-        for vtx, weight in enumerate(weights):
-            self.setVertexWeight(index=vtx, values=weight)
+        if config.undoable:
+            # Hacking the undo queue ! Setting all weigths to 1.0 on first joint to register a change in the undo queue
+            cmds.skinPercent(self.name, self.geometry.name, transformValue=[self.influences()[0].name, 1.0], zri=True)
+            # for vtx, weight in enumerate(weights):
+            #     self.setVertexWeight(index=vtx, values=weight)
+        # else:
+        self.setWeightsOM(weights)
 
     def setWeightsOM(self, weights):
         geo, components = self.getDeformerSetGeoAndComponents()
@@ -1326,27 +1333,40 @@ class SkinCluster(GeometryFilter):
         self.MFn.setWeights(geo, components, influence_array, flat_weights)
 
     @property
-    def dqWeights(self):
-        return weightlist.WeightList(self.MFn.getBlendWeights(*self.getDeformerSetGeoAndComponents()))
+    def weights(self):
+        return self.getWeights()
 
-    @dqWeights.setter
-    def dqWeights(self, data):
+    @weights.setter
+    def weights(self, weights):
+        self.setWeights(weights)
+
+    def getDQWeigts(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
+        return weightlist.WeightList(self.MFn.getBlendWeights(*self.getDeformerSetGeoAndComponents()),
+                                     force_clamp=force_clamp, min_value=min_value, max_value=max_value,
+                                     round_value=round_value)
+
+    def setDQWeights(self, weights):
         if config.undoable:
-            self.setDqWeights(data)
+            weightsAttr = self.blendWeights
+            for vtx, value in enumerate(weights):
+                weightsAttr[vtx].value = value
         else:
-            self.setDqWeightsOM(data)
+            self.setDQWeightsOM(weights)
 
-    def setDqWeights(self, data):
-        weightsAttr = self.blendWeights
-        for vtx, value in enumerate(data):
-            weightsAttr[vtx].value = value
-
-    def setDqWeightsOM(self, data):
+    def setDQWeightsOM(self, weights):
         geo, components = self.getDeformerSetGeoAndComponents()
         # Converting the data into maya array
-        data = om.MDoubleArray(data)
+        weights = om.MDoubleArray(weights)
         # Setting the weights
-        self.MFn.setBlendWeights(geo, components, data)
+        self.MFn.setBlendWeights(geo, components, weights)
+
+    @property
+    def dQWeights(self):
+        return self.getDQWeigts()
+
+    @dQWeights.setter
+    def dQWeights(self, weights):
+        self.setDQWeights(weights)
 
     def getPointsAffectedByInfluence(self, influence):
         """
@@ -1376,10 +1396,10 @@ class SkinCluster(GeometryFilter):
         Resets the skinCluster and mesh to the current influences position.
         """
         for inf in self.influences():
-            conns = (x for x in inf.worldMatrix.destinationConnections(type='skinCluster') if x.node == self)
+            conns = (x for x in inf.worldMatrix.outputs(type='skinCluster') if x.node == self)
             for conn in conns:
                 bpm = self.bindPreMatrix[conn.index]
-                if bpm.sourceConnection():
+                if bpm.input():
                     if config.verbose:
                         cmds.warning("{} is connected and can't be reset".format(bpm))
                     continue
@@ -1426,7 +1446,7 @@ class SkinCluster(GeometryFilter):
     def data(self):
         return {'influences': self.influences().names,
                 'weights': self.weights,
-                'dqWeights': self.dqWeights,
+                'dQWeights': self.dQWeights,
                 'skinningMethod': self.skinningMethod.value,
                 'maxInfluences': self.maxInfluences.value,
                 'normalizeWeights': self.normalizeWeights.value,
@@ -1454,7 +1474,7 @@ class SkinCluster(GeometryFilter):
         self.maintainMaxInfluences.value = data['maintainMaxInfluences']
         self.weightDistribution.value = data['weightDistribution']
         self.weights = data['weights']
-        self.dqWeights = data['dqWeights']
+        self.dQWeights = data['dQWeights']
 
     def addInfluence(self, influence):
         if hasattr(influence, 'isAYamNode'):
@@ -1543,7 +1563,7 @@ class UVPin(DependNode):
 
     @property
     def geometry(self):
-        connection = self.deformedGeometry.sourceConnection()
+        connection = self.deformedGeometry.input()
         if connection:
             return connection.node
 
@@ -1560,7 +1580,7 @@ class UVPin(DependNode):
         elif isinstance(geo, NurbsSurface):
             out_attr = geo.worldSpace
         else:
-            raise NotImplementedError("Geometry '{}' of type '{}' not implemeted.".format(geo, type(geo).__name__))
+            raise NotImplementedError("Geometry '{}' of type '{}' not implemented.".format(geo, type(geo).__name__))
 
         out_attr.connectTo(self.deformedGeometry, force=True)
 
@@ -1614,8 +1634,8 @@ class SupportedTypes(object):
     New node class should also be added to the classes_str dict to be
     compatible with getclass_cmds.
 
-    classes_MFn : {om.MFn.kNodeMFnType: class,} where om.MFn.kNodeMFnType is a valid corresponding value from om.MFn
-    classes_str : {'mayaType': class,} where 'mayaType' is the type you get when using cmds.nodeType('node').
+    For classes_MFn : {om.MFn.kNodeMFnType: class,} where om.MFn.kNodeMFnType is a valid corresponding value from om.MFn
+    For classes_str : {'mayaType': class,} where 'mayaType' is the type you get when using cmds.nodeType('node').
     """
 
     # Inheritance tree for all defined classes and their MFn types relative to each others.
@@ -1795,10 +1815,9 @@ class YamList(list):
         return not self.__eq__(other)
 
     def __getitem__(self, item):
-        item = super(YamList, self).__getitem__(item)
-        if not hasattr(item, 'isAYamObject'):  # In case item is a slice, returns a new YamList
-            return YamList(item, no_init_check=True)
-        return item
+        if item.__class__ == slice:
+            return YamList(super(YamList, self).__getitem__(item), no_init_check=True)
+        return super(YamList, self).__getitem__(item)
 
     if PY2:  # if python 2, defining the __getslice__ method.
         def __getslice__(self, *args):

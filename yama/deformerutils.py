@@ -245,16 +245,16 @@ def hammerShells(vertices=None, reverse=False):
 
     data = {}
     for vtx in vertices:
-        node = vtx.node.name  # Uses name as dict key instead of node itself for performance.
-        if node in data:
-            data[node].append(vtx)
+        node_name = vtx.node.name  # Uses name as dict key instead of node itself for performance.
+        if node_name in data:
+            data[node_name][1].append(vtx)
         else:
-            data[node] = [vtx]
+            data[node_name] = [vtx.node, [vtx]]
 
-    for node, vtxs in data.items():
-        node = nodes.yam(node)
+    for node_name, (node, vtxs) in data.items():
         shells = node.shells(indexOnly=True)  # Uses indexOnly for 'index in/not in shell' for much faster performance
-        print("Found {} shells for '{}'".format(len(shells), node))
+        if config.verbose:
+            print("Found {} shells for '{}'".format(len(shells), node_name))
         for shell in shells:
             if reverse:
                 vtxs_indexes = {vtx.index for vtx in vtxs}
@@ -280,7 +280,7 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
     influence_indexes = []
     all_influences = skinCluster.influences()
 
-    # Checks the target influence
+    # Checks the target influence is not missing from the skinCluster
     target_influence = nodes.yam(target_influence)
     if target_influence in all_influences:
         target_index = skinCluster.indexForInfluenceObject(target_influence)
@@ -291,7 +291,7 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
         cmds.warning("Target influence not found in skinCluster '{}': '{}'".format(skinCluster, target_influence))
         return False
 
-    # Checks the influences
+    # Checks the influences are not missing from the skinCluster
     missing_influences = []
     for inf in influences:
         inf = nodes.yam(inf)
@@ -305,11 +305,29 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
     if missing_influences:
         cmds.warning("Influences not found in skinCluster '{}': {}".format(skinCluster, missing_influences))
 
-    for inf, index in influence_indexes:
-        for vtx in skinCluster.getPointsAffectedByInfluence(inf):
-            skinCluster.weightList[vtx.index].weights[target_index].value += skinCluster.weightList[vtx.index].weights[
-                index].value
-            skinCluster.weightList[vtx.index].weights[index].value = 0.0
+    # Transferring the weights
+    weights = skinCluster.weights
+    for vtx in range(len(skinCluster.geometry)):
+        for index in influence_indexes:
+            weights[vtx][target_index] += weights[vtx][index]
+            weights[vtx][index] = 0.0
+    skinCluster.weights = weights
+
+    # OLD best way without undo queue hacking
+    # if config.undoable:
+    #     # If undoable, faster this way most times especially when the influences influence only part of the vertices.
+    #     for inf, index in influence_indexes:
+    #         for vtx in skinCluster.getPointsAffectedByInfluence(inf):
+    #             skinCluster.weightList[vtx.index].weights[target_index].value += skinCluster.weightList[vtx.index].weights[index].value
+    #             skinCluster.weightList[vtx.index].weights[index].value = 0.0
+    # else:  # Faster this way if not undoable since OpenMaya has a way to set weights per influences
+    #     target_weights = skinCluster.getInfluenceWeights(target_index)
+    #     zero_weights = weightlist.WeightList.fromLengthValue(len(skinCluster.geometry), 0.0)
+    #     for inf, index in influence_indexes:
+    #         target_weights += skinCluster.getInfluenceWeights(index)
+    #         skinCluster.setInfluenceWeights(index, zero_weights)
+    #     skinCluster.setInfluenceWeights(target_index, target_weights)
+
     return True
 
 
