@@ -1143,19 +1143,27 @@ class WeightGeometryFilter(GeometryFilter):
     def __init__(self, MObject):
         super(WeightGeometryFilter, self).__init__(MObject)
 
-    @property
-    def weights(self):
+    def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         geometry = self.geometry
         if not geometry:
             raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self.node))
         weightsAttr = self.weightsAttr
-        return weightlist.WeightList(weightsAttr[x].value for x in range(len(geometry)))
+        return weightlist.WeightList((weightsAttr[x].value for x in range(len(geometry))),
+                                     force_clamp=force_clamp, min_value=min_value, max_value=max_value,
+                                     round_value=round_value)
 
-    @weights.setter
-    def weights(self, weights):
+    def setWeights(self, weights):
         weightsAttr = self.weightsAttr
         for i, weight in enumerate(weights):
             weightsAttr[i].value = weight
+
+    @property
+    def weights(self):
+        return self.getWeights()
+
+    @weights.setter
+    def weights(self, weights):
+        self.setWeights(weights)
 
     @property
     def weightsAttr(self):
@@ -1294,26 +1302,25 @@ class SkinCluster(GeometryFilter):
 
         self.MFn.setWeights(geo, components, om.MIntArray([inf_index]), om.MDoubleArray(weights))
 
-    @property
-    def weights(self):
+    def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         weights = []
         # Getting the weights
         weights_array, num_influences = self.MFn.getWeights(*self.getDeformerSetGeoAndComponents())
 
         for i in range(0, len(weights_array), num_influences):
-            weights.append(weightlist.WeightList(weights_array[i:i + num_influences]))
+            weights.append(weightlist.WeightList(weights_array[i:i + num_influences],
+                                                 force_clamp=force_clamp, min_value=min_value, max_value=max_value,
+                                                 round_value=round_value))
         return weights
 
-    @weights.setter
-    def weights(self, weights):
-        if config.undoable:
-            self.setWeights(weights)
-        else:
-            self.setWeightsOM(weights)
-
     def setWeights(self, weights):
-        for vtx, weight in enumerate(weights):
-            self.setVertexWeight(index=vtx, values=weight)
+        if config.undoable:
+            # Hacking the undo queue ! Setting all weigths to 1.0 on first joint to register a change in the undo queue
+            cmds.skinPercent(self.name, self.geometry.name, transformValue=[self.influences()[0].name, 1.0], zri=True)
+            # for vtx, weight in enumerate(weights):
+            #     self.setVertexWeight(index=vtx, values=weight)
+        # else:
+        self.setWeightsOM(weights)
 
     def setWeightsOM(self, weights):
         geo, components = self.getDeformerSetGeoAndComponents()
@@ -1326,27 +1333,40 @@ class SkinCluster(GeometryFilter):
         self.MFn.setWeights(geo, components, influence_array, flat_weights)
 
     @property
-    def dqWeights(self):
-        return weightlist.WeightList(self.MFn.getBlendWeights(*self.getDeformerSetGeoAndComponents()))
+    def weights(self):
+        return self.getWeights()
 
-    @dqWeights.setter
-    def dqWeights(self, data):
+    @weights.setter
+    def weights(self, weights):
+        self.setWeights(weights)
+
+    def getDQWeigts(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
+        return weightlist.WeightList(self.MFn.getBlendWeights(*self.getDeformerSetGeoAndComponents()),
+                                     force_clamp=force_clamp, min_value=min_value, max_value=max_value,
+                                     round_value=round_value)
+
+    def setDQWeights(self, weights):
         if config.undoable:
-            self.setDqWeights(data)
+            weightsAttr = self.blendWeights
+            for vtx, value in enumerate(weights):
+                weightsAttr[vtx].value = value
         else:
-            self.setDqWeightsOM(data)
+            self.setDQWeightsOM(weights)
 
-    def setDqWeights(self, data):
-        weightsAttr = self.blendWeights
-        for vtx, value in enumerate(data):
-            weightsAttr[vtx].value = value
-
-    def setDqWeightsOM(self, data):
+    def setDQWeightsOM(self, weights):
         geo, components = self.getDeformerSetGeoAndComponents()
         # Converting the data into maya array
-        data = om.MDoubleArray(data)
+        weights = om.MDoubleArray(weights)
         # Setting the weights
-        self.MFn.setBlendWeights(geo, components, data)
+        self.MFn.setBlendWeights(geo, components, weights)
+
+    @property
+    def dQWeights(self):
+        return self.getDQWeigts()
+
+    @dQWeights.setter
+    def dQWeights(self, weights):
+        self.setDQWeights(weights)
 
     def getPointsAffectedByInfluence(self, influence):
         """
@@ -1426,7 +1446,7 @@ class SkinCluster(GeometryFilter):
     def data(self):
         return {'influences': self.influences().names,
                 'weights': self.weights,
-                'dqWeights': self.dqWeights,
+                'dQWeights': self.dQWeights,
                 'skinningMethod': self.skinningMethod.value,
                 'maxInfluences': self.maxInfluences.value,
                 'normalizeWeights': self.normalizeWeights.value,
@@ -1454,7 +1474,7 @@ class SkinCluster(GeometryFilter):
         self.maintainMaxInfluences.value = data['maintainMaxInfluences']
         self.weightDistribution.value = data['weightDistribution']
         self.weights = data['weights']
-        self.dqWeights = data['dqWeights']
+        self.dQWeights = data['dQWeights']
 
     def addInfluence(self, influence):
         if hasattr(influence, 'isAYamNode'):
