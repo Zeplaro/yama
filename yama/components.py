@@ -21,7 +21,7 @@ def getComponent(node, attr):
     :return: The component object.
     """
     if '.' in attr:
-        raise TypeError("component '{}' not in supported types".format(attr))
+        raise TypeError("Not a supported component : '{}'".format(attr))
 
     split = []
     if '[' in attr:  # Checking if getting a specific index
