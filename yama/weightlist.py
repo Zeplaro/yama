@@ -194,6 +194,24 @@ class WeightList(list):
 
 
 def normalizeWeights(weights, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
+    """
+    Normalizes a list of weights.
+
+    Args:
+        weights (list): A list of weights. Each weight can be a WeightList object or a numeric value.
+        force_clamp (bool, optional): True to force clamp the normalized values within the specified range. Default True
+        min_value (float, optional): The minimum value for clamping. Defaults to 0.0.
+        max_value (float, optional): The maximum value for clamping. Defaults to 1.0.
+        round_value (int, optional): The number of decimal places to round the normalized values. Defaults to None.
+
+    Returns:
+        list: A list of normalized weights, where each weight is a WeightList object.
+
+    Note:
+        - If a weight in the 'weights' list is already a WeightList object, it will be used as is.
+        - If 'force_clamp' is set to True, the normalized values will be clamped between 'min_value' and 'max_value'.
+        - If 'round_value' is specified, the normalized values will be rounded to the specified decimal places.
+    """
     # Checking that all given weights are WeightList
     weights = [WeightList(weight, force_clamp=force_clamp, min_value=min_value, max_value=max_value,
                           round_value=round_value)
@@ -201,7 +219,7 @@ def normalizeWeights(weights, force_clamp=True, min_value=0.0, max_value=1.0, ro
     new_weights = [weight.emptyCopy() for weight in weights]
     for values in zip(*weights):
         mult = 1.0
-        if any(values):  # Keeps everything to 0.0 if all values are at 0.0 and prevents a / by 0 error
+        if any(values):  # Prevents ZeroDivisionError, in case all values are at 0.0, and leaves them at 0.0
             try:
                 mult = 1.0 / sum(values)
             except ZeroDivisionError as e:
