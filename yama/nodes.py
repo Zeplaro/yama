@@ -742,6 +742,11 @@ class Transform(DagNode):
             children.keepType(type)
         return children
 
+    @property
+    def child(self):
+        if self.MDagPath.childCount():
+            return yam(self.MDagPath.child(0))
+
     def shapes(self, type=None, noIntermediate=True):
         """
         Gets the shapes of the transform as DependNode.
@@ -820,6 +825,10 @@ class Transform(DagNode):
         pos, obj_pos = self.getPosition(ws=True), obj.getPosition(ws=True)
         dist = sqrt(pow(pos[0] - obj_pos[0], 2) + pow(pos[1] - obj_pos[1], 2) + pow(pos[2] - obj_pos[2], 2))
         return dist
+
+
+class Joint(Transform):
+    pass
 
 
 class Constraint(Transform):
@@ -939,8 +948,7 @@ class SurfaceShape(ControlPoint):
     Handles control point shapes that have a surface; e.g.: Mesh and NurbsSurface
     Mainly used to check object isinstance.
     """
-    def __init__(self, MObject):
-        super(SurfaceShape, self).__init__(MObject)
+    pass
 
 
 class Mesh(SurfaceShape):
@@ -1191,10 +1199,10 @@ class Cluster(WeightGeometryFilter):
         root_grp = createNode('transform', name=self.shortName + '_clusterRoot', parent=handle_shape.parent.parent)
         cluster_grp = createNode('transform', name=self.shortName + '_cluster', parent=root_grp)
 
-        cluster_grp.worldMatrix[0].connectTo(self.matrix, force=True)
+        cluster_grp.worldMatrix.connectTo(self.matrix, force=True)
         cluster_grp.matrix.connectTo(self.weightedMatrix, force=True)
-        cluster_grp.parentInverseMatrix[0].connectTo(self.bindPreMatrix, force=True)
-        cluster_grp.parentMatrix[0].connectTo(self.preMatrix, force=True)
+        cluster_grp.parentInverseMatrix.connectTo(self.bindPreMatrix, force=True)
+        cluster_grp.parentMatrix.connectTo(self.preMatrix, force=True)
         self.clusterXforms.breakConnections()
         cmds.delete(handle_shape.parent.name)
         return root_grp
@@ -1225,9 +1233,9 @@ class SoftMod(WeightGeometryFilter):
         falloffRadius.connectTo(self.falloffRadius, force=True)
 
         softMod_grp.matrix.connectTo(self.weightedMatrix, force=True)
-        softMod_grp.parentInverseMatrix[0].connectTo(self.bindPreMatrix, force=True)
-        softMod_grp.parentMatrix[0].connectTo(self.preMatrix, force=True)
-        softMod_grp.worldMatrix[0].connectTo(self.matrix, force=True)
+        softMod_grp.parentInverseMatrix.connectTo(self.bindPreMatrix, force=True)
+        softMod_grp.parentMatrix.connectTo(self.preMatrix, force=True)
+        softMod_grp.worldMatrix.connectTo(self.matrix, force=True)
         dmx = createNode('decomposeMatrix', name=self.shortName + '_DMX')
         softMod_grp.parentMatrix.connectTo(dmx.inputMatrix)
         dmx.outputTranslate.connectTo(self.falloffCenter, force=True)
@@ -1395,16 +1403,13 @@ class SkinCluster(GeometryFilter):
         """
         Resets the skinCluster and mesh to the current influences position.
         """
-        for inf in self.influences():
-            conns = (x for x in inf.worldMatrix.outputs(type='skinCluster') if x.node == self)
-            for conn in conns:
-                bpm = self.bindPreMatrix[conn.index]
-                if bpm.input():
-                    if config.verbose:
-                        cmds.warning("{} is connected and can't be reset".format(bpm))
-                    continue
-                wim = inf.worldInverseMatrix.value
-                cmds.setAttr(bpm.name, *wim, type='matrix')
+        for matrix_indexed in self.matrix:
+            bpm_attr = self.bindPreMatrix[matrix_indexed.index]
+            if not bpm_attr.isSettable():
+                if config.verbose:
+                    cmds.warning("{} is connected and can't be reset".format(bpm_attr))
+                continue
+            bpm_attr.value = list(om.MMatrix(matrix_indexed.value).inverse())
         cmds.skinCluster(self.name, e=True, rbm=True)
 
     def indexForInfluenceObject(self, influence):
@@ -1625,6 +1630,12 @@ class UVPin(DependNode):
         self.connectTransform(target, [u, v])
 
 
+# These contain MFn and MFnData type names per {id#: name, ...}, to be able to get the type name from its id#.
+# Warning : id# for nodes, attribute, etc... of the same type, are not consistent and change between maya versions.
+MFN_TYPE_NAMES = {value: key for key, value in om.MFn.__dict__.items() if isinstance(value, int)}
+MFNDATA_TYPE_NAMES = {value: key for key, value in om.MFnData.__dict__.items() if isinstance(value, int)}
+
+
 class SupportedTypes(object):
     """
     Data of supported types of maya nodes.
@@ -1643,6 +1654,7 @@ class SupportedTypes(object):
         (DependNode, om.MFn.kDependencyNode): {
             (DagNode, om.MFn.kDagNode): {
                 (Transform, om.MFn.kTransform): {
+                    (Joint, om.MFn.kJoint): {},
                     (Constraint, om.MFn.kConstraint): {
                         (ParentConstraint, om.MFn.kParentConstraint): {},
                         (OrientConstraint, om.MFn.kOrientConstraint): {},
@@ -1677,7 +1689,7 @@ class SupportedTypes(object):
         om.MFn.kDependencyNode: DependNode,  # 4
         om.MFn.kDagNode: DagNode,  # 107
         om.MFn.kTransform: Transform,  # 110
-        om.MFn.kJoint: Transform,  # 121
+        om.MFn.kJoint: Joint,  # 121
         om.MFn.kConstraint: Constraint,  # 932; 928 in Maya 2020 ?! ¯\_(ツ)_/¯
         om.MFn.kParentConstraint: ParentConstraint,  # 242
         om.MFn.kPointConstraint: PointConstraint,  # 240
@@ -1728,7 +1740,7 @@ class SupportedTypes(object):
     classes_str = {
         'dagNode': DagNode,
         'transform': Transform,
-        'joint': Transform,
+        'joint': Joint,
         'constraint': Constraint,
         'parentConstraint': ParentConstraint,
         'pointConstraint': PointConstraint,
