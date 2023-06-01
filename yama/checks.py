@@ -12,11 +12,18 @@ class ObjExistsError(Exception):
 
 
 def objExists(obj, raiseError=False, verbose=False):
+    obj = str(obj)
     if cmds.objExists(obj):
         return True
     elif raiseError:
-        raise ObjExistsError("'{}' does not exist in the current scene".format(obj))
+        if '.' in obj:
+            raise AttributeExistsError("Attribute '{}' does not exist in the current scene".format(obj))
+        raise ObjExistsError("Object '{}' does not exist in the current scene".format(obj))
     elif verbose == 'warning':
         cmds.warning("'{}' does not exist in the current scene".format(obj))
     else:
         return False
+
+
+class AttributeExistsError(AttributeError, ObjExistsError):
+    pass
