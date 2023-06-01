@@ -350,6 +350,12 @@ class Yam(object):
         """Used to check if an object is an instance of Yam with the faster hasattr instead of slower isinstance."""
         return True
 
+    def __str__(self):
+        """
+        The current node name.
+        """
+        return self.name
+
 
 class DependNode(Yam):
     """
@@ -401,12 +407,6 @@ class DependNode(Yam):
         MFnDependencyNode don't have clean str representation.
         """
         return "{}('{}')".format(self.__class__.__name__, self.name)
-
-    def __str__(self):
-        """
-        The current node name.
-        """
-        return self.name
 
     def __getattr__(self, attr):
         """
@@ -1154,7 +1154,7 @@ class WeightGeometryFilter(GeometryFilter):
     def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         geometry = self.geometry
         if not geometry:
-            raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self.node))
+            raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self))
         weightsAttr = self.weightsAttr
         return weightlist.WeightList((weightsAttr[x].value for x in range(len(geometry))),
                                      force_clamp=force_clamp, min_value=min_value, max_value=max_value,
@@ -1282,7 +1282,9 @@ class SkinCluster(GeometryFilter):
         :param components: om.MObject of the deformed components
         :return: WeightList
         """
-        if hasattr(influence, 'isAYamNode') or isinstance(influence, string_types):
+        if isinstance(influence, string_types):
+            influence = yam(influence)
+        if hasattr(influence, 'isAYamNode'):
             influence = self.influences().index(influence)
         if not geo or not components:
             geo, components = self.getDeformerSetGeoAndComponents()
@@ -1382,6 +1384,7 @@ class SkinCluster(GeometryFilter):
         :param influence: DependNode
         :return: YamList of components
         """
+        influence = yam(influence)
         if influence in self.influences():
             influence = influence.MDagPath
         else:
@@ -1492,6 +1495,24 @@ class SkinCluster(GeometryFilter):
 
 
 class BlendShape(WeightGeometryFilter):
+    """
+    Class to wrap cmds and OpenMaya functions to easily interact with a blendShape node.
+
+    Note for targets and in-betweens :
+      Assumes for a target at value 1.0, that the target deltas are connected on the corresponding inputTargetItem plug
+      at the index 6000.
+      And in-between shapes are connected on index : int(inBetween_value * 1000 + 5000).
+      e.g.: shape at value 1.0 is connected to index 6000, in-between shape at value 0.42 is connected at index 5420,
+      in-between shape at value -1.2 is connected at index 3800, etc...
+
+      In-betweens only works down to a value -5.0 because : -5 * 1000 + 5000 == 0 which is index 0. At a value lower
+      than -5, the blendShape will connect the first attempt to index 2147483647 and then fail on any other attempt.
+      This happens because 2147483647 is the largest value that a signed 32-bit integer field can hold, which is why
+      going below index 0 loops back to this number.
+      Warning: if negative values are used for in-betweens the blendShape node will snap back to its 0.0 value shape if
+      the target attribute goes below -5.0. It is recommended to lock the target attribute lower range if negative
+      in-between values are used.
+    """
     def __init__(self, MObject):
         super(BlendShape, self).__init__(MObject)
 
@@ -1525,13 +1546,49 @@ class BlendShape(WeightGeometryFilter):
         return list(self.weight.MPlug.getExistingArrayAttributeIndices())
 
     def addTarget(self, target, index=None, topologyCheck=False):
+        """
+        Value for a new target has to be 1.0 otherwise the target attribute is not added to the blendShape which is
+        needed to return a corresponding BlendShapeTarget attribute.
+        """
         if index is None:
-            index = self.targetIndices()[-1] + 1
-        cmds.blendShape(self.name, e=True, t=(self.geometry.name, index, target, 1.0), topologyCheck=topologyCheck)
+            index = 0
+        target_indices = self.targetIndices()
+        while index in target_indices:
+            index += 1
+        cmds.blendShape(self.name, e=True, t=(self.geometry.name, index, str(target), 1.0), topologyCheck=topologyCheck)
+        return self.target(self.targetIndices().index(index))
+
+    def addEmptyTarget(self, name):
+        name_warning = False
+        if cmds.ls(name) and config.verbose:
+            name_warning = True
+        temp = duplicate(self.geometry)[0]
+        temp.name = name
+        if name_warning and config.verbose:
+            cmds.warning("An object with the same given target name : {}, exists in the scene. Target name used instead"
+                         " is : {}".format(name, temp.shortName))
+
+        target = self.addTarget(temp)
+        cmds.delete(temp.name)
+        return target
 
     def addInBetween(self, target, index, value):
         index = self.target(index).index
-        cmds.blendShape(self.name, e=True, inBetween=True, t=(self.geometry.name, index, target, value))
+        cmds.blendShape(self.name, e=True, inBetween=True, t=(self.geometry.name, index, str(target), value))
+
+    def getDeltas(self):
+        return {target.alias: target.getDeltas() for target in self.targets()}
+
+    def setDeltas(self, deltas, addMissingTargets=True):
+        current_targets_names = [target.attribute for target in self.targets()]
+        for target_name, delta in deltas.items():
+            if target_name in current_targets_names:
+                self[target_name].setDeltas(delta)
+            elif addMissingTargets:
+                target = self.addEmptyTarget(target_name)
+                target.setDeltas(delta)
+            elif config.verbose:
+                cmds.warning("Target {} is missing from {} and was not applied".format(target_name, self.name))
 
     @property
     def data(self):
