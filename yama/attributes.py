@@ -3,7 +3,7 @@
 """
 Contains all the class and functions for maya attributes.
 """
-import sys
+from six import PY2
 
 from maya import cmds
 import maya.api.OpenMaya as om
@@ -34,7 +34,7 @@ def getMPlug(attr):  # type: (str) -> om.MPlug
     try:
         om_list.add(attr)
     except RuntimeError:
-        raise checks.ObjExistsError("Attribute '{}' does not exist".format(attr))
+        raise checks.AttributeExistsError("Attribute '{}' does not exist".format(attr))
 
     try:
         MPlug = om_list.getPlug(0)
@@ -108,7 +108,7 @@ class Attribute(nodes.Yam):
         except (RuntimeError, TypeError):
             raise TypeError("'{}' is not an array attribute and cannot use __getitem__".format(self))
 
-    if sys.version_info.major == 2:
+    if PY2:
         def __getslice__(self, start, stop):
             return nodes.YamList(self[i] for i in range(len(self))[start:stop])
 
@@ -207,12 +207,12 @@ class Attribute(nodes.Yam):
     @property
     def name(self):
         """
-        The full node.attribute name.
+        The full 'node.attribute' name using alias names when available.
         Not using self.MPlug.name() because, unlike node.name, it does not return the node's  minimum string
         representation which will uniquely identify the path, in case the node has a non-unique name.
         :return: str
         """
-        return self.node.name + '.' + self.attribute
+        return self.node.name + '.' + self.alias
 
     def attr(self, attr):
         """
@@ -381,7 +381,6 @@ class Attribute(nodes.Yam):
             raise RuntimeError("'{}' is not an array attribute, use .input on none array attributes".format(self.name))
         return nodes.YamList(matrix_indexed.input(**kwargs) for matrix_indexed in self)
 
-
     @property
     def source(self):
         try:
@@ -542,7 +541,7 @@ class Attribute(nodes.Yam):
 
     @property
     def alias(self):
-        return self.MPlug.partialName(useAlias=True)
+        return self.MPlug.partialName(useAlias=True, useLongNames=True, includeInstancedIndices=True)
 
     @alias.setter
     def alias(self, alias):
@@ -572,8 +571,12 @@ class BlendShapeTarget(Attribute):
         super(BlendShapeTarget, self).__init__(MPlug, node)
 
     @property
+    def inputTargetGroupAttr(self):
+        return self.node.inputTarget[0].inputTargetGroup[self.index]
+
+    @property
     def weightsAttr(self):
-        return self.node.inputTarget[0].inputTargetGroup[self.index].targetWeights
+        return self.inputTargetGroupAttr.targetWeights
 
     def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         geometry = self.node.geometry
@@ -599,15 +602,48 @@ class BlendShapeTarget(Attribute):
 
     def getDeltas(self):
         inputTargetItem = self.node.inputTarget[0].inputTargetGroup[self.index].inputTargetItem
-        inputTargetItem_index = inputTargetItem.MPlug.getExistingArrayAttributeIndices()
-        if not inputTargetItem_index:
-            raise RuntimeError("No active index found on corresponding inputTagetItem attribute; "
-                               "{}".format(inputTargetItem.name))
-        values = inputTargetItem[inputTargetItem_index[0]].inputPointsTarget.value
-        indexes = inputTargetItem[inputTargetItem_index[0]].inputComponentsTarget.value
-        if len(values) != len(indexes):
-            raise RuntimeError("Blendshape {} inputPointsTarget values and inputComponentsTarget not in sync".format(self.node))
-        return {index: value for index, value in zip(indexes, values)}
+        inputTargetItem_indexes = inputTargetItem.MPlug.getExistingArrayAttributeIndices()
+        data = {}
+        for item_index in inputTargetItem_indexes:
+            plug = inputTargetItem[item_index]
+            delta_values = plug.inputPointsTarget.value
+            component_indexes = plug.inputComponentsTarget.value
+            if len(delta_values) != len(component_indexes):
+                raise RuntimeError("BlendShape {} inputPointsTarget values "
+                                   "and inputComponentsTarget not in sync".format(self.node))
+            shape_value = round(item_index / 1000.0 - 5, 6)
+            data[shape_value] = {index: value for index, value in zip(component_indexes, delta_values)}
+        return data
+
+    def setDeltas(self, deltas):
+        """Sets the given delta data on the corresponding inputTargetItem"""
+        inputTargetItem = self.node.inputTarget[0].inputTargetGroup[self.index].inputTargetItem
+        for shape_value, data in deltas.items():
+            # Needed if data comes from a json file with str keys
+            shape_value = float(shape_value)
+            self.setDelta(shape_value, data, inputTargetItem)
+
+    def setDelta(self, value, delta, inputTargetItem=None):
+        if not inputTargetItem:
+            inputTargetItem = self.node.inputTarget[0].inputTargetGroup[self.index].inputTargetItem
+
+        item_index = int(value * 1000 + 5000)
+
+        plug = inputTargetItem[item_index]
+        component_indexes = list(delta)
+        # Needed if components come from a json file with str keys
+        component_indexes = [int(x) for x in component_indexes]
+        delta_values = list(delta.values())
+        plug.inputPointsTarget.value = delta_values
+        plug.inputComponentsTarget.value = component_indexes
+
+    @property
+    def geometry(self):
+        inputTargetItem_index = self.inputTargetGroupAttr.inputTargetItem.MPlug.getExistingArrayAttributeIndices()[0]
+        inputGeomTarget = self.inputTargetGroupAttr.inputTargetItem[inputTargetItem_index].inputGeomTarget
+        input_attr = inputGeomTarget.input()
+        if input_attr:
+            return input_attr.node
 
 
 def getAttr(attr):
@@ -653,19 +689,19 @@ def setAttr(attr, value, **kwargs):
             raise RuntimeError("## Failed to get MPlug value on '{}': {}".format(MPlug.name(), e))
 
     attr_type = attr.type()
-    if attr_type in ['double2', 'double3', 'float2', 'float3', 'long2', 'long3', 'short2']:
+    if attr_type in ['double2', 'double3', 'float2', 'float3', 'long2', 'long3', 'short2', 'matrix']:
         cmds.setAttr(attr.name, *value, type=attr_type)
     elif attr_type == 'string':
         cmds.setAttr(attr.name, value, type=attr_type)
-    elif attr_type == 'matrix':
-        cmds.setAttr(attr.name, *value, type=attr_type)
     elif attr_type == 'TdataCompound':
         cmds.setAttr(attr.name+'[:]', *value, size=len(value))
-    elif attr_type == 'componentList':
-        # If given a list of integers, tries to set them as vertex components
-        if isinstance(value, (list, tuple)) and all(isinstance(x, int) for x in value):
-            value = ['vtx[{}]'.format(x) for x in value]
-        cmds.setAttr(attr.name, len(value), *value, type='componentList')
+    elif attr_type in ['componentList', 'pointArray']:
+        if attr_type == 'componentList':
+            # TODO: make work with other than vtx
+            # If given a list of integers, tries to set them as vertex components
+            if isinstance(value, (list, tuple)) and all(isinstance(x, int) for x in value):
+                value = ['vtx[{}]'.format(x) for x in value]
+        cmds.setAttr(attr.name, len(value), *value, type=attr_type)
     else:
         cmds.setAttr(attr.name, value, **kwargs)
 
@@ -697,7 +733,12 @@ def getMPlugValue(MPlug):
         elif attr_type == om.MFnData.kComponentList:
             mfn = om.MFnComponentListData(MPlug.asMObject())
             # TODO : Fails to .get if empty list
-            component = mfn.get(0)
+            try:
+                component = mfn.get(0)
+            except IndexError:
+                if config.verbose:
+                    cmds.warning("Failed to get MFnComponentListData on {}; Assumed it's empty".format(MPlug.name()))
+                return []
             return list(om.MFnSingleIndexedComponent(component).getElements())
         else:
             raise NotImplementedError("Attribute of MFnData type '{}' "
@@ -707,9 +748,9 @@ def getMPlugValue(MPlug):
     elif attr_type in (om.MFn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute, ):
         data_handle = MPlug.asMDataHandle()
         if attr_type == om.MFn.kMatrixAttribute:
-            return data_handle.asMatrix()
+            return list(data_handle.asMatrix())
         elif attr_type == om.MFn.kFloatMatrixAttribute:
-            return data_handle.asFloatMatrix()
+            return list(data_handle.asFloatMatrix())
     elif MPlug.isCompound:
         values = []
         for child_index in range(MPlug.numChildren()):
