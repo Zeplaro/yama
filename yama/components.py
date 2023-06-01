@@ -5,8 +5,9 @@ Contains all the class and functions for maya components.
 """
 # TODO : Improve getComponent func
 # TODO : fixed setPositionsOM on cvs ?
-import sys
 from abc import ABCMeta, abstractmethod
+from six import PY2
+
 from maya import cmds
 import maya.api.OpenMaya as om
 
@@ -28,7 +29,7 @@ def getComponent(node, attr):
         split = attr.split('[')
         attr = split.pop(0)
 
-    if attr not in SupportedTypes.types:
+    if attr not in SupportedTypes.TYPES:
         raise TypeError("component '{}' not in supported types".format(attr))
 
     # Changing node to its shape if given a transform
@@ -38,22 +39,22 @@ def getComponent(node, attr):
             raise RuntimeError("node '{}' has no shape to get component on".format(node))
 
     if attr == 'cp':
-        if node.__class__ in SupportedTypes.shape_component:
-            attr = SupportedTypes.shape_component[node.__class__]
+        if node.__class__ in SupportedTypes.SHAPE_COMPONENT:
+            attr = SupportedTypes.SHAPE_COMPONENT[node.__class__]
 
     # Getting api_type to get the proper class for the component
-    if (attr, node.__class__) in SupportedTypes.component_shape_MFnid:
-        api_type = SupportedTypes.component_shape_MFnid[(attr, node.__class__)]
+    if (attr, node.__class__) in SupportedTypes.COMPONENT_SHAPE_MFNID:
+        api_type = SupportedTypes.COMPONENT_SHAPE_MFNID[(attr, node.__class__)]
     else:
         om_list = om.MSelectionList()
         om_list.add(node.name + '.' + attr + '[0]')
         dag, comp = om_list.getComponent(0)
         api_type = comp.apiType()
 
-    if api_type not in SupportedTypes.MFnid_component_class:
+    if api_type not in SupportedTypes.MFNID_COMPONENT_CLASS:
         raise TypeError("component '{}' of api type '{}' not in supported types".format(attr, api_type))
 
-    comp_class = SupportedTypes.MFnid_component_class[api_type][1]
+    comp_class = SupportedTypes.MFNID_COMPONENT_CLASS[api_type][1]
     component = comp_class(node, api_type)
     indices = []
     for index in split:
@@ -84,8 +85,8 @@ class Components(nodes.Yam):
                             "instead got : {}, {}".format(node, type(node).__name__))
         self.node = node
         self.api_type = apiType
-        self.component_name = SupportedTypes.MFnid_component_class[apiType][0]
-        self.component_class = SupportedTypes.MFnid_component_class[apiType][2]
+        self.component_name = SupportedTypes.MFNID_COMPONENT_CLASS[apiType][0]
+        self.component_class = SupportedTypes.MFNID_COMPONENT_CLASS[apiType][2]
 
     def __getitem__(self, item):
         if item == '*':
@@ -94,15 +95,12 @@ class Components(nodes.Yam):
             return ComponentsSlice(self.node, self, item)
         return self.index(item)
 
-    if sys.version_info.major == 2:
+    if PY2:
         def __getslice__(self, start, stop):
             return ComponentsSlice(self.node, self, slice(start, stop+1))
 
     def __len__(self):
         return len(self.node)
-
-    def __str__(self):
-        return self.name
 
     def __repr__(self):
         return "{}('{}', '{}')".format(self.__class__.__name__, self.node.name, self.component_name)
@@ -506,9 +504,9 @@ class SupportedTypes(object):
     Contains all the supported component types and their corresponding class, MFn id, yam class, etc...
     """
     # Removed 'v' because rarely used and similar to short name for 'visibility'
-    types = {'cv', 'e', 'ep', 'f', 'map', 'pt', 'sf', 'u', '#v', 'vtx', 'vtxFace', 'cp', }
+    TYPES = {'cv', 'e', 'ep', 'f', 'map', 'pt', 'sf', 'u', '#v', 'vtx', 'vtxFace', 'cp', }
 
-    MFnid_component_class = {
+    MFNID_COMPONENT_CLASS = {
         om.MFn.kCurveCVComponent: ('cv', CurveCVs, CurveCV),  # 533
         om.MFn.kCurveEPComponent: ('ep', SingleIndexed, Component),  # 534
         om.MFn.kCurveParamComponent: ('u', SingleIndexed, Component),  # 536
@@ -523,7 +521,7 @@ class SupportedTypes(object):
         om.MFn.kMeshMapComponent: ('map', SingleIndexed, Component),  # 813
     }
 
-    component_shape_MFnid = {
+    COMPONENT_SHAPE_MFNID = {
         ('cv', nodes.NurbsCurve): om.MFn.kCurveCVComponent,
         ('cv', nodes.NurbsSurface): om.MFn.kSurfaceCVComponent,
         ('e', nodes.Mesh): om.MFn.kMeshEdgeComponent,
@@ -539,7 +537,7 @@ class SupportedTypes(object):
         ('vtxFace', nodes.Mesh): om.MFn.kCharacterMappingData,
     }
 
-    shape_component = {
+    SHAPE_COMPONENT = {
         nodes.Mesh: 'vtx',
         nodes.NurbsCurve: 'cv',
         nodes.NurbsSurface: 'cv',
