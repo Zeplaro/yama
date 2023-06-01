@@ -181,8 +181,12 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
     sourceDeformer, destinationDeformer = nodes.yams((sourceDeformer, destinationDeformer))
     if sourceGeo is None:
         sourceGeo = sourceDeformer.geometry
+    else:
+        sourceGeo = nodes.yam(sourceGeo)
     if destinationGeo is None:
         destinationGeo = destinationDeformer.geometry
+    else:
+        destinationGeo = nodes.yam(destinationGeo)
 
     if not hasattr(sourceDeformer, 'weights'):
         raise TypeError("'{}' of type '{}' has no 'weights' attributes."
@@ -283,12 +287,14 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
     # Checks the target influence is not missing from the skinCluster
     target_influence = nodes.yam(target_influence)
     if target_influence in all_influences:
-        target_index = skinCluster.indexForInfluenceObject(target_influence)
+        target_index = all_influences.index(target_influence)
     elif add_missing_target:
         cmds.skinCluster(skinCluster.name, e=True, addInfluence=target_influence.name, lockWeights=True, weight=0.0)
-        target_index = skinCluster.indexForInfluenceObject(target_influence)
+        all_influences = skinCluster.influences()
+        target_index = all_influences.index(target_influence)
     else:
-        cmds.warning("Target influence not found in skinCluster '{}': '{}'".format(skinCluster, target_influence))
+        if config.verbose:
+            cmds.warning("Target influence not found in skinCluster '{}': '{}'".format(skinCluster, target_influence))
         return False
 
     # Checks the influences are not missing from the skinCluster
@@ -296,14 +302,16 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
     for inf in influences:
         inf = nodes.yam(inf)
         if inf in all_influences:
-            influence_indexes.append([inf, skinCluster.indexForInfluenceObject(inf)])
+            influence_indexes.append(all_influences.index(inf))
         else:
             missing_influences.append(inf)
     if not influence_indexes:
-        cmds.warning("None of the influences were found in skinCluster '{}': {}".format(skinCluster, influences))
+        if config.verbose:
+            cmds.warning("None of the influences were found in skinCluster '{}': {}".format(skinCluster, influences))
         return False
     if missing_influences:
-        cmds.warning("Influences not found in skinCluster '{}': {}".format(skinCluster, missing_influences))
+        if config.verbose:
+            cmds.warning("Influences not found in skinCluster '{}': {}".format(skinCluster, missing_influences))
 
     # Transferring the weights
     weights = skinCluster.weights
@@ -313,7 +321,10 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
             weights[vtx][index] = 0.0
     skinCluster.weights = weights
 
-    # OLD best way without undo queue hacking
+    """
+    OLD best way without undo queue hacking for setting weights; must use skinCluster.indexForInfluenceObject to get the
+    target and source indices if using the old way.
+    """
     # if config.undoable:
     #     # If undoable, faster this way most times especially when the influences influence only part of the vertices.
     #     for inf, index in influence_indexes:
@@ -363,3 +374,79 @@ def skinAsNurbs(source=None, target=None):
     # Making sure the temp plane gets deleted
     finally:
         cmds.delete(plane.name)
+
+
+def localizeSkinClusterInfluence(skinCluster, influence):
+    """
+    Localizing the influence of a skinCluster make the skinCluster only accounts for the local position change of the
+    influence and does not take into account the position change of the influence parents.
+
+    Here are three methods to localize the influence of a skinCluster:
+
+    -First method : Create a transform located at the world origin, parent the new transform under the influence parent,
+      then parent the influence under the new transform, finally change the connection between the influence and the
+      skinCluster to have the .matrix (instead of its .worldMatrix) of the influence connect to the corresponding
+      .matrix of the skinCluster.
+      This way has the disadvantage of confusing maya about its current influences, because the modified .matrix inputs
+      are not connected from a .worldMatrix output. Some cmds and even OpenMaya functions will not return the correct
+      influences info anymore.
+      e.g. : using cmds.skinCluster('skinCluster1', q=True, wi=True) to list weighted influences will only return the
+      influences that still have their .worldMatrix connected to the skinCluster, and same thing when using
+      oma.MFnSkinCluster.influenceObjects which will also only return the influences that still have their .worldMatrix
+      connected.
+      To 'reset' the skinCluster to the current influence positions : set the .bindPreMatrix to value of the influence
+      .inverseMatrix.
+
+    -Second method : Multiply (in that order) the .matrix of the influence by the original parent world matrix and plug
+      the result directly into the corresponding .matrix input of the skinCluster.
+      This way has the disadvantage of confusing maya about its current influences, because the modified .matrix inputs
+      are not connected from a .worldMatrix output. Some cmds and even OpenMaya functions will not return the correct
+      influences info anymore.
+      e.g. : using cmds.skinCluster('skinCluster1', q=True, inf=True) to list influences will only return the influences
+      that still have their .worldMatrix connected to the skinCluster, and same thing when using
+      oma.MFnSkinCluster.influenceObjects which will also only return the influences that still have their .worldMatrix
+      connected.
+      To 'reset' the skinCluster to the current influence positions : set the original parent world matrix value to its
+      current state and set the .bindPreMatrix to the inverse matrix value of the multiplication result.
+
+    -Third method : Involves using the skinCluster .bindPreMatrix to localize the influence but keeping the .worldMatrix
+      of the influence connected to the corresponding .matrix of the skinCluster. First multiply (in that order) the
+      .matrix of the influence by the original parent world matrix (the values at bind pose not the plug), multiply
+      (in that order) the original world inverse matrix (the values at bind pose not the plug) by the result of the
+      first multiplication, then multiply (in that order) the result of the second multiplication by the
+      .worldInverseMatrix of the influence, finally plug the result of the last multiplication into the corresponding
+      .bindPreMatrix of the skinCluster.
+      This way has the advantage of keeping the influences .worldMatrix directly plugged into the .matrix attribtue of
+      the skinCluster, which allows you to still use many of the cmds and OpenMaya functions without the unexpected
+      behaviour that the other methods creates.
+      To 'reset' the skinCluster to the current influence positions. Set the stored matrix values for the original
+      parent world matrix and the original world inverse matrix to their current corresponding values for the influence.
+
+    This function uses the third method.
+    """
+    skinCluster, influence = nodes.yams([skinCluster, influence])
+    if influence not in skinCluster.influences():
+        raise RuntimeError("Given influence '{}' is not an influence of skinCluster '{}'".format(influence, skinCluster))
+
+    # Getting the index at which the influence is connected to the skinCluster
+    influence_index = skinCluster.indexForInfluenceObject(influence)
+
+    # Getting the world matrix for the influence as if the parent had not moved in the world
+    local_world_mult = nodes.createNode('multMatrix', name='{}_localWorld_MMX'.format(influence))
+    influence.matrix.connectTo(local_world_mult.matrixIn[0])
+    local_world_mult.matrixIn[1].value = influence.parentMatrix.value
+
+    # Getting a matrix of the difference between the original world inverse matrix and the live world matrix if the
+    # parent had not moved
+    localWorldDiff_localWorldInverse_mult = nodes.createNode('multMatrix', name='{}_wimWmDiff_MMX'.format(influence))
+    localWorldDiff_localWorldInverse_mult.matrixIn[0].value = influence.worldInverseMatrix.value
+    local_world_mult.matrixSum.connectTo(localWorldDiff_localWorldInverse_mult.matrixIn[1])
+
+    # Getting a matrix of the difference between the calculated live matrix difference and the current live world
+    # inverse matrix
+    worldInverse_diff_mult = nodes.createNode('multMatrix', name='{}_wimDiff_MMX'.format(influence))
+    localWorldDiff_localWorldInverse_mult.matrixSum.connectTo(worldInverse_diff_mult.matrixIn[0])
+    influence.worldInverseMatrix.connectTo(worldInverse_diff_mult.matrixIn[1])
+
+    # Connecting the result to the influence
+    worldInverse_diff_mult.matrixSum.connectTo(skinCluster.bindPreMatrix[influence_index])

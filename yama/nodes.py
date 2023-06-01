@@ -350,6 +350,12 @@ class Yam(object):
         """Used to check if an object is an instance of Yam with the faster hasattr instead of slower isinstance."""
         return True
 
+    def __str__(self):
+        """
+        The current node name.
+        """
+        return self.name
+
 
 class DependNode(Yam):
     """
@@ -401,12 +407,6 @@ class DependNode(Yam):
         MFnDependencyNode don't have clean str representation.
         """
         return "{}('{}')".format(self.__class__.__name__, self.name)
-
-    def __str__(self):
-        """
-        The current node name.
-        """
-        return self.name
 
     def __getattr__(self, attr):
         """
@@ -742,6 +742,11 @@ class Transform(DagNode):
             children.keepType(type)
         return children
 
+    @property
+    def child(self):
+        if self.MDagPath.childCount():
+            return yam(self.MDagPath.child(0))
+
     def shapes(self, type=None, noIntermediate=True):
         """
         Gets the shapes of the transform as DependNode.
@@ -820,6 +825,10 @@ class Transform(DagNode):
         pos, obj_pos = self.getPosition(ws=True), obj.getPosition(ws=True)
         dist = sqrt(pow(pos[0] - obj_pos[0], 2) + pow(pos[1] - obj_pos[1], 2) + pow(pos[2] - obj_pos[2], 2))
         return dist
+
+
+class Joint(Transform):
+    pass
 
 
 class Constraint(Transform):
@@ -939,8 +948,7 @@ class SurfaceShape(ControlPoint):
     Handles control point shapes that have a surface; e.g.: Mesh and NurbsSurface
     Mainly used to check object isinstance.
     """
-    def __init__(self, MObject):
-        super(SurfaceShape, self).__init__(MObject)
+    pass
 
 
 class Mesh(SurfaceShape):
@@ -1146,7 +1154,7 @@ class WeightGeometryFilter(GeometryFilter):
     def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         geometry = self.geometry
         if not geometry:
-            raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self.node))
+            raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self))
         weightsAttr = self.weightsAttr
         return weightlist.WeightList((weightsAttr[x].value for x in range(len(geometry))),
                                      force_clamp=force_clamp, min_value=min_value, max_value=max_value,
@@ -1191,10 +1199,10 @@ class Cluster(WeightGeometryFilter):
         root_grp = createNode('transform', name=self.shortName + '_clusterRoot', parent=handle_shape.parent.parent)
         cluster_grp = createNode('transform', name=self.shortName + '_cluster', parent=root_grp)
 
-        cluster_grp.worldMatrix[0].connectTo(self.matrix, force=True)
+        cluster_grp.worldMatrix.connectTo(self.matrix, force=True)
         cluster_grp.matrix.connectTo(self.weightedMatrix, force=True)
-        cluster_grp.parentInverseMatrix[0].connectTo(self.bindPreMatrix, force=True)
-        cluster_grp.parentMatrix[0].connectTo(self.preMatrix, force=True)
+        cluster_grp.parentInverseMatrix.connectTo(self.bindPreMatrix, force=True)
+        cluster_grp.parentMatrix.connectTo(self.preMatrix, force=True)
         self.clusterXforms.breakConnections()
         cmds.delete(handle_shape.parent.name)
         return root_grp
@@ -1225,9 +1233,9 @@ class SoftMod(WeightGeometryFilter):
         falloffRadius.connectTo(self.falloffRadius, force=True)
 
         softMod_grp.matrix.connectTo(self.weightedMatrix, force=True)
-        softMod_grp.parentInverseMatrix[0].connectTo(self.bindPreMatrix, force=True)
-        softMod_grp.parentMatrix[0].connectTo(self.preMatrix, force=True)
-        softMod_grp.worldMatrix[0].connectTo(self.matrix, force=True)
+        softMod_grp.parentInverseMatrix.connectTo(self.bindPreMatrix, force=True)
+        softMod_grp.parentMatrix.connectTo(self.preMatrix, force=True)
+        softMod_grp.worldMatrix.connectTo(self.matrix, force=True)
         dmx = createNode('decomposeMatrix', name=self.shortName + '_DMX')
         softMod_grp.parentMatrix.connectTo(dmx.inputMatrix)
         dmx.outputTranslate.connectTo(self.falloffCenter, force=True)
@@ -1274,7 +1282,9 @@ class SkinCluster(GeometryFilter):
         :param components: om.MObject of the deformed components
         :return: WeightList
         """
-        if hasattr(influence, 'isAYamNode') or isinstance(influence, string_types):
+        if isinstance(influence, string_types):
+            influence = yam(influence)
+        if hasattr(influence, 'isAYamNode'):
             influence = self.influences().index(influence)
         if not geo or not components:
             geo, components = self.getDeformerSetGeoAndComponents()
@@ -1374,6 +1384,7 @@ class SkinCluster(GeometryFilter):
         :param influence: DependNode
         :return: YamList of components
         """
+        influence = yam(influence)
         if influence in self.influences():
             influence = influence.MDagPath
         else:
@@ -1395,16 +1406,13 @@ class SkinCluster(GeometryFilter):
         """
         Resets the skinCluster and mesh to the current influences position.
         """
-        for inf in self.influences():
-            conns = (x for x in inf.worldMatrix.outputs(type='skinCluster') if x.node == self)
-            for conn in conns:
-                bpm = self.bindPreMatrix[conn.index]
-                if bpm.input():
-                    if config.verbose:
-                        cmds.warning("{} is connected and can't be reset".format(bpm))
-                    continue
-                wim = inf.worldInverseMatrix.value
-                cmds.setAttr(bpm.name, *wim, type='matrix')
+        for matrix_indexed in self.matrix:
+            bpm_attr = self.bindPreMatrix[matrix_indexed.index]
+            if not bpm_attr.isSettable():
+                if config.verbose:
+                    cmds.warning("{} is connected and can't be reset".format(bpm_attr))
+                continue
+            bpm_attr.value = list(om.MMatrix(matrix_indexed.value).inverse())
         cmds.skinCluster(self.name, e=True, rbm=True)
 
     def indexForInfluenceObject(self, influence):
@@ -1487,6 +1495,24 @@ class SkinCluster(GeometryFilter):
 
 
 class BlendShape(WeightGeometryFilter):
+    """
+    Class to wrap cmds and OpenMaya functions to easily interact with a blendShape node.
+
+    Note for targets and in-betweens :
+      Assumes for a target at value 1.0, that the target deltas are connected on the corresponding inputTargetItem plug
+      at the index 6000.
+      And in-between shapes are connected on index : int(inBetween_value * 1000 + 5000).
+      e.g.: shape at value 1.0 is connected to index 6000, in-between shape at value 0.42 is connected at index 5420,
+      in-between shape at value -1.2 is connected at index 3800, etc...
+
+      In-betweens only works down to a value -5.0 because : -5 * 1000 + 5000 == 0 which is index 0. At a value lower
+      than -5, the blendShape will connect the first attempt to index 2147483647 and then fail on any other attempt.
+      This happens because 2147483647 is the largest value that a signed 32-bit integer field can hold, which is why
+      going below index 0 loops back to this number.
+      Warning: if negative values are used for in-betweens the blendShape node will snap back to its 0.0 value shape if
+      the target attribute goes below -5.0. It is recommended to lock the target attribute lower range if negative
+      in-between values are used.
+    """
     def __init__(self, MObject):
         super(BlendShape, self).__init__(MObject)
 
@@ -1520,13 +1546,49 @@ class BlendShape(WeightGeometryFilter):
         return list(self.weight.MPlug.getExistingArrayAttributeIndices())
 
     def addTarget(self, target, index=None, topologyCheck=False):
+        """
+        Value for a new target has to be 1.0 otherwise the target attribute is not added to the blendShape which is
+        needed to return a corresponding BlendShapeTarget attribute.
+        """
         if index is None:
-            index = self.targetIndices()[-1] + 1
-        cmds.blendShape(self.name, e=True, t=(self.geometry.name, index, target, 1.0), topologyCheck=topologyCheck)
+            index = 0
+        target_indices = self.targetIndices()
+        while index in target_indices:
+            index += 1
+        cmds.blendShape(self.name, e=True, t=(self.geometry.name, index, str(target), 1.0), topologyCheck=topologyCheck)
+        return self.target(self.targetIndices().index(index))
+
+    def addEmptyTarget(self, name):
+        name_warning = False
+        if cmds.ls(name) and config.verbose:
+            name_warning = True
+        temp = duplicate(self.geometry)[0]
+        temp.name = name
+        if name_warning and config.verbose:
+            cmds.warning("An object with the same given target name : {}, exists in the scene. Target name used instead"
+                         " is : {}".format(name, temp.shortName))
+
+        target = self.addTarget(temp)
+        cmds.delete(temp.name)
+        return target
 
     def addInBetween(self, target, index, value):
         index = self.target(index).index
-        cmds.blendShape(self.name, e=True, inBetween=True, t=(self.geometry.name, index, target, value))
+        cmds.blendShape(self.name, e=True, inBetween=True, t=(self.geometry.name, index, str(target), value))
+
+    def getDeltas(self):
+        return {target.alias: target.getDeltas() for target in self.targets()}
+
+    def setDeltas(self, deltas, addMissingTargets=True):
+        current_targets_names = [target.attribute for target in self.targets()]
+        for target_name, delta in deltas.items():
+            if target_name in current_targets_names:
+                self[target_name].setDeltas(delta)
+            elif addMissingTargets:
+                target = self.addEmptyTarget(target_name)
+                target.setDeltas(delta)
+            elif config.verbose:
+                cmds.warning("Target {} is missing from {} and was not applied".format(target_name, self.name))
 
     @property
     def data(self):
@@ -1625,6 +1687,12 @@ class UVPin(DependNode):
         self.connectTransform(target, [u, v])
 
 
+# These contain MFn and MFnData type names per {id#: name, ...}, to be able to get the type name from its id#.
+# Warning : id# for nodes, attribute, etc... of the same type, are not consistent and change between maya versions.
+MFN_TYPE_NAMES = {value: key for key, value in om.MFn.__dict__.items() if isinstance(value, int)}
+MFNDATA_TYPE_NAMES = {value: key for key, value in om.MFnData.__dict__.items() if isinstance(value, int)}
+
+
 class SupportedTypes(object):
     """
     Data of supported types of maya nodes.
@@ -1643,6 +1711,7 @@ class SupportedTypes(object):
         (DependNode, om.MFn.kDependencyNode): {
             (DagNode, om.MFn.kDagNode): {
                 (Transform, om.MFn.kTransform): {
+                    (Joint, om.MFn.kJoint): {},
                     (Constraint, om.MFn.kConstraint): {
                         (ParentConstraint, om.MFn.kParentConstraint): {},
                         (OrientConstraint, om.MFn.kOrientConstraint): {},
@@ -1677,7 +1746,7 @@ class SupportedTypes(object):
         om.MFn.kDependencyNode: DependNode,  # 4
         om.MFn.kDagNode: DagNode,  # 107
         om.MFn.kTransform: Transform,  # 110
-        om.MFn.kJoint: Transform,  # 121
+        om.MFn.kJoint: Joint,  # 121
         om.MFn.kConstraint: Constraint,  # 932; 928 in Maya 2020 ?! ¯\_(ツ)_/¯
         om.MFn.kParentConstraint: ParentConstraint,  # 242
         om.MFn.kPointConstraint: PointConstraint,  # 240
@@ -1728,7 +1797,7 @@ class SupportedTypes(object):
     classes_str = {
         'dagNode': DagNode,
         'transform': Transform,
-        'joint': Transform,
+        'joint': Joint,
         'constraint': Constraint,
         'parentConstraint': ParentConstraint,
         'pointConstraint': PointConstraint,
