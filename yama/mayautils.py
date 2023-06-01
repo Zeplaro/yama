@@ -49,8 +49,8 @@ def mxConstraint(source=None, target=None):
     dmx = nodes.createNode('decomposeMatrix', n='{}_dmx'.format(source.shortName))
     cmx = nodes.createNode('composeMatrix', n='{}_cmx'.format(source.shortName))
     cmx.outputMatrix.connectTo(mmx.matrixIn[0], f=True)
-    source.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
-    target.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
+    source.worldMatrix.connectTo(mmx.matrixIn[1], f=True)
+    target.parentInverseMatrix.connectTo(mmx.matrixIn[2], f=True)
     mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
 
     source_tmp = nodes.createNode('transform', n='{}_sourceTMP'.format(source.shortName))
