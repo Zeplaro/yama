@@ -23,7 +23,7 @@ Once I don't feel the need to support Python 2.7 anymore, here is a list of the 
 - [ ] Update type hinting to Python 3 way of doing it.
 - [ ] Update `nodes.yam` to use `functools.singledispatch` instead of too many if, elifs, else.
 - [ ] Update `nodes.Yam` abstract class to use proper Python 3 way of doing an abstract class.
-- [ ] Try the walrus operator when usefull only.
+- [ ] Try the walrus operator when usefull.
 - [ ] Replace `pass` with `...` when prettier.
 - [ ] Use new dictionnary updating method `|=`
 - [ ] Make use of positional-only and keyword-only arguments when usefull.
