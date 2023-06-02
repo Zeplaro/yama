@@ -6,7 +6,7 @@ Yama is a wrapper for `maya.cmds` and `maya.api.OpenMaya`, with consistent objec
 
 Very similar and very inspired by pymel and cmdx.
 
-Yama is mostly a fancy way for me to store my maya scripts, and a playground to allow fast scripting work, how I like it.
+Yama is mostly a fancy way for me to store my maya scripts, and a playground to test new tools and allow fast scripting to work how I like it.
 
 ## How to use :
 _to-do_
