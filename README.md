@@ -13,7 +13,7 @@ _to-do_
 
 ## Full Python 3 transition todos :
 
-Once I don't feel the need to support Python 2.7 anymore, here is a list of the couple things I want to update :
+Once I don't feel the need to support Python 2.7 anymore, here is a list of a couple of things I want to update :
 
 - [ ] Remove unnecessary `object` inheritance to classes.
 - [ ] Remove imports of `six` and use of `six.string_types`.
