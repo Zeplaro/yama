@@ -4,7 +4,7 @@ from six import string_types
 from copy import copy
 from maya import cmds, mel
 
-from . import nodes, decorators, components, config, weightlist
+from . import nodes, decorators, components, config, weightlist, checks
 
 
 def getSkinCluster(obj, firstOnly=True):
@@ -21,8 +21,8 @@ def getSkinClusters(objs, firstOnly=True):
     return nodes.YamList([getSkinCluster(obj, firstOnly=firstOnly) for obj in objs])
 
 
-def skinAs(objs=None, sourceNamespace=None, targetNamespace=None, useObjectNamespace=False, prompt=True):
-    # type: ([str | nodes.Transform | nodes.Shape], str, str, bool, bool) -> nodes.YamList[nodes.SkinCluster] | None
+def skinAs(objs=None, sourceNamespace=None, targetNamespace=None, useObjectNamespace=False, createMissing=True, prompt=True):
+    # type: ([str | nodes.Transform | nodes.Shape], str, str, bool, bool, bool) -> nodes.YamList[nodes.SkinCluster] | None
     """
     Copies the skinning and skinCLuster settings of one skinned object to any other objects with a different topology.
     First object given in objs is the skinned object to copy from and the rest being the objects to copy the skin to, if
@@ -37,6 +37,8 @@ def skinAs(objs=None, sourceNamespace=None, targetNamespace=None, useObjectNames
     :param sourceNamespace: Namespace of the joints skinning the source object.
     :param targetNamespace: Namespace to use to find the joints that will skin the target objects.
     :param useObjectNamespace: If True: uses each objects namespace to determine the source and target namespaces.
+    :param createMissing: If True and useObjecNamespace or targetNamespace is True: will create any missing target
+                          influences that match the source influences.
     :param prompt: If True: will show a dialogue box asking to delete the intermediate shapes before skinning if
                    intermediate shapes are found on the target objects
     """
@@ -121,7 +123,14 @@ def skinAs(objs=None, sourceNamespace=None, targetNamespace=None, useObjectNames
                 replace_args = [sourceNamespace + ':', '']
                 if targetNamespace:
                     replace_args[1] = targetNamespace + ':'
-                target_influences = nodes.yams(inf.name.replace(*replace_args) for inf in source_influences)
+                target_influences = []
+                for inf in source_influences:
+                    target_name = inf.name.replace(*replace_args)
+                    if not checks.objExists(target_name) and createMissing:
+                        target_inf = nodes.createNode('joint', name=target_name)
+                    else:
+                        target_inf = nodes.yam(target_name)
+                    target_influences.append(target_inf)
             elif targetNamespace:
                 target_influences = nodes.yams(targetNamespace + ':' + inf for inf in source_influences)
             else:

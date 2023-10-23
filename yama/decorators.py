@@ -38,7 +38,8 @@ def verbose(func):
 
 def condition_debugger(condition):
     def decorator(func):
-        def wrapper(*args, **kwargs):
+        @wraps(func)
+        def wrap(*args, **kwargs):
             print("#$@&%*!    Function: '{}'; args={}, kwargs={}    #$@&%*!".format(func.__name__, args, kwargs))
 
             if eval(condition):
@@ -50,5 +51,5 @@ def condition_debugger(condition):
                 raise RuntimeError("Condition met after: '{}'; Condition: '{}'".format(func.__name__, condition))
 
             return result
-        return wrapper
+        return wrap
     return decorator
