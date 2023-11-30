@@ -96,17 +96,24 @@ class WeightList(list):
             self[i] *= y
         return self
 
-    def __div__(self, other):
+    def __truediv__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other, force_clamp=False)
         return self.emptyCopy(x / y for (x, y) in zip(self, other))
 
-    def __idiv__(self, other):
+    def __itruediv__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other, force_clamp=False)
         for i, y in enumerate(other):
             self[i] /= y
         return self
+
+    if PY2:
+        def __div__(self, other):
+            return self.__truediv__(other)
+
+        def __idiv__(self, other):
+            return self.__itruediv__(other)
 
     def __neg__(self):
         return self.emptyCopy(-x for x in self)
@@ -119,8 +126,9 @@ class WeightList(list):
             other = self.fromLengthValue(len(self), other)
         return super(WeightList, self).__eq__(other)
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
+    if PY2:
+        def __ne__(self, other):
+            return not self.__eq__(other)
 
     def __hash__(self):
         return hash(tuple(self))
@@ -210,7 +218,7 @@ def normalizeWeights(weights, force_clamp=True, min_value=0.0, max_value=1.0, ro
     new_weights = [weight.emptyCopy() for weight in weights]
     for values in zip(*weights):
         mult = 1.0
-        if any(values):  # Prevents ZeroDivisionError, in case all values are at 0.0, and leaves them at 0.0
+        if any(values):  # Keeps everything to 0.0 if all values are at 0.0 and prevents a / by 0 error
             try:
                 mult = 1.0 / sum(values)
             except ZeroDivisionError as e:

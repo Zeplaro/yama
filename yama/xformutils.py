@@ -42,6 +42,7 @@ def align(objs=None, t=True, r=True):
             obj.setPosition(pos, ws=True)
 
 
+@decorators.mayaundo
 @decorators.keepsel
 def aimChain(objs=None, aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None,
              worldUpVector=(0, 1, 0)):
@@ -91,7 +92,6 @@ def aimChain(objs=None, aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='sc
                                                worldUpType='objectrotation', worldUpObject=worldUpObject,
                                                worldUpVector=worldUpVector, mo=False))
             else:
-                cmds.delete(nulls.names, world_null.name)
                 raise NotImplementedError
 
         objs[-1].setXform(t=poses[-1], ro=objs[-2].getXform(ro=True, ws=True), ws=True)
@@ -329,7 +329,7 @@ def makePlanar(objs, firstPointIndex=0, secondPointIndex=-1, thirdPointIndex=1, 
         # Creating temporary transforms to work with.
         nulls = nodes.YamList()
         for obj in objs:
-            null = nodes.createNode('transform', name=obj + '_TEMP_NULL')
+            null = nodes.createNode('transform', name=obj.shortName + '_TEMP_NULL')
             null.setXform(m=obj.getXform(m=True, ws=True), ws=True)
             nulls.append(null)
 

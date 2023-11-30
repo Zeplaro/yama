@@ -307,7 +307,7 @@ class Component(nodes.Yam):
         return hash((self.node.hashCode, self.type(), self.indices()))
 
     def exists(self):
-        return checks.objExists(self.name)
+        return checks.objExists(self)
 
     @property
     def name(self):

@@ -98,6 +98,8 @@ def skinAs(objs=None, sourceNamespace=None, targetNamespace=None, useObjectNames
 
     if useObjectNamespace:
         sourceNamespace = ':'.join(source.name.split(':')[:-1])
+        if not sourceNamespace and config.verbose:
+            cmds.warning("useObjectNamespace is True but no namespace was found on source object")
     elif sourceNamespace or targetNamespace:
         if sourceNamespace:
             replace_args = [sourceNamespace + ':', '']

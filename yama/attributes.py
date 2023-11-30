@@ -3,12 +3,13 @@
 """
 Contains all the class and functions for maya attributes.
 """
-from six import PY2
+from six import PY2, string_types
 
-from maya import cmds
+from maya import cmds, mel
 import maya.api.OpenMaya as om
 import maya.OpenMaya as om1
-from . import config, nodes, weightlist, checks
+
+from . import config, nodes, weightlist, checks, mayautils
 
 
 def getAttribute(node, attr):
@@ -43,7 +44,14 @@ def getMPlug(attr):  # type: (str) -> om.MPlug
             cmds.warning("Failed to use MSelectionList.getPlug : '{}'; {}".format(attr, e))
         node = om_list.getDependNode(0)
         attribute = attr.split('.', 1)[-1]
-        MPlug = om.MFnDependencyNode(node).findPlug(attribute, False)
+        try:
+            MPlug = om.MFnDependencyNode(node).findPlug(attribute, False)
+        except RuntimeError as e:
+            if config.verbose:
+                cmds.warning("Failed to use MFnDependencyNode.findPlug : '{}'; {}".format(attr, e))
+            # TODO: Check if getting a .controlPoints[0]
+            raise e
+
     return MPlug
 
 
@@ -170,7 +178,7 @@ class Attribute(nodes.Yam):
     def __iter__(self):
         if self.isArray():
             node = self.node
-            for i in range(len(self)):
+            for i in self.indices():
                 MPlug = self.MPlug.elementByLogicalIndex(i)
                 yield Attribute(MPlug, node)
         else:
@@ -265,10 +273,13 @@ class Attribute(nodes.Yam):
             self._children.append(attribute)
         self._children_generated = True
 
+    def hasattr(self, attr):
+        return checks.objExists('{}.{}'.format(self, attr))
+
     @property
     def attribute(self):
         """Returns the attribute long name by itself without the node name."""
-        return self.MPlug.partialName(useLongNames=True, includeInstancedIndices=True)
+        return self.alias
 
     @attribute.setter
     def attribute(self, newName):
@@ -306,11 +317,14 @@ class Attribute(nodes.Yam):
         Checks if the attribute exists.
         :return: bool
         """
-        return checks.objExists(self.name)
+        return checks.objExists(self)
 
     @property
     def index(self):
         return self.MPlug.logicalIndex()
+
+    def indices(self):
+        return self.MPlug.getExistingArrayAttributeIndices()
 
     @property
     def parent(self):
@@ -379,7 +393,7 @@ class Attribute(nodes.Yam):
     def inputs(self, **kwargs):
         if not self.isArray():
             raise RuntimeError("'{}' is not an array attribute, use .input on none array attributes".format(self.name))
-        return nodes.YamList(matrix_indexed.input(**kwargs) for matrix_indexed in self)
+        return nodes.YamList(attr.input(**kwargs) for attr in self)
 
     @property
     def source(self):
@@ -509,7 +523,7 @@ class Attribute(nodes.Yam):
 
     @property
     def hidden(self):
-        if cmds.getAttr(self.name, keyable=True) or cmds.getAttr(self.name, channelBox=True):
+        if self.keyable or self.channelBox:
             return False
         return True
 
@@ -541,11 +555,19 @@ class Attribute(nodes.Yam):
 
     @property
     def alias(self):
-        return self.MPlug.partialName(useAlias=True, useLongNames=True, includeInstancedIndices=True)
+        return self.MPlug.partialName(useAlias=True, useLongNames=True, includeInstancedIndices=True,
+                                      includeNonMandatoryIndices=True)
 
     @alias.setter
     def alias(self, alias):
-        cmds.aliasAttr(alias, self.name)
+        # getting node.attribute name without alias
+        real_name = self.MPlug.partialName(includeNodeName=True, useLongNames=True, includeInstancedIndices=True,
+                                           includeNonMandatoryIndices=True)
+        try:
+            cmds.aliasAttr(alias, real_name)
+        except RuntimeError as e:
+            raise RuntimeError("Could not rename attribute :'{}', alias :'{}', to '{}'; "
+                               "{}".format(real_name, self.attribute, alias, e))
 
     @property
     def hashCode(self):
@@ -564,6 +586,26 @@ class Attribute(nodes.Yam):
 
     def isArray(self):
         return self.MPlug.isArray
+
+    def nextAvailableElement(self):
+        """
+        Gets an Attribute for the next available array element of this attribute.
+
+        @return: Attribute
+        """
+        if not self.isArray():
+            raise RuntimeError("The attribute {} is not an array attribute.".format(repr(self)))
+        existing_indices = self.indices() or [-1]
+        next_index = existing_indices[-1] + 1
+        return self[next_index]
+
+    @property
+    def enumNames(self):
+        return cmds.addAttr(self.name, q=True, enumName=True).split(':')
+
+    @enumNames.setter
+    def enumNames(self, names):
+        cmds.addAttr(self.name, enumName=':'.join(names), e=True)
 
 
 class BlendShapeTarget(Attribute):
@@ -600,20 +642,23 @@ class BlendShapeTarget(Attribute):
     def weights(self, weights):
         self.setWeights(weights)
 
+    def inputTaregetItemIndices(self):
+        return list(self.inputTargetGroupAttr.inputTargetItem.MPlug.getExistingArrayAttributeIndices())
+
+    def values(self):
+        # rounding to avoid python approximation, e.g.: (5200 / 1000.0 - 5) -> 0.20000000000000018 instead of 0.2
+        return [round(item_index / 1000.0 - 5, 6) for item_index in self.inputTaregetItemIndices()]
+
     def getDeltas(self):
-        inputTargetItem = self.node.inputTarget[0].inputTargetGroup[self.index].inputTargetItem
-        inputTargetItem_indexes = inputTargetItem.MPlug.getExistingArrayAttributeIndices()
-        data = {}
-        for item_index in inputTargetItem_indexes:
-            plug = inputTargetItem[item_index]
-            delta_values = plug.inputPointsTarget.value
-            component_indexes = plug.inputComponentsTarget.value
-            if len(delta_values) != len(component_indexes):
-                raise RuntimeError("BlendShape {} inputPointsTarget values "
-                                   "and inputComponentsTarget not in sync".format(self.node))
-            shape_value = round(item_index / 1000.0 - 5, 6)
-            data[shape_value] = {index: value for index, value in zip(component_indexes, delta_values)}
-        return data
+        """
+        Gets the delta data for the target for each full and in-between target values.
+        Deltas are stored in a dict per shape activation values. A simple target will be at value 1.0 and in-between
+        targets under their activation values (usually between 0.0 and 1.0).
+
+        Returns:
+            dict : {target value: {influenced component: list of x, y, z component delta}}
+        """
+        return {value: self.getDelta(value) for value in self.values()}
 
     def setDeltas(self, deltas):
         """Sets the given delta data on the corresponding inputTargetItem"""
@@ -622,6 +667,35 @@ class BlendShapeTarget(Attribute):
             # Needed if data comes from a json file with str keys
             shape_value = float(shape_value)
             self.setDelta(shape_value, data, inputTargetItem)
+
+    def getDelta(self, target_value, item_index=None):
+        """
+        Gets the delta data for one specific in-between value of the target; same value you would set on the attribute
+        of the blendShape node corresponding to this target, to "activate" the target or its in-between.
+        I call it an "in-between value of the target" but if the value is 1.0, it's the target default deltas, usually
+        just referred as : the target deltas.
+
+        Args:
+            target_value: float, value at which the full or in-between shape gets activated. If None, expects item_index
+            item_index: int, if provided and target_value is None, uses this index for inputTargetItem plug.
+
+        Returns:
+            delta: dict of {influenced component: [vector list x, y, z for the component delta]}
+        """
+
+        if target_value is not None:
+            item_index = int(target_value * 1000 + 5000)
+        elif item_index is None:
+            raise RuntimeError("At least one of target_value or item_index needed to get deltas; got None.")
+
+        delta_values = self.inputTargetGroupAttr.inputTargetItem[item_index].inputPointsTarget.value
+        component_indices = self.inputTargetGroupAttr.inputTargetItem[item_index].inputComponentsTarget.value
+        if component_indices and isinstance(component_indices[0], string_types):
+            component_indices = mayautils.componentListToIndices(component_indices)
+        if len(delta_values) != len(component_indices):
+            raise RuntimeError("BlendShape '{}' inputPointsTarget values "
+                               "and inputComponentsTarget not in sync".format(self.node))
+        return {index: value for index, value in zip(component_indices, delta_values)}
 
     def setDelta(self, value, delta, inputTargetItem=None):
         if not inputTargetItem:
@@ -639,11 +713,48 @@ class BlendShapeTarget(Attribute):
 
     @property
     def geometry(self):
+        """Returns the geometry shape connected on the target geometry input if any."""
         inputTargetItem_index = self.inputTargetGroupAttr.inputTargetItem.MPlug.getExistingArrayAttributeIndices()[0]
         inputGeomTarget = self.inputTargetGroupAttr.inputTargetItem[inputTargetItem_index].inputGeomTarget
         input_attr = inputGeomTarget.input()
         if input_attr:
             return input_attr.node
+
+    @geometry.setter
+    def geometry(self, geometry):
+        """
+        Sets a new geometry shape as the target geometry input.
+        Breaks the connection of the current geometry shape if one is already connected.
+        Warning: this operation will rename the target alias to the given geometry name.
+        Args:
+            geometry: str, new shape to set as geometry shape for the target.
+        """
+        current_value = self.value
+
+        # Force disconnects the current geometry shape
+        inputGeomTarget = self.inputTargetGroupAttr.inputTargetItem[6000].inputGeomTarget
+        if inputGeomTarget.input():
+            inputGeomTarget.breakInput()
+
+        cmds.blendShape(self.node.name, edit=True, target=(self.node.geometry, self.index, geometry, 1.0))
+        # Setting a new geometry for the target sets the current target value to 0.0.
+        self.value = current_value
+
+    def resetDeltas(self):
+        """Resets the delta of this target"""
+        cmds.blendShape(self.node.name, edit=True, resetTargetDelta=(0, self.index))
+
+    def removeTarget(self):
+        """
+        Removes the target from the blendShape.
+
+        If the target does not have a live geometry still connected then maya the remove kwarg on cmds.blendShape does
+        not work, instead we're using the same mel command used by the shapeEditor UI.
+        """
+        if self.geometry:
+            cmds.blendShape(self.node.name, e=True, remove=True, t=[self.node.geometry, 0, self.geometry, self.index])
+        else:
+            mel.eval('blendShapeDeleteTargetGroup("{}", "{}");'.format(self.node.name, self.index))
 
 
 def getAttr(attr):
@@ -728,10 +839,18 @@ def getMPlugValue(MPlug):
             mfn = om.MFnMatrixData(MPlug.asMObject())
             return list(mfn.matrix())
         elif attr_type == om.MFnData.kPointArray:
-            mfn = om.MFnPointArrayData(MPlug.asMObject())
+            # TODO: fails to get MPlug.asMObject() if empty data
+            try:
+                mfn = om.MFnPointArrayData(MPlug.asMObject())
+            except RuntimeError:
+                return []
             return [(x.x, x.y, x.z) for x in mfn.array()]
         elif attr_type == om.MFnData.kComponentList:
-            mfn = om.MFnComponentListData(MPlug.asMObject())
+            # TODO: fails to get MPlug.asMObject() if empty data
+            try:
+                mfn = om.MFnComponentListData(MPlug.asMObject())
+            except RuntimeError:
+                return []
             # TODO : Fails to .get if empty list
             try:
                 component = mfn.get(0)

@@ -7,26 +7,28 @@ Contains non maya specific utils.
 from __future__ import division
 from six import string_types
 from string import ascii_lowercase
+import math
+from functools import reduce
+from operator import mul
 
 
-def multList(list_a, list_b):
+def mulLists(lists):
     """
-    Zips 'list_a' items with 'list_b' items and multiplies them together.
-    :param list_a: list of digits
-    :param list_b: list of digits
-    :return: list of digits
+    Zips given lists items and multiplies them together.
+    :param lists: lists of list of multipliable items
+    :return: list of multiplied items
     """
-    return [x*y for x, y in zip(list_a, list_b)]
+    # TODO: replace reduce(mul, ...) with python 3.8 math.prod when dropping python 2 support
+    return [reduce(mul, x, 1) for x in zip(*lists)]
 
 
-def addList(list_a, list_b):
+def addLists(lists):
     """
-    Zips 'list_a' items with 'list_b' items and adds them together.
-    :param list_a: list of digits
-    :param list_b: list of digits
-    :return: list of digits
+    Zips given lists items and adds them together.
+    :param lists: lists of list of addable items
+    :return: list of added items
     """
-    return [x+y for x, y in zip(list_a, list_b)]
+    return [sum(x) for x in zip(*lists)]
 
 
 def decimalToAlphabetical(decimal):
@@ -155,3 +157,22 @@ def romanToDecimal(roman):
                 roman = roman[len(sign):]
                 break
     return result
+
+
+def distance(vectorA, vectorB):
+    # TODO: replace with python 3.8 math.dist when dropping python 2 support
+    return math.sqrt(sum((x - y) ** 2.0 for x, y in zip(vectorA, vectorB)))
+
+
+def getRegularPolygonCoordinates(sides=3, radius=0.5):
+    angle = 0
+    step = 2 * math.pi / sides
+
+    coordinates = []
+    for i in range(sides):
+        x = math.cos(angle) * radius
+        y = math.sin(angle) * radius
+        coordinates.append((x, y))
+        angle -= step  # Substracting to have the face normal face up when used to build regular polygon in maya
+
+    return coordinates

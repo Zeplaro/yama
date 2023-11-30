@@ -2,7 +2,7 @@
 
 from maya import cmds, mel
 import maya.api.OpenMaya as om
-from . import nodes, xformutils, decorators
+from . import nodes, xformutils, decorators, config, utils
 
 
 def createHook(node, parent=None, suffix='hook'):
@@ -323,3 +323,63 @@ def unlockTRSV(objs=None, unlock=True, breakConnections=True, keyable=True, t=Tr
                 obj.v.keyable = True
             if breakConnections:
                 obj.v.breakConnections()
+
+
+def createPolyNgon(name='pNgon1', radius=0.1, sides=3, upAxis='y', parent=None):
+    """
+    Creates a single face regular polygon with given number of sides.
+
+    @param name: str, name for the created polygon
+    @param radius: flaot, the radius for the polygon.
+    @param sides: int, the number of sides for the polygon.
+    @param upAxis: 'x', 'y', or 'z', up axis to which the polygon face normal will point to.
+    @param parent: the parent transform in which to put the created shape.
+
+    @return: Mesh polygon shape node.
+    """
+    if sides < 3:
+        raise ValueError("A polygon can not have less than 3 sides; numbr of sides given : {}".format(sides))
+
+    if config.undoable:
+        ngon = cmds.polyCone(radius=radius, subdivisionsX=sides, height=0, constructionHistory=False, name=name)[0]
+        cmds.delete('{}.f[1:{}]'.format(ngon, sides))
+        cmds.polyNormal(ngon, normalMode=0, constructionHistory=False)
+        ngon = nodes.yam(ngon).shape
+        if parent:
+            parent = nodes.yam(parent)
+            ngon.parent = parent
+
+    else:
+        mfn = om.MFnMesh()
+        coordinates = utils.getRegularPolygonCoordinates(sides, radius)
+        coordinates.insert('xyz'.index(upAxis), 0)
+        u, v = zip(*coordinates)
+        points = [om.MPoint(coordinate) for coordinate in coordinates]
+        create_args = [points, [sides], list(range(sides)), u, v]
+        if parent:
+            parent = nodes.yam(parent)
+            create_args.append(parent.MObject)
+        ngon = mfn.create(*create_args)
+        ngon = nodes.yam(ngon)
+        ngon.name = name
+        ngon = ngon.shape
+
+    return ngon
+
+
+def componentListToIndices(components):
+    """
+    Unpacks a list of components to a flat list of component indices.
+    Maya's componentList attributes store components. Getting the value of this type of attributes returns a list of
+    'packed' components, e.g.: ['vtx[0:333]', 'vtx[335:388]', 'vtx[390:38621]', 'vtx[38623:39242]', ...]
+    """
+    indices = []
+    for pack in components:
+        pack = pack.split('[')[-1][:-1]
+        if ':' in pack:
+            start, stop = pack.split(':')
+            start, stop = int(start), int(stop)
+            indices += list(range(start, stop + 1))
+        else:
+            indices.append(int(pack))
+    return indices
