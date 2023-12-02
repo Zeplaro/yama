@@ -180,31 +180,31 @@ def flipWeights(weights, table):
 
 
 @decorators.keepsel
-def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, destinationGeo=None):
+def copyDeformerWeights(source, target, sourceGeo=None, destinationGeo=None):
     """
     For two geometries with different topologies, copies a given deformer weight to another given deformer.
-    :param sourceDeformer: the deformer to copy the weights from, the object needs to have a 'weights' attribute
-    :param destinationDeformer: the deformer to copy the weights on, the object needs to have a 'weights' attribute
+    :param source: the deformer to copy the weights from, the object needs to have a 'weights' attribute
+    :param target: the deformer to copy the weights on, the object needs to have a 'weights' attribute
     :param sourceGeo: the geo on which the sourceDeformer is applied; if None, the geo is taken from the sourceDeformer
     :param destinationGeo: the geo on which the destinationDeformer is applied; if None, the geo is taken from the
                            destinationDeformer
     """
-    sourceDeformer, destinationDeformer = nodes.yams((sourceDeformer, destinationDeformer))
+    source, target = nodes.yams((source, target))
     if sourceGeo is None:
-        sourceGeo = sourceDeformer.geometry
+        sourceGeo = source.geometry
     else:
         sourceGeo = nodes.yam(sourceGeo)
     if destinationGeo is None:
-        destinationGeo = destinationDeformer.geometry
+        destinationGeo = target.geometry
     else:
         destinationGeo = nodes.yam(destinationGeo)
 
-    if not hasattr(sourceDeformer, 'weights'):
+    if not hasattr(source, 'weights'):
         raise TypeError("'{}' of type '{}' has no 'weights' attributes."
-                        "".format(sourceDeformer, type(sourceDeformer).__name__))
-    if not hasattr(destinationDeformer, 'weights'):
+                        "".format(source, type(source).__name__))
+    if not hasattr(target, 'weights'):
         raise TypeError("'{}' of type '{}' has no 'weights' attributes."
-                        "".format(destinationDeformer, type(destinationDeformer).__name__))
+                        "".format(target, type(target).__name__))
 
     # Creating temp geos
     temp_source_geo, temp_dest_geo = nodes.yams(cmds.duplicate(sourceGeo.name, destinationGeo.name))
@@ -229,7 +229,7 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
                                                  includeHiddenSelections=True, toSelectedBones=True)[0])
     destination_skn.envelope.value = 0
 
-    source_weights = sourceDeformer.weights
+    source_weights = source.weights
     source_skn.weights = [[value] for value in source_weights]
 
     cmds.copySkinWeights(sourceSkin=source_skn.name, destinationSkin=destination_skn.name, noMirror=True,
@@ -237,7 +237,7 @@ def copyDeformerWeights(sourceDeformer, destinationDeformer, sourceGeo=None, des
                          smooth=True, normalize=False)
 
     destination_skn_weights = destination_skn.weights
-    destinationDeformer.weights = weightlist.WeightList([value[0] for value in destination_skn_weights])
+    target.weights = weightlist.WeightList([value[0] for value in destination_skn_weights])
 
     cmds.delete(source_skn.name, destination_skn.name)
     cmds.delete(source_jnt.name, destination_jnt.name)
