@@ -78,7 +78,7 @@ class Components(nodes.Yam):
     __metaclass__ = ABCMeta
 
     def __init__(self, node, apiType):
-        super(Components, self).__init__()
+        super().__init__()
         if not isinstance(node, nodes.ControlPoint):
             raise TypeError(f"Expected component node of type ControlPoint, instead got : {node}, {type(node).__name__}")
         self.node = node
@@ -141,7 +141,7 @@ class SingleIndexed(Components):
     Base class for components indexed by a single index.
     """
     def __init__(self, *args, **kwargs):
-        super(SingleIndexed, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __iter__(self):
         for i in range(len(self)):
@@ -153,7 +153,7 @@ class MeshVertices(SingleIndexed):
     Class for mesh vertices.
     """
     def __init__(self, *args, **kwargs):
-        super(MeshVertices, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def getPositions(self, ws=False):
         if ws:
@@ -166,7 +166,7 @@ class MeshVertices(SingleIndexed):
         if not config.undoable:
             self.setPositionsOM(values, ws)
         else:
-            super(MeshVertices, self).setPositions(values, ws)
+            super().setPositions(values, ws)
 
     def setPositionsOM(self, values, ws=False):
         if ws:
@@ -181,7 +181,7 @@ class CurveCVs(SingleIndexed):
     Class for curve cvs.
     """
     def __init__(self, *args, **kwargs):
-        super(CurveCVs, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def getPositions(self, ws=False):
         if ws:
@@ -194,7 +194,7 @@ class CurveCVs(SingleIndexed):
         if not config.undoable:
             self.setPositionsOM(values, ws)
         else:
-            super(CurveCVs, self).setPositions(values, ws)
+            super().setPositions(values, ws)
 
     def setPositionsOM(self, values, ws=False):
         # TODO: doesn't work ? Does but has a refresh issue ?
@@ -211,7 +211,7 @@ class DoubleIndexed(Components):
     Base class for components indexed by two indices.
     """
     def __init__(self, *args, **kwargs):
-        super(DoubleIndexed, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __iter__(self):
         for u in range(self.node.lenU()):
@@ -224,7 +224,7 @@ class TripleIndexed(Components):
     Base class for components indexed by three indices.
     """
     def __init__(self, *args, **kwargs):
-        super(TripleIndexed, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __iter__(self):
         lenx, leny, lenz = self.node.lenXYZ()
@@ -239,7 +239,7 @@ class Component(nodes.Yam):
     Base class for indexed component.
     """
     def __init__(self, node, components, index, secondIndex=None, thirdIndex=None):
-        super(Component, self).__init__()
+        super().__init__()
         if isinstance(node, nodes.Transform):
             node = node.shape
         self.node = node
@@ -326,7 +326,7 @@ class Component(nodes.Yam):
 
 class MeshVertex(Component):
     def __init__(self, *args, **kwargs):
-        super(MeshVertex, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def getPosition(self, ws=False):
         if ws:
@@ -340,7 +340,7 @@ class MeshVertex(Component):
         if not config.undoable:
             self.setPositionOM(values, ws)
         else:
-            super(MeshVertex, self).setPosition(values, ws)
+            super().setPosition(values, ws)
 
     def setPositionOM(self, value, ws=False):
         if ws:
@@ -353,7 +353,7 @@ class MeshVertex(Component):
 
 class CurveCV(Component):
     def __init__(self, *args, **kwargs):
-        super(CurveCV, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def getPosition(self, ws=False):
         if ws:
@@ -367,7 +367,7 @@ class CurveCV(Component):
         if not config.undoable:
             self.setPositionOM(value, ws)
         else:
-            super(CurveCV, self).setPosition(value, ws)
+            super().setPosition(value, ws)
 
     def setPositionOM(self, value, ws=False):
         if ws:
@@ -384,7 +384,7 @@ class ComponentsSlice(nodes.Yam):
     Warning : ComponentsSlice does contain the last index of the slice unlike in a Python slice.
     """
     def __init__(self, node, components, components_slice):
-        super(ComponentsSlice, self).__init__()
+        super().__init__()
         self.node = node
         self.components = components
         self._slice = components_slice
@@ -481,7 +481,7 @@ class ComponentsSlice(nodes.Yam):
         self.setPositions(value, ws=ws)
 
 
-class SupportedTypes(object):
+class SupportedTypes:
     """
     Contains all the supported component types and their corresponding class, MFn id, yam class, etc...
     """
