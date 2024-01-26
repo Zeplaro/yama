@@ -1,8 +1,5 @@
 # encoding: utf8
 
-from __future__ import division
-from six import PY2
-
 from . import io
 
 
@@ -20,16 +17,12 @@ class WeightList(list):
                 self.append(i)
 
     def __repr__(self):
-        return "{}({})".format(self.__class__.__name__, super(WeightList, self).__repr__())
+        return f"{self.__class__.__name__}({super(WeightList, self).__repr__()})"
 
     def __getitem__(self, item):
         if item.__class__ == slice:
             return self.emptyCopy(super(WeightList, self).__getitem__(item))
         return super(WeightList, self).__getitem__(item)
-
-    if PY2:
-        def __getslice__(self, start, stop):
-            return self.emptyCopy(super(WeightList, self).__getslice__(start, stop))
 
     @classmethod
     def fromLengthValue(cls, length, value=0.0, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
@@ -96,12 +89,12 @@ class WeightList(list):
             self[i] *= y
         return self
 
-    def __div__(self, other):
+    def __truediv__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other, force_clamp=False)
         return self.emptyCopy(x / y for (x, y) in zip(self, other))
 
-    def __idiv__(self, other):
+    def __itruediv__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other, force_clamp=False)
         for i, y in enumerate(other):
@@ -118,9 +111,6 @@ class WeightList(list):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other)
         return super(WeightList, self).__eq__(other)
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
 
     def __hash__(self):
         return hash(tuple(self))
@@ -156,7 +146,7 @@ class WeightList(list):
         if round_value is None and self.round_value is not None:
             round_value = self.round_value
         else:
-            raise RuntimeError("No round_value value provided or set on the object")
+            raise RuntimeError("No round_value value provided or set on the object.")
         for i, value in enumerate(self):
             self[i] = round(value, round_value)
 
@@ -210,11 +200,11 @@ def normalizeWeights(weights, force_clamp=True, min_value=0.0, max_value=1.0, ro
     new_weights = [weight.emptyCopy() for weight in weights]
     for values in zip(*weights):
         mult = 1.0
-        if any(values):  # Prevents ZeroDivisionError, in case all values are at 0.0, and leaves them at 0.0
+        if any(values):  # Keeps everything to 0.0 if all values are at 0.0 and prevents a / by 0 error
             try:
                 mult = 1.0 / sum(values)
             except ZeroDivisionError as e:
-                raise ZeroDivisionError("The sum of values was equal to 0.0; Values : {}\n{}".format(values, e))
+                raise ZeroDivisionError(f"The sum of values was equal to 0.0; Values : {values}; {e}")
         for i, value in enumerate(values):
             new_weights[i].append(value * mult)
     return new_weights

@@ -6,7 +6,6 @@ Contains all the class and functions for maya components.
 # TODO : Improve getComponent func
 # TODO : fixed setPositionsOM on cvs ?
 from abc import ABCMeta, abstractmethod
-from six import PY2
 
 from maya import cmds
 import maya.api.OpenMaya as om
@@ -22,7 +21,7 @@ def getComponent(node, attr):
     :return: The component object.
     """
     if '.' in attr:
-        raise TypeError("Not a supported component : '{}'".format(attr))
+        raise TypeError(f"Not a supported component : '{attr}'")
 
     split = []
     if '[' in attr:  # Checking if getting a specific index
@@ -30,13 +29,13 @@ def getComponent(node, attr):
         attr = split.pop(0)
 
     if attr not in SupportedTypes.TYPES:
-        raise TypeError("component '{}' not in supported types".format(attr))
+        raise TypeError(f"component '{attr}' not in supported types")
 
     # Changing node to its shape if given a transform
     if isinstance(node, nodes.Transform):
         node = node.shape
         if not node:
-            raise RuntimeError("node '{}' has no shape to get component on".format(node))
+            raise RuntimeError(f"node '{node}' has no shape to get component on")
 
     if attr == 'cp':
         if node.__class__ in SupportedTypes.SHAPE_COMPONENT:
@@ -47,12 +46,12 @@ def getComponent(node, attr):
         api_type = SupportedTypes.COMPONENT_SHAPE_MFNID[(attr, node.__class__)]
     else:
         om_list = om.MSelectionList()
-        om_list.add(node.name + '.' + attr + '[0]')
+        om_list.add(f'{node.name}.{attr}[0]')
         dag, comp = om_list.getComponent(0)
         api_type = comp.apiType()
 
     if api_type not in SupportedTypes.MFNID_COMPONENT_CLASS:
-        raise TypeError("component '{}' of api type '{}' not in supported types".format(attr, api_type))
+        raise TypeError(f"component '{attr}' of api type '{api_type}' not in supported types")
 
     comp_class = SupportedTypes.MFNID_COMPONENT_CLASS[api_type][1]
     component = comp_class(node, api_type)
@@ -81,8 +80,7 @@ class Components(nodes.Yam):
     def __init__(self, node, apiType):
         super(Components, self).__init__()
         if not isinstance(node, nodes.ControlPoint):
-            raise TypeError("Expected component node of type ControlPoint, "
-                            "instead got : {}, {}".format(node, type(node).__name__))
+            raise TypeError(f"Expected component node of type ControlPoint, instead got : {node}, {type(node).__name__}")
         self.node = node
         self.api_type = apiType
         self.component_name = SupportedTypes.MFNID_COMPONENT_CLASS[apiType][0]
@@ -95,15 +93,11 @@ class Components(nodes.Yam):
             return ComponentsSlice(self.node, self, item)
         return self.index(item)
 
-    if PY2:
-        def __getslice__(self, start, stop):
-            return ComponentsSlice(self.node, self, slice(start, stop+1))
-
     def __len__(self):
         return len(self.node)
 
     def __repr__(self):
-        return "{}('{}', '{}')".format(self.__class__.__name__, self.node.name, self.component_name)
+        return f"{self.__class__.__name__}('{self.node.name}', '{self.component_name}')"
 
     @abstractmethod
     def __iter__(self):
@@ -111,22 +105,19 @@ class Components(nodes.Yam):
 
     def __eq__(self, other):
         if isinstance(other, Component):
-            return self.__hash__() == hash(other)
+            return hash(self) == hash(other)
         else:
             try:
                 return self == nodes.yam(other)
             except (TypeError, checks.ObjExistsError):
                 return False
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
     def __hash__(self):
         return hash((self.node.hashCode, self.api_type))
 
     @property
     def name(self):
-        return self.node + '.' + self.component_name + '[:]'
+        return f'{self.node}.{self.component_name}[:]'
 
     def index(self, index, secondIndex=None, thirdIndex=None):
         return self.component_class(self.node, self, index, secondIndex, thirdIndex)
@@ -268,24 +259,22 @@ class Component(nodes.Yam):
 
     def __repr__(self):
         if self.third_index is not None:
-            return "{}('{}', '{}', {}, {}, {})".format(self.__class__.__name__, self.node,
-                                                       self.components.component_name, self.index, self.second_index,
-                                                       self.third_index)
+            return (f"{self.__class__.__name__}('{self.node}', '{self.components.component_name}', {self.index}, "
+                    f"{self.second_index}, {self.third_index})")
         elif self.second_index is not None:
-            return "{}('{}', '{}', {}, {})".format(self.__class__.__name__, self.node, self.components.component_name,
-                                                   self.index, self.second_index)
+            return (f"{self.__class__.__name__}('{self.node}', '{self.components.component_name}', {self.index}, "
+                    f"{self.second_index})")
         else:
-            return "{}('{}', '{}', {})".format(self.__class__.__name__, self.node, self.components.component_name,
-                                               self.index)
+            return f"{self.__class__.__name__}('{self.node}', '{self.components.component_name}', {self.index})"
 
     def __getitem__(self, item):
         """
         todo : work with slices
         """
         if not isinstance(item, int):
-            raise TypeError("Expected item of type int, got : {}, {}".format(item, type(item).__name__))
+            raise TypeError("Expected item of type int, got : {item}, {type(item).__name__}")
         if isinstance(self.components, SingleIndexed):
-            raise IndexError("'{}' is a single index component and cannot get a second index".format(self))
+            raise IndexError(f"'{self}' is a single index component and cannot get a second index")
 
         if self.second_index is None:
             return self.__class__(self.node, self.components, self.index, item)
@@ -294,32 +283,29 @@ class Component(nodes.Yam):
             if isinstance(self.components, TripleIndexed):
                 return self.__class__(self.node, self.components, self.index, self.second_index, item)
             else:
-                raise IndexError("'{}' is a double index component and cannot get a third index".format(self))
-        raise IndexError("'{}' cannot get four index")
+                raise IndexError(f"'{self}' is a double index component and cannot get a third index")
+        raise IndexError(f"'{self}' cannot get four index")
 
     def __eq__(self, other):
-        return self.__hash__() == hash(other)
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
+        return hash(self) == hash(other)
 
     def __hash__(self):
         return hash((self.node.hashCode, self.type(), self.indices()))
 
     def exists(self):
-        return checks.objExists(self.name)
+        return checks.objExists(self)
 
     @property
     def name(self):
-        return self.node + '.' + self.attribute
+        return f'{self.node}.{self.attribute}'
 
     @property
     def attribute(self):
-        attribute = self.components.component_name + '[' + str(self.index) + ']'
+        attribute = f'{self.components.component_name}[{self.index}]'
         if self.second_index is not None:
-            attribute += '[' + str(self.second_index) + ']'
+            attribute += f'[{self.second_index}]'
         if self.third_index is not None:
-            attribute += '[' + str(self.third_index) + ']'
+            attribute += f'[{self.third_index}]'
         return attribute
 
     def indices(self):
@@ -438,8 +424,7 @@ class ComponentsSlice(nodes.Yam):
         return self.name
 
     def __repr__(self):
-        return "{}('{}', '{}', {})".format(self.__class__.__name__, self.node, self.components.component_name,
-                                           self.slice)
+        return f"{self.__class__.__name__}('{self.node}', '{self.components.component_name}', {self.slice})"
 
     def __getitem__(self, item):
         if isinstance(item, slice):
@@ -457,9 +442,6 @@ class ComponentsSlice(nodes.Yam):
         if isinstance(other, ComponentsSlice):
             return self.indices == other.indices
         return False
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
 
     def __hash__(self):
         return hash((self.node.hashCode, self.components.api_type, self.indices))

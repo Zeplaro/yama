@@ -6,19 +6,17 @@ The main functions used would be createNode to create a new node and get it init
 yam or yams to initialize existing objects into their proper class type.
 """
 
-from abc import ABCMeta, abstractproperty, abstractmethod
-from six import string_types, PY2
-from math import sqrt
+import abc
+
 from maya import cmds
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
 import maya.OpenMaya as om1
 
-from . import weightlist, config, checks
+from . import weightlist, config, checks, utils, decorators
 
 
-def getMObject(node):
-    # type: (str) -> om.MObject
+def getMObject(node: str) -> om.MObject:
     """
     Gets the associated OpenMaya.MObject for the given node.
     :param node: str, node unique name
@@ -29,12 +27,12 @@ def getMObject(node):
         mSelectionList.add(node)
     except RuntimeError:
         if checks.objExists(node):
-            raise Exception("more than one object called '{}'".format(node))
+            raise Exception(f"More than one object called '{node}'")
         checks.objExists(node, raiseError=True)
     try:
         MObject = mSelectionList.getDependNode(0)
     except Exception as e:
-        raise Exception("Failed to getDependNode on : '{}'; {}".format(node, e))
+        raise Exception(f"Failed to getDependNode on : '{node}'; {e}")
     return MObject
 
 
@@ -42,7 +40,7 @@ gmo = getMObject
 
 
 def yam(node):
-    # type: (Yam | string_types | om.MObject | om.MDagPath | om.MPlug) -> DependNode | 'attributes.Attribute'
+    # type: (Yam | str | om.MObject | om.MDagPath | om.MPlug) -> DependNode | 'attributes.Attribute'
     """
     Handles all node class assignment to assign the proper class depending on the node type.
     Also works with passing a 'node.attribute'.
@@ -60,7 +58,7 @@ def yam(node):
     if hasattr(node, 'isAYamObject'):
         return node
 
-    elif isinstance(node, string_types):
+    elif isinstance(node, str):
         if '.' in node:  # checking if an attribute or component was given with the node
             node, attribute = node.split('.', 1)
         MObject = getMObject(node)
@@ -76,8 +74,8 @@ def yam(node):
         return attributes.Attribute(MPlug=node)
 
     else:
-        raise TypeError("yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected;"
-                        " got {}.".format(node.__class__.__name__))
+        raise TypeError(f"yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected; "
+                        f"got {node.__class__.__name__}.")
 
     yam_node = Singleton(MObject)
     if attribute:
@@ -85,14 +83,22 @@ def yam(node):
     return yam_node
 
 
-def yams(nodes):
-    # type: ([Yam | str | om.MObject | om.MDagPath | om.MPlug]) -> YamList
+def yams(*nodes):
+    # type: (*(Yam | str | om.MObject | om.MDagPath | om.MPlug | list | tuple, ...)) -> YamList
     """
     Returns each node or attributes initialized as their appropriate DependNode or Attribute. See 'yam' function.
-    :param nodes: (list) list of str of existing nodes.
-    :return: list of DependNode
+    :param nodes: Yam | str | om.MObject | om.MDagPath | om.MPlug of existing nodes.
+    :return: YamList of DependNode
     """
-    return YamList(yam(node) for node in nodes)
+    try:
+        return YamList(yam(node) for node in nodes)
+    except TypeError as e:  # in case a list or tuple was passed as single argument instead of an unpacked list.
+        try:  # trying again using the first element of the nodes.
+            return YamList(yam(node) for node in nodes[0])
+        except TypeError as f:  # to raise the proper TypeError in case an element of the nodes[0] is the wrong type.
+            raise f
+        except Exception:  # in case there was actually an issue with the given nodes.
+            raise e
 
 
 def createNode(*args, **kwargs):
@@ -123,107 +129,108 @@ def spaceLocator(name='locator', pos=(0, 0, 0), rot=(0, 0, 0), parent=None, ws=F
     return loc
 
 
-def duplicate(objs, **kwargs):
+@decorators.string_args
+def duplicate(*objs, **kwargs):
     """Wrapper for cmds.duplicate"""
     return yams(cmds.duplicate(objs, **kwargs))
 
 
+@decorators.string_args
 def ls(*args, **kwargs):
     """Wrapper for 'maya.cmds.ls' but returning yam objects."""
     if 'fl' not in kwargs and 'flatten' not in kwargs:
-        kwargs['fl'] = True
+        kwargs['flatten'] = True
     return yams(cmds.ls(*args, **kwargs))
 
 
 def selected(**kwargs):
     """Returns current scene selection as yam objects; kwargs are passed on to 'ls'."""
     if 'os' not in kwargs and 'sl' not in kwargs and 'orderedSelection' not in kwargs and 'selection' not in kwargs:
-        kwargs['os'] = True
+        kwargs['orderedSelection'] = True
     return ls(**kwargs)
 
 
+@decorators.string_args
 def select(*args, **kwargs):
     """Set current scene selection with given args and kwargs. Allows to pass yam object into the select function."""
-    sel = []
+    cmds.select(*args, **kwargs)
+
+
+@decorators.string_args
+def listAttr(*args, **kwargs):
+    """
+    Wrapper for cmds.listAttr returning Component objects.
+
+    @note: There is no way to get the nodes from which the attributes were queried in the results of cmds.listAttr,
+           which is why this is so convoluted.
+           The node name is extracted and stored before querying the attributes, then plugged back with the attribute
+           before being converted to a Component object with cpn.encode.
+
+    @param args: [DependNode | Attribute | str, ...] The object, node or attribute to query the attributes from.
+    @param kwargs: kwargs passed on to cmds.listAttr
+    @return: list[Attribute, ...]
+    """
+    kwargs['leaf'] = False
+
+    if not args:  # Working with selection if no args to match cmds.listAttr behaviour.
+        args = cmds.ls(os=True)
+
+    node_args = []
     for arg in args:
-        if isinstance(arg, YamList):
-            sel.append(arg.names)
-        elif hasattr(arg, 'isAYamObject'):
-            sel.append(str(arg))
-        elif isinstance(arg, (list, tuple, dict, set)):
-            new = []
-            for arg_ in arg:
-                if hasattr(arg_, 'isAYamObject'):
-                    new.append(str(arg_))
-                else:
-                    new.append(arg_)
-            sel.append(new)
+        node, *attrs = arg.split('.')
+
+        # Listing all corresponding nodes in case a wildcard '*' or '?' symbol was used in the node name.
+        if '*' in node or '?' in node:
+            nodes = cmds.ls(node)
+            node_args += [[node, '.'.join([node, *attrs])] for node in nodes]
+
         else:
-            sel.append(arg)
-    cmds.select(*sel, **kwargs)
+            node_args.append([node, arg])
+
+    results = []
+    for node, arg in node_args:
+        attrs = cmds.listAttr(arg, **kwargs) or []
+        result = [f'{node}.{attr}' for attr in attrs]
+
+        # If querying sub-attributes of an attribute the original attribute is also returned and needs to be removed
+        # from the results.
+        if '.' in arg and result:
+            if result[0] == arg:
+                result.pop(0)
+
+        results += result
+
+    return yams(results)
 
 
-def listAttr(obj, **kwargs):
-    """
-    Returns the maya cmds.listAttr as Attribute objects.
-    :param obj : DependNode, Attribute or str.
-    :param kwargs: kwargs passed on to cmds.listAttr
-    :return: YamList([Attribute, ...])
-    """
-    if not hasattr(obj, 'isAYamNode'):
-        obj = yam(obj)
-    return YamList(obj.attr(attr) for attr in cmds.listAttr(obj.name, **kwargs) or [])
-
-
-def constraint(*args, **kwargs):
-    if 'constraintType' in kwargs:
-        constraintType = kwargs['constraintType']
-        del kwargs['constraintType']
-    else:
-        raise RuntimeError("No constraintType given")
-
-    if constraintType == 'parentConstraint':
-        func = cmds.parentConstraint
-    elif constraintType == 'pointConstraint':
-        func = cmds.pointConstraint
-    elif constraintType == 'orientConstraint':
-        func = cmds.orientConstraint
-    elif constraintType == 'scaleConstraint':
-        func = cmds.scaleConstraint
-    elif constraintType == 'aimConstraint':
-        func = cmds.aimConstraint
-    else:
-        raise NotImplementedError("Given constraint type not implemented : {}".format(constraintType))
+@decorators.string_args
+def constraint(*args, type, **kwargs):
+    func = getattr(cmds, type)
 
     return yam(func(*args, **kwargs)[0])
 
 
 def parentConstraint(*args, **kwargs):
-    kwargs['constraintType'] = 'parentConstraint'
-    return constraint(*args, **kwargs)
+    return constraint(*args, type='parentConstraint', **kwargs)
 
 
 def pointConstraint(*args, **kwargs):
-    kwargs['constraintType'] = 'pointConstraint'
-    return constraint(*args, **kwargs)
+    return constraint(*args, type='pointConstraint', **kwargs)
 
 
 def orientConstraint(*args, **kwargs):
-    kwargs['constraintType'] = 'orientConstraint'
-    return constraint(*args, **kwargs)
+    return constraint(*args, type='orientConstraint', **kwargs)
 
 
 def scaleConstraint(*args, **kwargs):
-    kwargs['constraintType'] = 'scaleConstraint'
-    return constraint(*args, **kwargs)
+    return constraint(*args, type='scaleConstraint', **kwargs)
 
 
 def aimConstraint(*args, **kwargs):
-    kwargs['constraintType'] = 'aimConstraint'
-    return constraint(*args, **kwargs)
+    return constraint(*args, type='aimConstraint', **kwargs)
 
 
-class Singleton(object):
+class Singleton:
     """
     Handles the instances of Yam nodes to return already instantiated nodes instead of creating a new object if the node
     has already been instantiated.
@@ -240,7 +247,7 @@ class Singleton(object):
         try:  # Faster than checking for type using isinstance
             handle = om.MObjectHandle(MObject)
         except ValueError:
-            raise TypeError("Expected OpenMaya.MObject type, instead got : '{}'".format(type(MObject).__name__))
+            raise TypeError(f"Expected OpenMaya.MObject type, instead got : '{type(MObject).__name__}'")
         if not handle.isValid():
             raise ValueError("Given MObject does not contain a valid node")
         hash_code = handle.hashCode()
@@ -305,7 +312,7 @@ class Singleton(object):
             try:
                 node_name = om.MFnDependencyNode(MObject).name()
             except RuntimeError as e:
-                raise ValueError("Given MObject does not contain a valid dependencyNode; {}".format(e))
+                raise ValueError(f"Given MObject does not contain a valid dependencyNode; {e}")
         for node_type in reversed(cmds.nodeType(node_name, i=True)):  # checks each inherited types for the node
             if node_type in SupportedTypes.classes_str:
                 return SupportedTypes.classes_str[node_type]
@@ -320,7 +327,7 @@ class Singleton(object):
         try:  # Faster than checking for type using isinstance
             handle = om.MObjectHandle(MObject)
         except ValueError:
-            raise TypeError("Expected OpenMaya.MObject type, instead got : '{}'".format(type(MObject).__name__))
+            raise TypeError(f"Expected OpenMaya.MObject type, instead got : '{type(MObject).__name__}'")
 
         hash_code = handle.hashCode()
         if hash_code in cls._instances:
@@ -328,33 +335,35 @@ class Singleton(object):
         return False
 
 
-class Yam(object):
+class Yam(abc.ABC):
     """
-    Abstract class for all objects related to maya nodes, attributes and other components.
+    Abstract class for all objects related to maya nodes, attributes and components.
     Should not be instantiated by itself.
     """
-    __metaclass__ = ABCMeta
 
-    if PY2:  # if python 2, use abstractproperty
-        @abstractproperty
-        def name(self):
-            raise NotImplementedError
-    else:  # else use the preferred property on abstractmethod
-        @property
-        @abstractmethod
-        def name(self):
-            raise NotImplementedError
+    @property
+    @abc.abstractmethod
+    def name(self):
+        pass
 
     @property
     def isAYamObject(self):
         """Used to check if an object is an instance of Yam with the faster hasattr instead of slower isinstance."""
         return True
 
-    def __str__(self):
+    def __repr__(self):
         """
-        The current node name.
+        Not a valid Python expression that could be used to recreate an object with the same value since the MObject and
+        MFnDependencyNode don't have clean str representation.
         """
-        return self.name
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __bool__(self):
+        """
+        Needed for Truth testing since __len__ is defined but does not work on non ControlPoint nodes.
+        :return: True
+        """
+        return True
 
 
 class DependNode(Yam):
@@ -370,6 +379,8 @@ class DependNode(Yam):
     >>> node.MObject   # <-- returns a api 2.0 object
     >>> node.MObject1  # <-- returns a api 1.0 object
     """
+    _MFN_FUNC = om.MFnDependencyNode
+    _MFN_OBJECT = 'MObject'
 
     def __init__(self, MObject):
         """
@@ -379,11 +390,10 @@ class DependNode(Yam):
         super(DependNode, self).__init__()
         self.MObject = MObject
         self._MObject1 = None
-        self._MFnFnc = om.MFnDependencyNode
-        self._MFnObject = 'MObject'
         self._MFn = None
         self._attributes = {}
         self._hashCode = None
+        self._types = None
 
     @property
     def isAYamNode(self):
@@ -398,15 +408,8 @@ class DependNode(Yam):
         :return: api 2.0 MFn Object
         """
         if self._MFn is None:
-            self._MFn = self._MFnFnc(getattr(self, self._MFnObject))
+            self._MFn = self._MFN_FUNC(getattr(self, self._MFN_OBJECT))
         return self._MFn
-
-    def __repr__(self):
-        """
-        Not a valid Python expression that could be used to recreate an object with the same value since the MObject and
-        MFnDependencyNode don't have clean str representation.
-        """
-        return "{}('{}')".format(self.__class__.__name__, self.name)
 
     def __getattr__(self, attr):
         """
@@ -449,19 +452,6 @@ class DependNode(Yam):
             except (RuntimeError, TypeError):
                 return False
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def __bool__(self):
-        """
-        Needed for Truth testing since __len__ is defined but does not work on non array attributes.
-        :return: True
-        """
-        return True
-
-    def __nonzero__(self):
-        return self.__bool__()
-
     def __hash__(self):
         return self.hashCode
 
@@ -487,7 +477,8 @@ class DependNode(Yam):
         """
         if not config.undoable:
             self.MFn.setName(newName)
-        cmds.rename(self.name, newName)
+        else:
+            cmds.rename(self.name, newName)
 
     @property
     def name(self):
@@ -505,7 +496,7 @@ class DependNode(Yam):
     def attr(self, attr):
         """
         Gets an Attribute object for the given attr.
-        This function should be use in case the attr conflicts with a function or attribute of the class.
+        This function should be used in case the attr conflicts with a function or attribute of the class.
         :param attr: str
         :return: Attribute object
         """
@@ -517,6 +508,9 @@ class DependNode(Yam):
         attribute = attributes.getAttribute(self, attr)
         self._attributes[attr] = attribute
         return attribute
+
+    def hasattr(self, attr):
+        return checks.objExists(f'{self}.{attr}')
 
     def addAttr(self, longName, **kwargs):
         # Checks if 'attributeType' or 'at' is in kwargs and has a value
@@ -569,8 +563,6 @@ class DependNode(Yam):
         Allows the kwarg 'type' (unlike cmds.listHistory) to only return objects of given type.
         :param kwargs: kwargs passed on to cmds.listConnections
         :return: list[Attribute, ...]
-        :param kwargs:
-        :return:
         """
         type_ = None
         if 'type' in kwargs:
@@ -580,24 +572,39 @@ class DependNode(Yam):
             nodes.keepType(type_)
         return nodes
 
-    def type(self):
+    def type(self) -> str:
         """
         Returns the node type name
         :return: str
         """
-        return self.MFn.typeName
+        return self.types()[-1]
 
-    def inheritedTypes(self):
+    def types(self) -> [str, ...]:
         """
         Lists the inherited maya types.
         e.g.: for a joint -> ['containerBase', 'entity', 'dagNode', 'transform', 'joint']
         :return: list of inherited maya types
         """
-        return cmds.nodeType(self.name, inherited=True)
+        if self._types is None:
+            self._types = cmds.nodeType(self.name, inherited=True)
+        return self._types
 
-    def isa(self, nodeType):
+    def isa(self, nodeType) -> bool:
         """Returns True is self is of the given type."""
-        return nodeType in self.inheritedTypes()
+        if isinstance(nodeType, str):
+            return nodeType in self.types()
+
+        elif isinstance(nodeType, (list, tuple)):
+            for t in nodeType:
+                if self.isa(t):
+                    return True
+            return False
+
+        elif isinstance(nodeType, type):
+            return isinstance(self, nodeType)
+
+        raise TypeError(f"{type(nodeType).__name__} is not a valid parameter type for .isa() , "
+                        f"valid  types are: str, list, tuple, type.")
 
     @property
     def hashCode(self):
@@ -615,10 +622,10 @@ class DagNode(DependNode):
     """
     Subclass for all maya dag nodes.
     """
+    _MFN_FUNC = om.MFnDagNode
 
     def __init__(self, MObject):
         super(DagNode, self).__init__(MObject)
-        self._MFnFnc = om.MFnDagNode
         self._MDagPath = None
         self._MDagPath1 = None
 
@@ -694,15 +701,13 @@ class DagNode(DependNode):
 
 
 class Transform(DagNode):
-    def __init__(self, MObject):
-        super(Transform, self).__init__(MObject)
-        self._MFnFnc = om.MFnTransform
+    _MFN_FUNC = om.MFnTransform
 
     def __len__(self):
         shape = self.shape
         if shape:
             return len(shape)
-        raise TypeError("object has no shape and type '{}' has no len()".format(self.__class__.__name__))
+        raise TypeError(f"object has no shape and type '{self.__class__.__name__}' has no len()")
 
     def __contains__(self, item):
         """
@@ -712,7 +717,7 @@ class Transform(DagNode):
             try:
                 item = yam(item)
             except Exception as e:
-                raise RuntimeError("in '{}.__contains__('{}')'; {}".format(self, item, e))
+                raise RuntimeError(f"in '{self}.__contains__('{item}')'; {e}")
         return item.longName.startswith(self.longName)
 
     def attr(self, attr):
@@ -816,15 +821,14 @@ class Transform(DagNode):
         :param obj: Transform, Component or str
         :return: float
         """
-        if isinstance(obj, string_types):
+        if isinstance(obj, str):
             obj = yam(obj)
         from . import components
         if not isinstance(obj, (Transform, components.Component)):
-            raise AttributeError("wrong type given, expected : 'Transform', 'Component' or 'str', "
-                                 "got : {}".format(obj.__class__.__name__))
-        pos, obj_pos = self.getPosition(ws=True), obj.getPosition(ws=True)
-        dist = sqrt(pow(pos[0] - obj_pos[0], 2) + pow(pos[1] - obj_pos[1], 2) + pow(pos[2] - obj_pos[2], 2))
-        return dist
+            raise AttributeError(f"wrong type given, expected : 'Transform', 'Component' or 'str', "
+                                 f"got : {obj.__class__.__name__}")
+
+        return utils.distance(self.getPosition(ws=True), obj.getPosition(ws=True))
 
 
 class Joint(Transform):
@@ -837,68 +841,53 @@ class Constraint(Transform):
     Should not be instanced on its own and only used as inherited class for actual
     constraint type nodes, e.g.: 'parentConstraint', 'orientConstraint', etc...
     """
-
-    def __init__(self, MObject):
-        super(Constraint, self).__init__(MObject)
-        self._cmds_func = None
+    _CMDS_FUNC = None
 
     def _raise_no_func(self):
-        raise RuntimeError("No associated cmds constraint function found for : '{}'. Constraint should not be "
-                           "instanced on its own, only used as inherited class for actual constraint type nodes, "
-                           "e.g.: 'parentConstraint', 'orientConstraint', etc...".format(self.name))
+        raise RuntimeError(f"No associated cmds constraint function found for : '{self.name}'. Constraint should not be"
+                           f" instanced on its own, only used as inherited class for actual constraint type nodes, "
+                           f"e.g.: 'parentConstraint', 'orientConstraint', etc...")
 
     def weightAttrs(self):
         """
         Gets the node's constraint weight attributes.
         :return: YamList([Attribute, ])
         """
-        if not self._cmds_func:
+        if not self._CMDS_FUNC:
             self._raise_no_func()
-        return YamList(self.attr(attr) for attr in self._cmds_func(self.name, q=True, weightAliasList=True))
+        return YamList(self.attr(attr) for attr in self._CMDS_FUNC(self.name, q=True, weightAliasList=True))
 
     def weightTargets(self):
         """
         Gets the node's constraint 'target' (is how maya calls them), the nodes that control the constrained node.
         :return: YamList([Transform, ])
         """
-        if not self._cmds_func:
+        if not self._CMDS_FUNC:
             self._raise_no_func()
-        return yams(self._cmds_func(self.name, q=True, targetList=True))
+        return yams(self._CMDS_FUNC(self.name, q=True, targetList=True))
 
 
 class ParentConstraint(Constraint):
-    def __init__(self, MObject):
-        super(ParentConstraint, self).__init__(MObject)
-        self._cmds_func = cmds.parentConstraint
+    _CMDS_FUNC = cmds.parentConstraint
 
 
 class OrientConstraint(Constraint):
-    def __init__(self, MObject):
-        super(OrientConstraint, self).__init__(MObject)
-        self._cmds_func = cmds.orientConstraint
+    _CMDS_FUNC = cmds.orientConstraint
 
 
 class PointConstraint(Constraint):
-    def __init__(self, MObject):
-        super(PointConstraint, self).__init__(MObject)
-        self._cmds_func = cmds.pointConstraint
+    _CMDS_FUNC = cmds.pointConstraint
 
 
 class ScaleConstraint(Constraint):
-    def __init__(self, MObject):
-        super(ScaleConstraint, self).__init__(MObject)
-        self._cmds_func = cmds.scaleConstraint
+    _CMDS_FUNC = cmds.scaleConstraint
 
 
 class AimConstraint(Constraint):
-    def __init__(self, MObject):
-        super(AimConstraint, self).__init__(MObject)
-        self._cmds_func = cmds.aimConstraint
+    _CMDS_FUNC = cmds.aimConstraint
 
 
 class Shape(DagNode):
-    def __init__(self, MObject):
-        super(Shape, self).__init__(MObject)
 
     @property
     def parent(self):
@@ -915,9 +904,6 @@ class ControlPoint(Shape):
     """
     Handles shape that have control point; e.g.: Mesh, NurbsCurve, NurbsSurface, Lattice
     """
-
-    def __init__(self, MObject):
-        super(ControlPoint, self).__init__(MObject)
 
     def __len__(self):
         return len(cmds.ls(self.name + '.cp[*]', fl=True))
@@ -952,10 +938,8 @@ class SurfaceShape(ControlPoint):
 
 
 class Mesh(SurfaceShape):
-    def __init__(self, MObject):
-        super(Mesh, self).__init__(MObject)
-        self._MFnFnc = om.MFnMesh
-        self._MFnObject = 'MDagPath'
+    _MFN_FUNC = om.MFnMesh
+    _MFN_OBJECT = 'MDagPath'
 
     def __len__(self):
         """
@@ -1001,10 +985,8 @@ class Mesh(SurfaceShape):
 
 
 class NurbsCurve(ControlPoint):
-    def __init__(self, MObject):
-        super(NurbsCurve, self).__init__(MObject)
-        self._MFnFnc = om.MFnNurbsCurve
-        self._MFnObject = 'MDagPath'
+    _MFN_FUNC = om.MFnNurbsCurve
+    _MFN_OBJECT = 'MDagPath'
 
     def __len__(self):
         """
@@ -1015,13 +997,12 @@ class NurbsCurve(ControlPoint):
 
     @staticmethod
     def create(cvs, knots, degree, form, parent):
-        if isinstance(parent, string_types):
+        if isinstance(parent, str):
             parent = yam(parent).MObject
         elif isinstance(parent, Transform):
             parent = parent.MObject
         else:
-            raise TypeError("Expected parent of type str or Transform, "
-                            "got : {}, {}".format(parent, type(parent).__name__))
+            raise TypeError(f"Expected parent of type str or Transform, got : {parent}, {type(parent).__name__}")
         curve = om.MFnNurbsCurve().create(cvs, knots, degree, form, False, True, parent)
         return yam(curve)
 
@@ -1055,10 +1036,8 @@ class NurbsCurve(ControlPoint):
 
 
 class NurbsSurface(SurfaceShape):
-    def __init__(self, MObject):
-        super(NurbsSurface, self).__init__(MObject)
-        self._MFnFnc = om.MFnNurbsSurface
-        self._MFnObject = 'MDagPath'
+    _MFN_FUNC = om.MFnNurbsSurface
+    _MFN_OBJECT = 'MDagPath'
 
     def __len__(self):
         return self.lenU() * self.lenV()
@@ -1086,8 +1065,6 @@ class NurbsSurface(SurfaceShape):
 
 
 class Lattice(ControlPoint):
-    def __init__(self, MObject):
-        super(Lattice, self).__init__(MObject)
 
     def __len__(self):
         """
@@ -1127,9 +1104,7 @@ class Lattice(ControlPoint):
 
 
 class GeometryFilter(DependNode):
-    def __init__(self, MObject):
-        super(GeometryFilter, self).__init__(MObject)
-        self._MFnFnc = oma.MFnGeometryFilter
+    _MFN_FUNC = oma.MFnGeometryFilter
 
     @property
     def geometry(self):
@@ -1146,15 +1121,11 @@ class GeometryFilter(DependNode):
 
 
 class WeightGeometryFilter(GeometryFilter):
-    # TODO : update all inheriting classes to get weights or array attr values directly; Or not because not used array
-    #  plugs don't exist yet
-    def __init__(self, MObject):
-        super(WeightGeometryFilter, self).__init__(MObject)
 
     def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         geometry = self.geometry
         if not geometry:
-            raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self))
+            raise RuntimeError(f"Deformer '{self}' is not connected to a geometry")
         weightsAttr = self.weightsAttr
         return weightlist.WeightList((weightsAttr[x].value for x in range(len(geometry))),
                                      force_clamp=force_clamp, min_value=min_value, max_value=max_value,
@@ -1183,10 +1154,8 @@ class WeightGeometryFilter(GeometryFilter):
 
 
 class Cluster(WeightGeometryFilter):
-    def __init__(self, MObject):
-        super(Cluster, self).__init__(MObject)
 
-    def convertToRoot(self):
+    def localize(self):
         """
         Adds a 'root' node as parent of the cluster. The root can be moved around without the cluster having an
         influence on the deformed shape.
@@ -1194,7 +1163,7 @@ class Cluster(WeightGeometryFilter):
         """
         handle_shape = self.handleShape
         if not handle_shape:
-            raise RuntimeError('No clusterHandle found connected to ' + self.name)
+            raise RuntimeError(f'No clusterHandle found connected to {self.name}')
 
         root_grp = createNode('transform', name=self.shortName + '_clusterRoot', parent=handle_shape.parent.parent)
         cluster_grp = createNode('transform', name=self.shortName + '_cluster', parent=root_grp)
@@ -1213,10 +1182,8 @@ class Cluster(WeightGeometryFilter):
 
 
 class SoftMod(WeightGeometryFilter):
-    def __init__(self, MObject):
-        super(SoftMod, self).__init__(MObject)
 
-    def convertToRoot(self):
+    def localize(self):
         """
         Adds a 'root' node as parent of the softMod. The root can be moved around to change from where the softMod
         starts its influence.
@@ -1224,7 +1191,7 @@ class SoftMod(WeightGeometryFilter):
         """
         handle_shape = self.handleShape
         if not handle_shape:
-            raise RuntimeError('No softModHandle found connected to ' + self.name)
+            raise RuntimeError(f'No softModHandle found connected to {self.name}')
 
         root_grp = createNode('transform', name=self.shortName + '_softModRoot', parent=handle_shape.parent.parent)
         softMod_grp = createNode('transform', name=self.shortName + '_softMod', parent=root_grp)
@@ -1250,10 +1217,7 @@ class SoftMod(WeightGeometryFilter):
 
 
 class SkinCluster(GeometryFilter):
-    def __init__(self, MObject):
-        super(SkinCluster, self).__init__(MObject)
-        self._weights_attr = None
-        self._MFnFnc = oma.MFnSkinCluster
+    _MFN_FUNC = oma.MFnSkinCluster
 
     def influences(self):
         return yams(self.MFn.influenceObjects())
@@ -1282,7 +1246,7 @@ class SkinCluster(GeometryFilter):
         :param components: om.MObject of the deformed components
         :return: WeightList
         """
-        if isinstance(influence, string_types):
+        if isinstance(influence, str):
             influence = yam(influence)
         if hasattr(influence, 'isAYamNode'):
             influence = self.influences().index(influence)
@@ -1389,7 +1353,7 @@ class SkinCluster(GeometryFilter):
             influence = influence.MDagPath
         else:
             if not isinstance(influence, DagNode):
-                raise TypeError("Influence should be of type 'DependNode' not '{}'".format(type(influence).__name__))
+                raise TypeError(f"Influence should be of type 'DependNode' not '{type(influence).__name__}'")
             raise RuntimeError("Influence not found in skin cluster")
 
         vtx_list = yams(self.MFn.getPointsAffectedByInfluence(influence)[0].getSelectionStrings())
@@ -1410,7 +1374,7 @@ class SkinCluster(GeometryFilter):
             bpm_attr = self.bindPreMatrix[matrix_indexed.index]
             if not bpm_attr.isSettable():
                 if config.verbose:
-                    cmds.warning("{} is connected and can't be reset".format(bpm_attr))
+                    cmds.warning(f"{bpm_attr} is connected and can't be reset")
                 continue
             bpm_attr.value = list(om.MMatrix(matrix_indexed.value).inverse())
         cmds.skinCluster(self.name, e=True, rbm=True)
@@ -1473,7 +1437,7 @@ class SkinCluster(GeometryFilter):
             elif influence not in influences:
                 to_add.append(influence)
         if missing:
-            raise RuntimeError('Influences not found in scene : {}'.format(missing))
+            raise RuntimeError(f'Influences not found in scene : {missing}')
         self.addInfluences(to_add)
 
         self.skinningMethod.value = data['skinningMethod']
@@ -1513,11 +1477,24 @@ class BlendShape(WeightGeometryFilter):
       the target attribute goes below -5.0. It is recommended to lock the target attribute lower range if negative
       in-between values are used.
     """
-    def __init__(self, MObject):
-        super(BlendShape, self).__init__(MObject)
 
     def __getitem__(self, item):
         return self.target(item)
+
+    def __contains__(self, item):
+        """
+        Checks if the blendShape node contains a given target.
+        Works with string name of the target or BlendShapeTarget object.
+
+        Args:
+            item: string or BlendShapeTarget
+
+        Returns: bool, True if the given item is a target of the blendShape node.
+        """
+        import attributes
+        if isinstance(item, attributes.BlendShapeTarget):
+            item = item.attribute
+        return item in [target.attribute for target in self.targets()]
 
     def targets(self):
         from .attributes import BlendShapeTarget
@@ -1527,16 +1504,16 @@ class BlendShape(WeightGeometryFilter):
         targets = self.targets()
 
         # checking for alias names per targets
-        if isinstance(index, string_types):
+        if isinstance(index, str):
             try:
                 index = targets.getattrs('alias').index(index)
             except ValueError:
-                raise ValueError("'{}' not in blendShape target list".format(index))
+                raise ValueError(f"'{index}' not in blendShape target list.")
 
         try:
             return targets[index]
         except IndexError:
-            raise IndexError("BlendShape target index out of range : {}".format(index))
+            raise IndexError(f"BlendShape target index out of range : {index}.")
 
     @property
     def weightsAttr(self):
@@ -1550,11 +1527,16 @@ class BlendShape(WeightGeometryFilter):
         Value for a new target has to be 1.0 otherwise the target attribute is not added to the blendShape which is
         needed to return a corresponding BlendShapeTarget attribute.
         """
+        existing_target_indices = self.targetIndices() or [-1]
         if index is None:
-            index = 0
-        target_indices = self.targetIndices()
-        while index in target_indices:
+            index = existing_target_indices[-1] + 1
+
+        if index < 0:
+            raise RuntimeError(f"Target index cannot be negative; got : {index} for target '{target}'.")
+
+        while index in existing_target_indices:
             index += 1
+
         cmds.blendShape(self.name, e=True, t=(self.geometry.name, index, str(target), 1.0), topologyCheck=topologyCheck)
         return self.target(self.targetIndices().index(index))
 
@@ -1565,8 +1547,8 @@ class BlendShape(WeightGeometryFilter):
         temp = duplicate(self.geometry)[0]
         temp.name = name
         if name_warning and config.verbose:
-            cmds.warning("An object with the same given target name : {}, exists in the scene. Target name used instead"
-                         " is : {}".format(name, temp.shortName))
+            cmds.warning(f"An object with the same given target name : {name}, exists in the scene. Target name used "
+                         f"instead is : {temp.shortName}.")
 
         target = self.addTarget(temp)
         cmds.delete(temp.name)
@@ -1588,7 +1570,7 @@ class BlendShape(WeightGeometryFilter):
                 target = self.addEmptyTarget(target_name)
                 target.setDeltas(delta)
             elif config.verbose:
-                cmds.warning("Target {} is missing from {} and was not applied".format(target_name, self.name))
+                cmds.warning(f"Target {target_name} is missing from {self.name} and was not applied.")
 
     @property
     def data(self):
@@ -1606,8 +1588,6 @@ class BlendShape(WeightGeometryFilter):
 
 
 class UVPin(DependNode):
-    def __init__(self, MObject):
-        super(UVPin, self).__init__(MObject)
 
     @staticmethod
     def createUVPin(mesh, name=None):
@@ -1615,10 +1595,10 @@ class UVPin(DependNode):
         if isinstance(mesh, Transform) and mesh.shape:
             mesh = mesh.shape
         if not isinstance(mesh, SurfaceShape):
-            raise TypeError("Target object must be a surface shape")
+            raise TypeError("Target object must be a surface shape.")
 
         if name is None:
-            name = '{}_UVP'.format(mesh)
+            name = f'{mesh}_UVP'
         pin = createNode('uvPin', name=name)
         pin.geometry = mesh
         return pin
@@ -1635,30 +1615,30 @@ class UVPin(DependNode):
         if isinstance(geo, Transform):
             geo = geo.shape
         if not isinstance(geo, SurfaceShape):
-            raise ValueError("Geometry must be a SurfaceShape; got {} -> {}".format(geo, type(geo).__name__))
+            raise ValueError(f"Geometry must be a SurfaceShape; got {geo} -> {type(geo).__name__}.")
 
         if isinstance(geo, Mesh):
             out_attr = geo.worldMesh
         elif isinstance(geo, NurbsSurface):
             out_attr = geo.worldSpace
         else:
-            raise NotImplementedError("Geometry '{}' of type '{}' not implemented.".format(geo, type(geo).__name__))
+            raise NotImplementedError(f"Geometry '{geo}' of type '{type(geo).__name__}' not implemented.")
 
         out_attr.connectTo(self.deformedGeometry, force=True)
 
     def connectTransform(self, target, coordinates, index=None):
         target = yam(target)
         if not isinstance(target, Transform):
-            raise TypeError("Target must be a transform; got : {}, {}".format(target, type(target).__name__))
+            raise TypeError(f"Target must be a transform; got : {target}, {type(target).__name__}.")
         if not len(coordinates) == 2:
-            raise ValueError("Invalid UV coordinates given; {}".format(coordinates))
+            raise ValueError(f"Invalid UV coordinates given; {coordinates}.")
 
         if index is None:
             index = len(self.coordinate)
         self.coordinate[index].coordinateU.value = coordinates[0]
         self.coordinate[index].coordinateV.value = coordinates[1]
-        mmx = createNode('multMatrix', name='{}_MMX'.format(self))
-        dmx = createNode('decomposeMatrix', name='{}_DMX'.format(self))
+        mmx = createNode('multMatrix', name=f'{self}_MMX')
+        dmx = createNode('decomposeMatrix', name=f'{self}_DMX')
         self.outputMatrix[index].connectTo(mmx.matrixIn[0])
         target.parentInverseMatrix.connectTo(mmx.matrixIn[1])
         mmx.matrixSum.connectTo(dmx.inputMatrix)
@@ -1670,9 +1650,9 @@ class UVPin(DependNode):
     def attachToClosestPoint(self, target):
         target = yam(target)
         if not isinstance(target, Transform):
-            raise TypeError("Target must be a transform; got : {}, {}".format(target, type(target).__name__))
+            raise TypeError(f"Target must be a transform; got : {target}, {type(target).__name__}.")
         if not self.geometry:
-            raise RuntimeError("No geometry connected to the uvPin")
+            raise RuntimeError("No geometry connected to the uvPin.")
 
         geo = self.geometry
         point = om.MPoint(target.getXform(t=True, ws=True))
@@ -1682,7 +1662,7 @@ class UVPin(DependNode):
             point, _, _ = geo.MFn.closestPoint(point, space=om.MSpace.kObject)  # TODO : fails to do it world space
             u, v = geo.MFn.getParamAtPoint(point, True)
         else:
-            raise NotImplementedError("Geometry '{}' of type '{}' not implemeted.".format(geo, type(geo).__name__))
+            raise NotImplementedError(f"Geometry '{geo}' of type '{type(geo).__name__}' not implemeted.")
         self.normalizedIsoParms.value = False
         self.connectTransform(target, [u, v])
 
@@ -1693,7 +1673,7 @@ MFN_TYPE_NAMES = {value: key for key, value in om.MFn.__dict__.items() if isinst
 MFNDATA_TYPE_NAMES = {value: key for key, value in om.MFnData.__dict__.items() if isinstance(value, int)}
 
 
-class SupportedTypes(object):
+class SupportedTypes:
     """
     Data of supported types of maya nodes.
 
@@ -1850,7 +1830,7 @@ class SupportedTypes(object):
     diff = set(classes_MFn.values()) - all_classes
     if diff:
         cmds.warning("#" * 82)
-        cmds.warning("There is a node class in classes_MFn dict that is not listed in classes_str : '{}'".format(diff))
+        cmds.warning(f"There is a node class in classes_MFn dict that is not listed in classes_str : '{diff}'")
         cmds.warning("#" * 82)
 
 
@@ -1864,35 +1844,29 @@ class YamList(list):
     """
 
     def __init__(self, items=(), no_init_check=False):
-        super(YamList, self).__init__(items)
+        super().__init__(items)
         self.no_check = False
         if not no_init_check:
             self._check_all()
 
     def __repr__(self):
-        return "{}({})".format(self.__class__.__name__, super(YamList, self).__repr__())
+        return f"{self.__class__.__name__}({super(YamList, self).__repr__()})"
 
     def __str__(self):
-        return "{}{}".format(self.__class__.__name__, self.names)
+        return f"{self.__class__.__name__}{self.names}"
 
     def __eq__(self, other):
         if isinstance(other, YamList):
             return str(list(self)) == str(list(other))
         return str(list(self)) == str(other)
 
-    if PY2:
-        def __ne__(self, other):
-            return not self.__eq__(other)
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def __getitem__(self, item):
         if item.__class__ == slice:
             return YamList(super(YamList, self).__getitem__(item), no_init_check=True)
         return super(YamList, self).__getitem__(item)
-
-    if PY2:  # if python 2, defining the __getslice__ method.
-        def __getslice__(self, *args):
-            items = super(YamList, self).__getslice__(*args)
-            return YamList(items, no_init_check=True)
 
     def _check(self, item):
         """
@@ -1901,7 +1875,7 @@ class YamList(list):
         """
         if not self.no_check:
             if not hasattr(item, 'isAYamObject'):
-                raise TypeError("YamList can only contain Yam objects. '{}' is '{}'".format(item, type(item).__name__))
+                raise TypeError(f"YamList can only contain Yam objects. '{item}' is '{type(item).__name__}'.")
 
     def _check_all(self):
         """
@@ -1910,8 +1884,7 @@ class YamList(list):
         if not self.no_check:
             for item in self:
                 if not hasattr(item, 'isAYamObject'):
-                    raise TypeError("YamList can only contain Yam objects. "
-                                    "'{}' is '{}'".format(item, type(item).__name__))
+                    raise TypeError(f"YamList can only contain Yam objects. '{item}' is '{type(item).__name__}'.")
 
     def append(self, item):
         if not self.no_check:
@@ -1974,8 +1947,8 @@ class YamList(list):
         """
         if not isinstance(nodeType, (tuple, list)):
             nodeType = [nodeType]
-        if not all(isinstance(x, string_types) or hasattr(x, 'isAYamObject') for x in nodeType):
-            raise TypeError("Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{}'".format(nodeType))
+        if not all(isinstance(x, str) or hasattr(x, 'isAYamObject') for x in nodeType):
+            raise TypeError(f"Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{nodeType}'.")
         for i, item in reversed(list(enumerate(self))):
             inherited_types = item.inheritedTypes()
             for type_ in nodeType:
@@ -1995,8 +1968,8 @@ class YamList(list):
         popped = YamList()
         if not isinstance(nodeType, (tuple, list)):
             nodeType = [nodeType]
-        if not all(isinstance(x, string_types) or hasattr(x, 'isAYamObject') for x in nodeType):
-            raise TypeError("Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{}'".format(nodeType))
+        if not all(isinstance(x, str) or hasattr(x, 'isAYamObject') for x in nodeType):
+            raise TypeError(f"Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{nodeType}'.")
         for i, item in reversed(list(enumerate(self))):
             inherited_types = item.inheritedTypes()
             for type_ in nodeType:
@@ -2012,7 +1985,7 @@ class YamList(list):
         return YamList(self, no_init_check=True)
 
 
-class Yum(object):
+class Yum:
     """
     Lazy way to initialize an existing Yam node.
 

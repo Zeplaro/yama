@@ -1,6 +1,5 @@
 # encoding: utf8
 
-from __future__ import division
 from maya import cmds
 import maya.api.OpenMaya as om
 
@@ -8,12 +7,15 @@ from . import nodes, components, decorators, utils, checks
 
 
 def align(objs=None, t=True, r=True):
+    """
+    Aligns and evenly spaces given or selected objects between the first and last objects.
+    """
     if not objs:
         if cmds.selectPref(q=True, tso=True) == 0:  # Allows you to get components order of selection
             cmds.selectPref(tso=True)
         objs = nodes.selected()
     if not objs and len(objs) > 2:
-        raise ValueError("Not enough object selected")
+        raise ValueError("Not enough object selected.")
     objs = nodes.yams(objs)
     poses = [x.getPosition(ws=True) for x in objs]
 
@@ -38,9 +40,13 @@ def align(objs=None, t=True, r=True):
             obj.setPosition(pos, ws=True)
 
 
+@decorators.mayaundo
 @decorators.keepsel
-def aim(objs=None, aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None, worldUpVector=(0, 1, 0)):
+def aimChain(objs=None, aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None,
+             worldUpVector=(0, 1, 0)):
     """
+    Aims the given or selected objects to each other in order. Last object gets the same orientation as the previous
+    one.
     Args:
         objs: [str, ...]
         aimVector: [float, float, float]
@@ -50,64 +56,84 @@ def aim(objs=None, aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='scene',
         worldUpVector: [float, float, float], Use for worldUpType "scene" and "objectrotation"
 
     e.g.:
-    >>> aim(objs='locator1', aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None, worldUpVector=(0, 1, 0))
+    >>> aimChain(objs='locator1', aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None,
+    >>> worldUpVector=(0, 1, 0))
     """
     if worldUpType == 'object':
         if not worldUpObject:
-            raise Exception("worldUpObject is required for worldUpType 'object'")
+            raise Exception("worldUpObject is required for worldUpType 'object'.")
         checks.objExists(worldUpObject, raiseError=True)
     if not objs:
         objs = nodes.selected()
     if not objs and len(objs) > 1:
-        raise ValueError("Not enough object selected")
+        raise ValueError("Not enough object selected.")
     objs = nodes.yams(objs)
     poses = [x.getXform(t=True, ws=True) for x in objs]
-    nulls = nodes.YamList(nodes.createNode('transform') for _ in objs)
-    for null, pos in zip(nulls, poses):
-        null.setXform(t=pos, ws=True)
-    world_null = nodes.createNode('transform', name='world_null')
+    # Using try to make sure nulss transforms are deleted
+    try:
+        nulls = nodes.YamList(nodes.createNode('transform') for _ in objs)
+        for null, pos in zip(nulls, poses):
+            null.setXform(t=pos, ws=True)
+        world_null = nodes.createNode('transform', name='world_null')
 
-    for obj, null, pos in zip(objs[:-1], nulls[1:], poses):
-        obj.setXform(t=pos, ws=True)
-        if worldUpType == 'scene':
-            cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector,
-                                           worldUpType='objectrotation', worldUpObject=world_null.name,
-                                           worldUpVector=worldUpVector, mo=False))
-        elif worldUpType == 'object':
-            cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector,
-                                           worldUpType='object', worldUpObject=worldUpObject, mo=False))
-        elif worldUpType == 'objectrotation':
-            cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector,
-                                           worldUpType='objectrotation', worldUpObject=worldUpObject,
-                                           worldUpVector=worldUpVector, mo=False))
-        else:
-            cmds.delete(nulls.names, world_null.name)
-            raise NotImplementedError
+        for obj, null, pos in zip(objs[:-1], nulls[1:], poses):
+            obj.setXform(t=pos, ws=True)
+            if worldUpType == 'scene':
+                cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector,
+                                               worldUpType='objectrotation', worldUpObject=world_null.name,
+                                               worldUpVector=worldUpVector, mo=False))
+            elif worldUpType == 'object':
+                cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector,
+                                               worldUpType='object', worldUpObject=worldUpObject, mo=False))
+            elif worldUpType == 'objectrotation':
+                cmds.delete(cmds.aimConstraint(null.name, obj.name, aimVector=aimVector, upVector=upVector,
+                                               worldUpType='objectrotation', worldUpObject=worldUpObject,
+                                               worldUpVector=worldUpVector, mo=False))
+            else:
+                raise NotImplementedError
 
-    objs[-1].setXform(t=poses[-1], ro=objs[-2].getXform(ro=True, ws=True), ws=True)
-    cmds.delete(world_null.name, nulls.names)
+        objs[-1].setXform(t=poses[-1], ro=objs[-2].getXform(ro=True, ws=True), ws=True)
+
+    finally:
+        try:
+            cmds.delete(nulls.names)
+            cmds.delete(world_null.name)
+        except NameError:
+            pass
 
 
-def match(objs=None, t=True, r=True, s=False, m=False, ws=True):
+def match(source=None, targets=None, t=True, r=True, s=False, m=False, ws=True):
     """
     Match the position, rotation and scale of the first object to the following objects.
-    :param objs: [str, ...] or None to get selected objects.
+    :param source: str or None to get first selected object.
+    :param targets: [str, ...] or None to get selected objects.
     :param t: bool, True to match translation.
     :param r: bool, True to match rotation.
     :param s: bool, True to match scale.
     :param m: bool, True to match matrix.
     :param ws:  bool, True to match in world space.
     """
-    if not objs:
-        objs = nodes.selected()
-    if not objs and len(objs) > 1:
-        raise ValueError("Not enough object selected")
-    objs = nodes.yams(objs)
+    if isinstance(targets, (str, nodes.Yam)):
+        targets = [targets]
 
-    source, targets = objs[0], objs[1:]
+    if not targets:
+        targets = nodes.selected()
+    if not source:
+        source = targets.pop(0) if targets else None
+
+    if not targets or not source:
+        raise ValueError("Not enough object selected.")
+
+    source = nodes.yam(source)
+    targets = nodes.yams(targets)
+
     if isinstance(source, components.Component):
         r = False
         s = False
+
+    # Prevent unnecessary getting and setting of t, r and s when matching matrix
+    if m:
+        t, r, s = False, False, False
 
     pos, rot, scale, matrix = None, None, None, None
     if t:
@@ -133,7 +159,7 @@ def match(objs=None, t=True, r=True, s=False, m=False, ws=True):
             if t:
                 target.setPosition(pos, ws=ws)
         else:
-            raise RuntimeError("Cannot match '{}' of type '{}'".format(target, type(target).__name__))
+            raise RuntimeError(f"Cannot match '{target}' of type '{type(target).__name__}'.")
 
 
 @decorators.keepsel
@@ -183,16 +209,16 @@ def snapAlongCurve(objs=None, curve=None, reverse=False):
     if not objs or not curve:
         objs = nodes.selected()
         if not objs:
-            raise RuntimeError("No object given and object selected")
+            raise RuntimeError("No object given and object selected.")
         if len(objs) < 2:
-            raise RuntimeError("Not enough object given or selected")
+            raise RuntimeError("Not enough object given or selected.")
         curve = objs.pop()
 
     if isinstance(curve, nodes.Transform):
         curve = curve.shape
 
     if not isinstance(curve, nodes.NurbsCurve):
-        raise TypeError("No NurbsCurve found under given curve".format(curve))
+        raise TypeError(f"No NurbsCurve found under given curve : {curve}.")
 
     if reverse:
         objs = objs[::-1]
@@ -205,13 +231,13 @@ def snapAlongCurve(objs=None, curve=None, reverse=False):
 def mirrorPos(obj, table):
     for l_cp in table:
         l_pos = obj.cp[l_cp].getPosition()
-        r_pos = utils.multList(l_pos, table.axis_mult)
+        r_pos = utils.mulLists([l_pos, table.axis_mult])
         obj.cp[table[l_cp]].setPosition(r_pos)
 
     mid_mult = table.axis_mult[:]
     mid_mult['xyz'.index(table.axis)] *= 0
     for mid in table.mids:
-        pos = utils.multList(obj.cp[mid].getPosition(), mid_mult)
+        pos = utils.mulLists([obj.cp[mid].getPosition(), mid_mult])
         obj.cp[mid].setPosition(pos)
 
 
@@ -220,12 +246,12 @@ def flipPos(obj, table, reverse_face_normal=True):
         l_pos = obj.cp[l_cp].getPosition()
         r_pos = obj.cp[table[l_cp]].getPosition()
 
-        obj.cp[l_cp].setPosition(utils.multList(l_pos, table.axis_mult))
-        obj.cp[table[l_cp]].setPosition(utils.multList(r_pos, table.axis_mult))
+        obj.cp[l_cp].setPosition(utils.mulLists([l_pos, table.axis_mult]))
+        obj.cp[table[l_cp]].setPosition(utils.mulLists([r_pos, table.axis_mult]))
 
     for mid in table.mids:
         pos = obj.cp[mid].getPosition()
-        pos = utils.multList(pos, table.axis_mult)
+        pos = utils.mulLists([pos, table.axis_mult])
         obj.cp[mid].setPosition(pos)
 
     if reverse_face_normal:
@@ -246,7 +272,7 @@ def extractXYZ(neutral, pose, axis=('y', 'xz'), ws=False):
     neutral = nodes.yam(neutral)
     pose = nodes.yam(pose)
     if not isinstance(neutral, nodes.Mesh) or not isinstance(pose, nodes.Mesh):
-        raise TypeError("Given neutral and/or pose object are not mesh objects")
+        raise TypeError(f"Given neutral and/or pose object are not mesh objects; {neutral}, {pose}")
     n_pose = neutral.vtx.getPositions(ws=ws)
     pose_pos = pose.vtx.getPositions(ws=ws)
     data = {x: [] for x in axis}
@@ -260,3 +286,81 @@ def extractXYZ(neutral, pose, axis=('y', 'xz'), ws=False):
                     pos.append(n_value)
             data[i].append(pos)
     return data
+
+
+@decorators.keepsel
+def makePlanar(objs, firstPointIndex=0, secondPointIndex=-1, thirdPointIndex=1, aimObjsChain=True, **aimKwargs):
+    """
+    Aligns the given objects on a three point plane defined by the first, last and objs[midIndex] given objects.
+    All objects must be in a parented hierarchy and given in hierarchical order.
+    Minimum three objects must be given.
+
+    :param objs: list [str, ...] Objects to align on a plane.
+    :param firstPointIndex: int, the index in the given object list for the first point of the plane.
+    :param secondPointIndex: int, the index in the given object list for the second point of the plane.
+    :param thirdPointIndex: int, the index in the given object list for the third point of the plane.
+    :param aimObjsChain: bool, if True: aims the objects to each other in order.
+    :aimKwargs: all kwargs passed to aimChain call if aimObjsChain is True.
+    """
+    if len(objs) < 3:
+        raise ValueError("Not enough object given. Minimum 3 object needed to align them on the same plane")
+    if not -len(objs) < firstPointIndex < len(objs)-1:
+        raise ValueError(f"Must be True : -len(objs) < firstPointIndex < len(objs)-1; "
+                         f"Given firstPointIndex : {firstPointIndex}.")
+    if not -len(objs) < secondPointIndex < len(objs)-1:
+        raise ValueError(f"Must be True : -len(objs) < secondPointIndex < len(objs)-1; "
+                         f"Given secondPointIndex : {secondPointIndex}.")
+    if not -len(objs) < thirdPointIndex < len(objs)-1:
+        raise ValueError(f"Must be True : -len(objs) < thirdPointIndex < len(objs)-1; "
+                         f"Given thirdPointIndex : {thirdPointIndex}.")
+
+    # Getting positive indices for corresponding amount of objs.
+    length = len(objs)
+    firstPointIndex = slice(firstPointIndex, None).indices(length)[0]
+    secondPointIndex = slice(secondPointIndex, None).indices(length)[0]
+    thirdPointIndex = slice(thirdPointIndex, None).indices(length)[0]
+
+    # Using try to make sure nulls transforms are deleted
+    try:
+        # Creating temporary transforms to work with.
+        nulls = nodes.YamList()
+        for obj in objs:
+            null = nodes.createNode('transform', name=obj.shortName + '_TEMP_NULL')
+            null.setXform(m=obj.getXform(m=True, ws=True), ws=True)
+            nulls.append(null)
+
+        # Creating aim transform and matching it to defined up object.
+        aimNull = nodes.createNode('transform', name='AIM_NULL')
+        aimNull.setXform(m=objs[thirdPointIndex].getXform(m=True, ws=True), ws=True)
+
+        # Aiming the first object to the last object with aimNull for up.
+        aimChain([nulls[firstPointIndex], nulls[secondPointIndex]], worldUpType='object', worldUpObject=aimNull)
+
+        # Parenting all nulls to first null and setting z to 0.
+        nulls_except_first = nulls[:firstPointIndex] + nulls[firstPointIndex + 1:]
+        cmds.parent(nulls_except_first, nulls[firstPointIndex])
+        for null in nulls_except_first:
+            null.tz.value = 0
+
+        # Matching the new positions from nulls to objects.
+        for obj, null in zip(objs, nulls):
+            obj.setPosition(null.getPosition(ws=True), ws=True)
+
+        # Aiming objects to each others
+        if aimObjsChain:
+            # Matching the aimNull to defined up object
+            aimNull.setXform(ro=nulls[firstPointIndex].getXform(ro=True, ws=True), ws=True)
+            # Moving the aimNull up by same amount as distance between first and last object
+            dist = utils.distance(objs[0].getPosition(ws=True), objs[-1].getPosition(ws=True)) * 10
+            cmds.move(dist, aimNull.name, objectSpace=True, relative=True, moveY=True)
+
+            aimKwargs.setdefault('worldUpType', 'object')
+            aimKwargs.setdefault('worldUpObject', aimNull)
+            aimChain(objs, **aimKwargs)
+
+    finally:
+        try:
+            cmds.delete(nulls.names)
+            cmds.delete(aimNull.name)
+        except NameError:
+            pass
