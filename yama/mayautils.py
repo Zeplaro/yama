@@ -17,9 +17,9 @@ def createHook(node, parent=None, suffix='hook'):
     node = nodes.yam(node)
     if not isinstance(node, nodes.Transform):
         raise ValueError("Given node is not a transform")
-    hook = nodes.createNode('transform', name='{}_{}'.format(node.shortName, suffix))
-    mmx = nodes.createNode('multMatrix', n='mmx_{}_{}'.format(node.shortName, suffix))
-    dmx = nodes.createNode('decomposeMatrix', n='dmx_{}_{}'.format(node.shortName, suffix))
+    hook = nodes.createNode('transform', name=f'{node.shortName}_{suffix}')
+    mmx = nodes.createNode('multMatrix', n=f'mmx_{node.shortName}_{suffix}')
+    dmx = nodes.createNode('decomposeMatrix', n=f'dmx_{node.shortName}_{suffix}')
     node.worldMatrix[0].connectTo(mmx.matrixIn[1], f=True)
     hook.parentInverseMatrix[0].connectTo(mmx.matrixIn[2], f=True)
     mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
@@ -40,21 +40,21 @@ def mxConstraint(source=None, target=None):
     if not source or not target:
         sel = nodes.selected(type='transform')
         if len(sel) != 2:
-            raise RuntimeError("two 'transform' needed; {} given".format(len(sel)))
+            raise RuntimeError(f"two 'transform' needed; {len(sel)} given")
         source, target = sel
     else:
         source, target = nodes.yams([source, target])
 
-    mmx = nodes.createNode('multMatrix', n='{}_mmx'.format(source.shortName))
-    dmx = nodes.createNode('decomposeMatrix', n='{}_dmx'.format(source.shortName))
-    cmx = nodes.createNode('composeMatrix', n='{}_cmx'.format(source.shortName))
+    mmx = nodes.createNode('multMatrix', n=f'{source.shortName}_mmx')
+    dmx = nodes.createNode('decomposeMatrix', n=f'{source.shortName}_dmx')
+    cmx = nodes.createNode('composeMatrix', n=f'{source.shortName}_cmx')
     cmx.outputMatrix.connectTo(mmx.matrixIn[0], f=True)
     source.worldMatrix.connectTo(mmx.matrixIn[1], f=True)
     target.parentInverseMatrix.connectTo(mmx.matrixIn[2], f=True)
     mmx.matrixSum.connectTo(dmx.inputMatrix, f=True)
 
-    source_tmp = nodes.createNode('transform', n='{}_sourceTMP'.format(source.shortName))
-    target_tmp = nodes.createNode('transform', n='{}_targetTMP'.format(target.shortName))
+    source_tmp = nodes.createNode('transform', n=f'{source.shortName}_sourceTMP')
+    target_tmp = nodes.createNode('transform', n=f'{source.shortName}_targetTMP')
     xformutils.match([source, source_tmp])
     xformutils.match([target, target_tmp])
     target_tmp.parent = source_tmp
@@ -118,14 +118,14 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False, raiseError
                 except Exception as e:
                     if raiseErrors:
                         raise e
-                    cmds.warning("Failed to set defaultValue on {} : {}".format(attr, e))
+                    cmds.warning(f"Failed to set defaultValue on {attr} : {e}")
 
 
 def insertGroup(obj, suffix='GRP'):
     if not obj:
         raise ValueError("No obj given; Use 'insertGroups' to work on selection")
     obj = nodes.yam(obj)
-    grp = nodes.createNode('transform', name='{}_{}'.format(obj.shortName, suffix))
+    grp = nodes.createNode('transform', name=f'{obj.shortName}_{suffix}')
     world_matrix = obj.getXform(m=True, ws=True)
     parent = obj.parent
     if parent:
@@ -169,7 +169,7 @@ def wrapMesh(objs=None, ws=True):
     if isinstance(source, nodes.Transform):
         source = source.shape
         if not isinstance(source, nodes.Mesh):
-            raise RuntimeError("First object '{}' is not a 'mesh'".format(source))
+            raise RuntimeError(f"First object '{source}' is not a 'mesh'")
     if ws:
         space = om.MSpace.kworld
     else:
@@ -179,7 +179,7 @@ def wrapMesh(objs=None, ws=True):
         if isinstance(target, nodes.Transform):
             target = target.shape
             if not isinstance(target, nodes.Mesh):
-                cmds.warning("Cannot match '{}' of type '{}'".format(target, type(target).__name__))
+                cmds.warning(f"Cannot match '{target}' of type '{type(target).__name__}'")
                 continue
         target_mfn = target.MFn
         for i in range(len(target)):
@@ -255,7 +255,7 @@ class SymTable(dict):
         self.mids = []
 
     def __repr__(self):
-        return "SymTable({})".format(super(SymTable, self).__repr__())
+        return f"SymTable({super(SymTable, self).__repr__()})"
 
     def __invert__(self):
         """
@@ -338,11 +338,11 @@ def createPolyNgon(name='pNgon1', radius=0.1, sides=3, upAxis='y', parent=None):
     @return: Mesh polygon shape node.
     """
     if sides < 3:
-        raise ValueError("A polygon can not have less than 3 sides; numbr of sides given : {}".format(sides))
+        raise ValueError(f"A polygon can not have less than 3 sides; numbr of sides given : {sides}")
 
     if config.undoable:
         ngon = cmds.polyCone(radius=radius, subdivisionsX=sides, height=0, constructionHistory=False, name=name)[0]
-        cmds.delete('{}.f[1:{}]'.format(ngon, sides))
+        cmds.delete(f'{ngon}.f[1:{sides}]')
         cmds.polyNormal(ngon, normalMode=0, constructionHistory=False)
         ngon = nodes.yam(ngon).shape
         if parent:
