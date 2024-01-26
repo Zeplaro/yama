@@ -387,7 +387,7 @@ class DependNode(Yam):
         Needs a maya api 2.0 MObject associated to the node and a MFnDependencyNode initialized with the MObject.
         :param MObject: maya api MObject
         """
-        super(DependNode, self).__init__()
+        super().__init__()
         self.MObject = MObject
         self._MObject1 = None
         self._MFn = None
@@ -625,7 +625,7 @@ class DagNode(DependNode):
     _MFN_FUNC = om.MFnDagNode
 
     def __init__(self, MObject):
-        super(DagNode, self).__init__(MObject)
+        super().__init__(MObject)
         self._MDagPath = None
         self._MDagPath1 = None
 
@@ -731,7 +731,7 @@ class Transform(DagNode):
         try:
             return components.getComponent(self, attr)  # Trying to get component if one
         except (RuntimeError, TypeError):
-            return super(Transform, self).attr(attr)
+            return super().attr(attr)
 
     def children(self, type=None, noIntermediate=True):
         """
@@ -891,7 +891,7 @@ class Shape(DagNode):
 
     @property
     def parent(self):
-        return super(Shape, self).parent
+        return super().parent
 
     @parent.setter
     def parent(self, parent):
@@ -926,7 +926,7 @@ class ControlPoint(Shape):
             from . import components
             return components.getComponent(self, attr)  # Trying to get component if one
         except (RuntimeError, TypeError):
-            return super(ControlPoint, self).attr(attr)
+            return super().attr(attr)
 
 
 class SurfaceShape(ControlPoint):
@@ -1850,7 +1850,7 @@ class YamList(list):
             self._check_all()
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({super(YamList, self).__repr__()})"
+        return f"{self.__class__.__name__}({super().__repr__()})"
 
     def __str__(self):
         return f"{self.__class__.__name__}{self.names}"
@@ -1865,8 +1865,8 @@ class YamList(list):
 
     def __getitem__(self, item):
         if item.__class__ == slice:
-            return YamList(super(YamList, self).__getitem__(item), no_init_check=True)
-        return super(YamList, self).__getitem__(item)
+            return YamList(super().__getitem__(item), no_init_check=True)
+        return super().__getitem__(item)
 
     def _check(self, item):
         """
@@ -1889,14 +1889,14 @@ class YamList(list):
     def append(self, item):
         if not self.no_check:
             self._check(item)
-        super(YamList, self).append(item)
+        super().append(item)
 
     def extend(self, items):
         if not self.no_check:
             if not isinstance(items, YamList):
                 for item in items:
                     self._check(item)
-        super(YamList, self).extend(items)
+        super().extend(items)
 
     def no_check_extend(self, items):
         """Extends the list with the given items but skips the type check of the items for efficiency."""
@@ -1907,13 +1907,13 @@ class YamList(list):
 
     def insert(self, index, item):
         self._check(item)
-        super(YamList, self).insert(index, item)
+        super().insert(index, item)
 
     def sort(self, key=None, reverse=False):
         if key is None:
             def name(x): return x.name
             key = name
-        super(YamList, self).sort(key=key, reverse=reverse)
+        super().sort(key=key, reverse=reverse)
 
     def attrs(self, attr):
         return YamList((x.attr(attr) for x in self), no_init_check=True)
@@ -2000,7 +2000,7 @@ class Yum:
     >>> yum.nodeName
     """
     def __init__(self):
-        super(Yum, self).__init__()
+        super().__init__()
 
     def __getattr__(self, item):
         return yam(item)
