@@ -4,8 +4,6 @@
 Contains non maya specific utils.
 """
 
-from __future__ import division
-from six import string_types
 from string import ascii_lowercase
 import math
 from functools import reduce
@@ -49,9 +47,9 @@ def decimalToAlphabetical(decimal):
     :return: str
     """
     if not isinstance(decimal, int):
-        raise TypeError("Expected type -> int; got {} -> {}".format(decimal, type(decimal).__name__))
+        raise TypeError(f"Expected type -> int; got {decimal} -> {type(decimal).__name__}.")
     if decimal < 0:
-        raise ValueError("Given decimal must be superior or equal to 0; got : {}".format(decimal))
+        raise ValueError(f"Given decimal must be superior or equal to 0; got : {decimal}")
 
     alphanum = ''
     decimal += 1  # because alphabet hase no 0 and starts with 'a'
@@ -81,14 +79,14 @@ def alphabeticalToDecimal(alpha):
     :param alpha: str
     :return: int
     """
-    if not isinstance(alpha, string_types):
-        raise TypeError("Expected type -> str; got {} -> {}".format(alpha, type(alpha).__name__))
+    if not isinstance(alpha, str):
+        raise TypeError(f"Expected type -> str; got {alpha} -> {type(alpha).__name__}.")
     if not alpha:
         raise ValueError("Cannot convert given empty string to decimal")
 
     alpha = alpha.lower()
     if not all(x in ascii_lowercase for x in alpha):
-        raise ValueError("Expected ascii characters only; got {}".format(alpha))
+        raise ValueError(f"Expected ascii characters only; got {alpha}.")
 
     index = -1
     for step, letter in reversed(list(enumerate(reversed(alpha)))):
@@ -103,9 +101,9 @@ def decimalToRoman(decimal):
     Given decimal must be an integer superior to 0.
     """
     if not isinstance(decimal, int):
-        raise TypeError("Expected type -> int; got {} -> {}".format(decimal, type(decimal).__name__))
+        raise TypeError(f"Expected type -> int; got {decimal} -> {type(decimal).__name__}.")
     if not decimal > 0:
-        raise ValueError("Given index must be superior to 0; got : {}".format(decimal))
+        raise ValueError(f"Given index must be superior to 0; got : {decimal}.")
 
     roman = [(1000, 'M'), (900, 'CM'),
              (500, 'D'), (400, 'CD'),
@@ -132,10 +130,10 @@ def romanToDecimal(roman):
     Warning : a string containing valid letters in an invalid order will still return a value even if the roman numeral
     is not valid; e.g. : 'CLVDXI' returns 666 but 666 is actually written 'DCLXVI'
     """
-    if not isinstance(roman, string_types):
-        raise TypeError("Expected type -> str, and not empty; got {} -> {}".format(roman, type(roman).__name__))
+    if not isinstance(roman, str):
+        raise TypeError(f"Expected type -> str, and not empty; got {roman} -> {type(roman).__name__}.")
     if not roman:
-        raise ValueError("Cannot convert given empty string to roman numeral")
+        raise ValueError("Cannot convert given empty string to roman numeral.")
 
     values = [('M', 1000), ('CM', 900),
               ('D', 500), ('CD', 400),
@@ -147,7 +145,7 @@ def romanToDecimal(roman):
     roman = roman.upper()
     diff = set(roman) - set([x for x, _ in values])
     if diff:
-        raise ValueError("Only valid roman character accepted; invalid characters : {}".format(list(diff)))
+        raise ValueError(f"Only valid roman character accepted; invalid characters : {diff}.")
 
     result = 0
     while roman:
@@ -176,3 +174,28 @@ def getRegularPolygonCoordinates(sides=3, radius=0.5):
         angle -= step  # Substracting to have the face normal face up when used to build regular polygon in maya
 
     return coordinates
+
+
+def recursive_map(func, iterable, *, recursiontypes=(tuple, list), forcerecursiontypes=False):
+    """
+    Recursive equivalent of map if an element of the iterable is an instance of given recursiontypes.
+
+    @param func: the function to call with each element of the iterable as argument.
+    @param iterable: the iterable to loop through to pass each element as argument to the given function.
+    @param recursiontypes: list of types that trigger the recursion if the item type match any of these.
+
+    @return: Return an iterator that applies function to every item of iterable, or its items if recursion.
+    """
+    for item in iterable:
+        if isinstance(item, recursiontypes):
+
+            if forcerecursiontypes:
+                for type_ in recursiontypes:
+                    if isinstance(item, type_):
+                        yield type_(recursive_map(func, item))
+                        break
+
+            else:
+                yield type(item)(recursive_map(func, item))
+        else:
+            yield func(item)

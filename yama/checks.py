@@ -17,10 +17,10 @@ def objExists(obj, raiseError=False, verbose=False):
         return True
     elif raiseError:
         if '.' in obj:
-            raise AttributeExistsError("Attribute '{}' does not exist in the current scene".format(obj))
-        raise ObjExistsError("Object '{}' does not exist in the current scene".format(obj))
+            raise AttributeExistsError(f"Attribute '{obj}' does not exist in the current scene")
+        raise ObjExistsError(f"Object '{obj}' does not exist in the current scene")
     elif verbose == 'warning':
-        cmds.warning("'{}' does not exist in the current scene".format(obj))
+        cmds.warning(f"'{obj}' does not exist in the current scene")
     else:
         return False
 

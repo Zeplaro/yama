@@ -3,7 +3,6 @@
 """
 Contains all the class and functions for maya attributes.
 """
-from six import PY2, string_types
 
 from maya import cmds, mel
 import maya.api.OpenMaya as om
@@ -29,26 +28,26 @@ def getAttribute(node, attr):
         return Attribute(MPlug, node)
 
 
-def getMPlug(attr):  # type: (str) -> om.MPlug
+def getMPlug(attr: str) -> om.MPlug:
     om_list = om.MSelectionList()
 
     try:
         om_list.add(attr)
     except RuntimeError:
-        raise checks.AttributeExistsError("Attribute '{}' does not exist".format(attr))
+        raise checks.AttributeExistsError(f"Attribute '{attr}' does not exist")
 
     try:
         MPlug = om_list.getPlug(0)
     except TypeError as e:
         if config.verbose:
-            cmds.warning("Failed to use MSelectionList.getPlug : '{}'; {}".format(attr, e))
+            cmds.warning(f"Failed to use MSelectionList.getPlug : '{attr}'; {e}")
         node = om_list.getDependNode(0)
         attribute = attr.split('.', 1)[-1]
         try:
             MPlug = om.MFnDependencyNode(node).findPlug(attribute, False)
         except RuntimeError as e:
             if config.verbose:
-                cmds.warning("Failed to use MFnDependencyNode.findPlug : '{}'; {}".format(attr, e))
+                cmds.warning(f"Failed to use MFnDependencyNode.findPlug : '{attr}'; {e}")
             # TODO: Check if getting a .controlPoints[0]
             raise e
 
@@ -67,13 +66,13 @@ class Attribute(nodes.Yam):
         """
         super(Attribute, self).__init__()
         if not isinstance(MPlug, om.MPlug):
-            raise TypeError("MPlug arg should be of type OpenMaya.MPlug not : {}".format(MPlug.__class__.__name__))
+            raise TypeError(f"MPlug arg should be of type OpenMaya.MPlug not : {MPlug.__class__.__name__}")
         if MPlug.isNull:
             raise ValueError("Given MPlug is Null and does not contain a valid attribute.")
 
         if node:
             if not isinstance(node, nodes.DependNode):
-                raise TypeError("Given node arg should be of type DependNode not : {}".format(type(node).__name__))
+                raise TypeError(f"Given node arg should be of type DependNode not : {type(node).__name__}")
             self.node = node
         else:
             self.node = nodes.yam(MPlug.node())
@@ -84,11 +83,8 @@ class Attribute(nodes.Yam):
         self._children_generated = False
         self._hashCode = None
 
-    def __str__(self):
-        return self.name
-
     def __repr__(self):
-        return "{}('{}.{}')".format(self.__class__.__name__, self.node, self.attribute)
+        return f"{self.__class__.__name__}('{self.node}.{self.attribute}')"
 
     def __getattr__(self, attr):
         """
@@ -114,11 +110,7 @@ class Attribute(nodes.Yam):
                 self._attributes[item] = Attribute(MPlug, self.node)
             return self._attributes[item]
         except (RuntimeError, TypeError):
-            raise TypeError("'{}' is not an array attribute and cannot use __getitem__".format(self))
-
-    if PY2:
-        def __getslice__(self, start, stop):
-            return nodes.YamList(self[i] for i in range(len(self))[start:stop])
+            raise TypeError(f"'{self}' is not an array attribute and cannot use __getitem__")
 
     def __add__(self, other):
         """
@@ -139,7 +131,7 @@ class Attribute(nodes.Yam):
         Using self.attribute for 'in' operator.
         :return: str
         """
-        return self.attribute.__contains__(item)
+        return item in self.attribute
 
     def __rshift__(self, other):
         """
@@ -165,16 +157,6 @@ class Attribute(nodes.Yam):
     def __len__(self):
         return self.MPlug.numElements()
 
-    def __bool__(self):
-        """
-        Needed for Truth testing since __len__ is defined but does not work on non array attributes.
-        :return: True
-        """
-        return True
-
-    def __nonzero__(self):
-        return self.__bool__()
-
     def __iter__(self):
         if self.isArray():
             node = self.node
@@ -182,7 +164,7 @@ class Attribute(nodes.Yam):
                 MPlug = self.MPlug.elementByLogicalIndex(i)
                 yield Attribute(MPlug, node)
         else:
-            raise TypeError("'{}' is not iterable".format(self))
+            raise TypeError(f"'{self}' is not iterable")
 
     def __eq__(self, other):
         if hasattr(other, 'MPlug'):
@@ -192,9 +174,6 @@ class Attribute(nodes.Yam):
                 return self.MPlug == nodes.yam(other).MPlug
             except (TypeError, checks.ObjExistsError, AttributeError):
                 return False
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
 
     def __hash__(self):
         return self.hashCode
@@ -220,7 +199,7 @@ class Attribute(nodes.Yam):
         representation which will uniquely identify the path, in case the node has a non-unique name.
         :return: str
         """
-        return self.node.name + '.' + self.alias
+        return f"{self.node.name}.{self.alias}"
 
     def attr(self, attr):
         """
@@ -243,10 +222,10 @@ class Attribute(nodes.Yam):
             else:  # Using singleton and children are generated but attr still isn't in the stored attributes.
                 if config.verbose:
                     cmds.warning("Attribute was not generated with _getChildren but still exists ? "
-                                 r"¯\_(ツ)_/¯ {} {}".format(self.name, attr))
+                                 rf"¯\_(ツ)_/¯ {self.name} {attr}")
 
         # Regular MPlug getting if not using singleton or children attribute not generated.
-        MPlug = getMPlug(self.name + '.' + attr)
+        MPlug = getMPlug(f"{self.name}.{attr}")
         attribute = Attribute(MPlug, self.node)
         self._attributes[attr] = attribute
         return attribute
@@ -260,7 +239,7 @@ class Attribute(nodes.Yam):
         Raises: AttributeError: If the attribute is not a compound attribute and has no children.
         """
         if not self.MPlug.isCompound:
-            raise AttributeError("'{}' is not an compound attribute and has no children attribute".format(self))
+            raise AttributeError(f"'{self}' is not an compound attribute and has no children attribute")
         self._attributes = {}
         self._children = []
         for index in range(self.MPlug.numChildren()):
@@ -274,7 +253,7 @@ class Attribute(nodes.Yam):
         self._children_generated = True
 
     def hasattr(self, attr):
-        return checks.objExists('{}.{}'.format(self, attr))
+        return checks.objExists(f'{self}.{attr}')
 
     @property
     def attribute(self):
@@ -304,13 +283,13 @@ class Attribute(nodes.Yam):
         """
         Alternative way to get the maya value.
         """
-        return getAttr(self)
+        return self.value
 
     def set(self, value):
         """
         Alternative way to set the maya value.
         """
-        setAttr(self, value)
+        self.value = value
 
     def exists(self):
         """
@@ -392,7 +371,7 @@ class Attribute(nodes.Yam):
 
     def inputs(self, **kwargs):
         if not self.isArray():
-            raise RuntimeError("'{}' is not an array attribute, use .input on none array attributes".format(self.name))
+            raise RuntimeError(f"'{self}' is not an array attribute, use .input on none array attributes")
         return nodes.YamList(attr.input(**kwargs) for attr in self)
 
     @property
@@ -400,7 +379,7 @@ class Attribute(nodes.Yam):
         try:
             return Attribute(self.MPlug.source())
         except AssertionError:
-            raise RuntimeError("Attribute {} does not have a source connection".format(self))
+            raise RuntimeError(f"Attribute {self} does not have a source connection")
 
     def outputs(self, **kwargs):
         return self.listConnections(source=False, **kwargs)
@@ -493,6 +472,12 @@ class Attribute(nodes.Yam):
     def locked(self, value):
         cmds.setAttr(self.name, lock=value)
 
+    def lock(self):
+        self.locked = True
+
+    def unlock(self):
+        self.locked = False
+
     @property
     def keyable(self):
         return self.MPlug.isKeyable
@@ -566,8 +551,8 @@ class Attribute(nodes.Yam):
         try:
             cmds.aliasAttr(alias, real_name)
         except RuntimeError as e:
-            raise RuntimeError("Could not rename attribute :'{}', alias :'{}', to '{}'; "
-                               "{}".format(real_name, self.attribute, alias, e))
+            raise RuntimeError(f"Could not rename attribute :'{real_name}', alias :'{self.attribute}', to '{alias}'; "
+                               f"{e}")
 
     @property
     def hashCode(self):
@@ -577,7 +562,7 @@ class Attribute(nodes.Yam):
 
     def children(self):
         if not self.MPlug.isCompound:
-            raise RuntimeError("'{}' is not an compound attribute and has no children attribute".format(self))
+            raise RuntimeError(f"'{self}' is not an compound attribute and has no children attribute")
         if self.isArray():
             return self[0].children()
         if not self._children_generated or self.MPlug.numElements() != len(self._children):
@@ -623,7 +608,7 @@ class BlendShapeTarget(Attribute):
     def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
         geometry = self.node.geometry
         if not geometry:
-            raise RuntimeError("Deformer '{}' is not connected to a geometry".format(self.node))
+            raise RuntimeError(f"Deformer '{self.node}' is not connected to a geometry")
         weightsAttr = self.weightsAttr
         return weightlist.WeightList((weightsAttr[x].value for x in range(len(geometry))),
                                      force_clamp=force_clamp, min_value=min_value, max_value=max_value,
@@ -690,7 +675,7 @@ class BlendShapeTarget(Attribute):
 
         delta_values = self.inputTargetGroupAttr.inputTargetItem[item_index].inputPointsTarget.value
         component_indices = self.inputTargetGroupAttr.inputTargetItem[item_index].inputComponentsTarget.value
-        if component_indices and isinstance(component_indices[0], string_types):
+        if component_indices and isinstance(component_indices[0], str):
             component_indices = mayautils.componentListToIndices(component_indices)
         if len(delta_values) != len(component_indices):
             raise RuntimeError("BlendShape '{}' inputPointsTarget values "
@@ -754,10 +739,10 @@ class BlendShapeTarget(Attribute):
         if self.geometry:
             cmds.blendShape(self.node.name, e=True, remove=True, t=[self.node.geometry, 0, self.geometry, self.index])
         else:
-            mel.eval('blendShapeDeleteTargetGroup("{}", "{}");'.format(self.node.name, self.index))
+            mel.eval(f'blendShapeDeleteTargetGroup("{self.node.name}", "{self.index}");')
 
 
-def getAttr(attr):
+def getAttr(attr: Attribute):
     """
     Gets the attribute value.
     :param attr: Attribute object
@@ -769,9 +754,9 @@ def getAttr(attr):
         return getMPlugValue(MPlug)
     except NotImplementedError as e:
         if config.verbose:
-            print("## Failed to get MPlug value on '{}': {}".format(MPlug.name(), e))
+            print(f"## Failed to get MPlug value on '{MPlug.name()}': {e}")
     except RuntimeError as e:
-        raise RuntimeError("## Failed to get MPlug value on '{}': {}".format(MPlug.name(), e))
+        raise RuntimeError(f"## Failed to get MPlug value on '{MPlug.name()}': {e}")
 
     value = cmds.getAttr(attr.name)
     # Fixing cmds.getattr to simply return the tuple in the list that cmds returns for attribute like '.translate',
@@ -795,9 +780,9 @@ def setAttr(attr, value, **kwargs):
             return
         except NotImplementedError as e:
             if config.verbose:
-                print("## Failed to set MPlug value: {}".format(e))
+                print(f"## Failed to set MPlug value: {e}")
         except RuntimeError as e:
-            raise RuntimeError("## Failed to get MPlug value on '{}': {}".format(MPlug.name(), e))
+            raise RuntimeError(f"## Failed to get MPlug value on '{MPlug.name()}': {e}")
 
     attr_type = attr.type()
     if attr_type in ['double2', 'double3', 'float2', 'float3', 'long2', 'long3', 'short2', 'matrix']:
@@ -811,7 +796,7 @@ def setAttr(attr, value, **kwargs):
             # TODO: make work with other than vtx
             # If given a list of integers, tries to set them as vertex components
             if isinstance(value, (list, tuple)) and all(isinstance(x, int) for x in value):
-                value = ['vtx[{}]'.format(x) for x in value]
+                value = [f'vtx[{x}]' for x in value]
         cmds.setAttr(attr.name, len(value), *value, type=attr_type)
     else:
         cmds.setAttr(attr.name, value, **kwargs)
@@ -856,12 +841,11 @@ def getMPlugValue(MPlug):
                 component = mfn.get(0)
             except IndexError:
                 if config.verbose:
-                    cmds.warning("Failed to get MFnComponentListData on {}; Assumed it's empty".format(MPlug.name()))
+                    cmds.warning(f"Failed to get MFnComponentListData on {MPlug.name()}; Assumed it's empty")
                 return []
             return list(om.MFnSingleIndexedComponent(component).getElements())
         else:
-            raise NotImplementedError("Attribute of MFnData type '{}' "
-                                      "not supported".format(nodes.MFNDATA_TYPE_NAMES[attr_type]))
+            raise NotImplementedError(f"Attribute of MFnData type '{nodes.MFNDATA_TYPE_NAMES[attr_type]}' not supported")
     elif attr_type == om.MFn.kTimeAttribute:
         return MPlug.asMTime().asUnits(om.MTime.uiUnit())
     elif attr_type in (om.MFn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute, ):
@@ -876,8 +860,7 @@ def getMPlugValue(MPlug):
             values.append(getMPlugValue(MPlug.child(child_index)))
         return values
     else:
-        raise NotImplementedError("Attribute '{}' of type '{}' "
-                                  "not supported".format(MPlug.name(), nodes.MFN_TYPE_NAMES[attr_type]))
+        raise NotImplementedError(f"Attribute '{MPlug.name()}' of type '{nodes.MFN_TYPE_NAMES[attr_type]}' not supported")
 
 
 def setMPlugValue(MPlug, value):
@@ -931,8 +914,7 @@ def setMPlugValue(MPlug, value):
             # Setting the MObject on the MPlug
             MPlug.setMObject(mfnd.object())
         else:
-            raise NotImplementedError("Attribute of MFnData type '{}' "
-                                      "not supported".format(nodes.MFNDATA_TYPE_NAMES[attr_type]))
+            raise NotImplementedError(f"Attribute of MFnData type '{nodes.MFNDATA_TYPE_NAMES[attr_type]}' not supported")
     elif attr_type == om.MFn.kTimeAttribute:
         MPlug.setMTime(om.MTime(value, om.MTime.uiUnit()))
     elif attr_type in (om.MFn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute, ):
@@ -946,5 +928,4 @@ def setMPlugValue(MPlug, value):
         for child_index in range(MPlug.numChildren()):
             setMPlugValue(MPlug.child(child_index), value[child_index])
     else:
-        raise NotImplementedError("Attribute '{}' of type '{}' "
-                                  "not supported".format(MPlug.name(), nodes.MFN_TYPE_NAMES[attr_type]))
+        raise NotImplementedError(f"Attribute '{MPlug.name()}' of type '{nodes.MFN_TYPE_NAMES[attr_type]}' not supported")

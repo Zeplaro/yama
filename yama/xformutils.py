@@ -1,7 +1,5 @@
 # encoding: utf8
 
-from __future__ import division
-from six import string_types
 from maya import cmds
 import maya.api.OpenMaya as om
 
@@ -17,7 +15,7 @@ def align(objs=None, t=True, r=True):
             cmds.selectPref(tso=True)
         objs = nodes.selected()
     if not objs and len(objs) > 2:
-        raise ValueError("Not enough object selected")
+        raise ValueError("Not enough object selected.")
     objs = nodes.yams(objs)
     poses = [x.getPosition(ws=True) for x in objs]
 
@@ -63,12 +61,12 @@ def aimChain(objs=None, aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='sc
     """
     if worldUpType == 'object':
         if not worldUpObject:
-            raise Exception("worldUpObject is required for worldUpType 'object'")
+            raise Exception("worldUpObject is required for worldUpType 'object'.")
         checks.objExists(worldUpObject, raiseError=True)
     if not objs:
         objs = nodes.selected()
     if not objs and len(objs) > 1:
-        raise ValueError("Not enough object selected")
+        raise ValueError("Not enough object selected.")
     objs = nodes.yams(objs)
     poses = [x.getXform(t=True, ws=True) for x in objs]
     # Using try to make sure nulss transforms are deleted
@@ -115,7 +113,7 @@ def match(source=None, targets=None, t=True, r=True, s=False, m=False, ws=True):
     :param m: bool, True to match matrix.
     :param ws:  bool, True to match in world space.
     """
-    if isinstance(targets, (string_types, nodes.Yam)):
+    if isinstance(targets, (str, nodes.Yam)):
         targets = [targets]
 
     if not targets:
@@ -124,7 +122,7 @@ def match(source=None, targets=None, t=True, r=True, s=False, m=False, ws=True):
         source = targets.pop(0) if targets else None
 
     if not targets or not source:
-        raise ValueError("Not enough object selected")
+        raise ValueError("Not enough object selected.")
 
     source = nodes.yam(source)
     targets = nodes.yams(targets)
@@ -160,10 +158,8 @@ def match(source=None, targets=None, t=True, r=True, s=False, m=False, ws=True):
         elif isinstance(target, components.Component):
             if t:
                 target.setPosition(pos, ws=ws)
-            if m:
-                target.setXform(m=matrix, ws=ws)
         else:
-            raise RuntimeError("Cannot match '{}' of type '{}'".format(target, type(target).__name__))
+            raise RuntimeError(f"Cannot match '{target}' of type '{type(target).__name__}'.")
 
 
 @decorators.keepsel
@@ -213,16 +209,16 @@ def snapAlongCurve(objs=None, curve=None, reverse=False):
     if not objs or not curve:
         objs = nodes.selected()
         if not objs:
-            raise RuntimeError("No object given and object selected")
+            raise RuntimeError("No object given and object selected.")
         if len(objs) < 2:
-            raise RuntimeError("Not enough object given or selected")
+            raise RuntimeError("Not enough object given or selected.")
         curve = objs.pop()
 
     if isinstance(curve, nodes.Transform):
         curve = curve.shape
 
     if not isinstance(curve, nodes.NurbsCurve):
-        raise TypeError("No NurbsCurve found under given curve".format(curve))
+        raise TypeError(f"No NurbsCurve found under given curve : {curve}.")
 
     if reverse:
         objs = objs[::-1]
@@ -276,7 +272,7 @@ def extractXYZ(neutral, pose, axis=('y', 'xz'), ws=False):
     neutral = nodes.yam(neutral)
     pose = nodes.yam(pose)
     if not isinstance(neutral, nodes.Mesh) or not isinstance(pose, nodes.Mesh):
-        raise TypeError("Given neutral and/or pose object are not mesh objects")
+        raise TypeError(f"Given neutral and/or pose object are not mesh objects; {neutral}, {pose}")
     n_pose = neutral.vtx.getPositions(ws=ws)
     pose_pos = pose.vtx.getPositions(ws=ws)
     data = {x: [] for x in axis}
@@ -309,14 +305,14 @@ def makePlanar(objs, firstPointIndex=0, secondPointIndex=-1, thirdPointIndex=1, 
     if len(objs) < 3:
         raise ValueError("Not enough object given. Minimum 3 object needed to align them on the same plane")
     if not -len(objs) < firstPointIndex < len(objs)-1:
-        raise ValueError("Must be True : -len(objs) < firstPointIndex < len(objs)-1; "
-                         "Given firstPointIndex : {}".format(firstPointIndex))
+        raise ValueError(f"Must be True : -len(objs) < firstPointIndex < len(objs)-1; "
+                         f"Given firstPointIndex : {firstPointIndex}.")
     if not -len(objs) < secondPointIndex < len(objs)-1:
-        raise ValueError("Must be True : -len(objs) < secondPointIndex < len(objs)-1; "
-                         "Given secondPointIndex : {}".format(secondPointIndex))
+        raise ValueError(f"Must be True : -len(objs) < secondPointIndex < len(objs)-1; "
+                         f"Given secondPointIndex : {secondPointIndex}.")
     if not -len(objs) < thirdPointIndex < len(objs)-1:
-        raise ValueError("Must be True : -len(objs) < thirdPointIndex < len(objs)-1; "
-                         "Given thirdPointIndex : {}".format(thirdPointIndex))
+        raise ValueError(f"Must be True : -len(objs) < thirdPointIndex < len(objs)-1; "
+                         f"Given thirdPointIndex : {thirdPointIndex}.")
 
     # Getting positive indices for corresponding amount of objs.
     length = len(objs)
