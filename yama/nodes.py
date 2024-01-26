@@ -393,6 +393,7 @@ class DependNode(Yam):
         self._MFn = None
         self._attributes = {}
         self._hashCode = None
+        self._types = None
 
     @property
     def isAYamNode(self):
@@ -571,24 +572,39 @@ class DependNode(Yam):
             nodes.keepType(type_)
         return nodes
 
-    def type(self):
+    def type(self) -> str:
         """
         Returns the node type name
         :return: str
         """
-        return self.MFn.typeName
+        return self.types()[-1]
 
-    def inheritedTypes(self):
+    def types(self) -> [str, ...]:
         """
         Lists the inherited maya types.
         e.g.: for a joint -> ['containerBase', 'entity', 'dagNode', 'transform', 'joint']
         :return: list of inherited maya types
         """
-        return cmds.nodeType(self.name, inherited=True)
+        if self._types is None:
+            self._types = cmds.nodeType(self.name, inherited=True)
+        return self._types
 
-    def isa(self, nodeType):
+    def isa(self, nodeType) -> bool:
         """Returns True is self is of the given type."""
-        return nodeType in self.inheritedTypes()
+        if isinstance(nodeType, str):
+            return nodeType in self.types()
+
+        elif isinstance(nodeType, (list, tuple)):
+            for t in nodeType:
+                if self.isa(t):
+                    return True
+            return False
+
+        elif isinstance(nodeType, type):
+            return isinstance(self, nodeType)
+
+        raise TypeError(f"{type(nodeType).__name__} is not a valid parameter type for .isa() , "
+                        f"valid  types are: str, list, tuple, type.")
 
     @property
     def hashCode(self):
