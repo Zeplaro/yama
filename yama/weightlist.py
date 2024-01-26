@@ -5,7 +5,7 @@ from . import io
 
 class WeightList(list):
     def __init__(self, data=None, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
-        super(WeightList, self).__init__()
+        super().__init__()
         self.min_value = min_value
         self.max_value = max_value
         self.force_clamp = force_clamp
@@ -17,12 +17,12 @@ class WeightList(list):
                 self.append(i)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({super(WeightList, self).__repr__()})"
+        return f"{self.__class__.__name__}({super().__repr__()})"
 
     def __getitem__(self, item):
         if item.__class__ == slice:
-            return self.emptyCopy(super(WeightList, self).__getitem__(item))
-        return super(WeightList, self).__getitem__(item)
+            return self.emptyCopy(super().__getitem__(item))
+        return super().__getitem__(item)
 
     @classmethod
     def fromLengthValue(cls, length, value=0.0, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
@@ -51,7 +51,7 @@ class WeightList(list):
     def __setitem__(self, key, value):
         value = self._cleanValue(value)
 
-        super(WeightList, self).__setitem__(key, value)
+        super().__setitem__(key, value)
 
     def __add__(self, other):
         if isinstance(other, (int, float)):
@@ -110,7 +110,7 @@ class WeightList(list):
     def __eq__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other)
-        return super(WeightList, self).__eq__(other)
+        return super().__eq__(other)
 
     def __hash__(self):
         return hash(tuple(self))
@@ -123,7 +123,7 @@ class WeightList(list):
 
     def append(self, value):
         value = self._cleanValue(value)
-        super(WeightList, self).append(value)
+        super().append(value)
 
     def extend(self, other):
         for i in other:
@@ -131,7 +131,7 @@ class WeightList(list):
 
     def insert(self, index, value):
         value = self._cleanValue(value)
-        super(WeightList, self).insert(index, value)
+        super().insert(index, value)
 
     def clamp(self, min_value=None, max_value=None):
         if min_value is None:

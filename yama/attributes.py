@@ -64,7 +64,7 @@ class Attribute(nodes.Yam):
         :param node (Depend): the node of the attribute attr.
         :param attr (OpenMaya.MPlug):
         """
-        super(Attribute, self).__init__()
+        super().__init__()
         if not isinstance(MPlug, om.MPlug):
             raise TypeError(f"MPlug arg should be of type OpenMaya.MPlug not : {MPlug.__class__.__name__}")
         if MPlug.isNull:
@@ -595,7 +595,7 @@ class Attribute(nodes.Yam):
 
 class BlendShapeTarget(Attribute):
     def __init__(self, MPlug, node=None):
-        super(BlendShapeTarget, self).__init__(MPlug, node)
+        super().__init__(MPlug, node)
 
     @property
     def inputTargetGroupAttr(self):

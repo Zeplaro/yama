@@ -250,12 +250,12 @@ class SymTable(dict):
     """
 
     def __init__(self, *args):
-        super(SymTable, self).__init__(*args)
+        super().__init__(*args)
         self.axis_mult = [-1, 1, 1]
         self.mids = []
 
     def __repr__(self):
-        return f"SymTable({super(SymTable, self).__repr__()})"
+        return f"SymTable({super().__repr__()})"
 
     def __invert__(self):
         """
