@@ -95,10 +95,12 @@ def yams(*nodes):
     """
     try:
         return YamList(yam(node) for node in nodes)
-    except TypeError as e:  # in case a list or tuple was passed as single argument instead of an unpacked list.
+    # in case a list or tuple was passed as single argument instead of an unpacked list.
+    except TypeError as e:
         try:  # trying again using the first element of the nodes.
             return YamList(yam(node) for node in nodes[0])
-        except TypeError as f:  # to raise the proper TypeError in case an element of the nodes[0] is the wrong type.
+        # to raise the proper TypeError in case an element of the nodes[0] is the wrong type.
+        except TypeError as f:
             raise f
         except Exception:  # in case there was actually an issue with the given nodes.
             raise e

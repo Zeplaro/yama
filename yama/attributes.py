@@ -212,7 +212,8 @@ class Attribute(nodes.Yam):
 
         if config.use_singleton:
             if attr in self._attributes:
-                if not self._attributes[attr].MPlug.isNull:  # Making sure the stored Plug is still valid.
+                # Making sure the stored Plug is still valid.
+                if not self._attributes[attr].MPlug.isNull:
                     return self._attributes[attr]
 
             elif not self._children_generated:
