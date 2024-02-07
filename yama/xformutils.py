@@ -11,7 +11,8 @@ def align(objs=None, t=True, r=True):
     Aligns and evenly spaces given or selected objects between the first and last objects.
     """
     if not objs:
-        if cmds.selectPref(q=True, tso=True) == 0:  # Allows you to get components order of selection
+        # Allows you to get components order of selection
+        if cmds.selectPref(q=True, tso=True) == 0:
             cmds.selectPref(tso=True)
         objs = nodes.selected()
     if not objs and len(objs) > 2:
@@ -283,7 +284,8 @@ def flipPos(obj, table, reverse_face_normal=True):
         obj.cp[mid].setPosition(pos)
 
     if reverse_face_normal:
-        cmds.polyNormal(obj.name, normalMode=3, constructionHistory=False)  # Flipping the face normals
+        # Flipping the face normals
+        cmds.polyNormal(obj.name, normalMode=3, constructionHistory=False)
 
 
 def extractXYZ(neutral, pose, axis=("y", "xz"), ws=False):

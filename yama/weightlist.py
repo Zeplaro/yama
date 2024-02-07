@@ -217,7 +217,8 @@ def normalizeWeights(weights, force_clamp=True, min_value=0.0, max_value=1.0, ro
     new_weights = [weight.emptyCopy() for weight in weights]
     for values in zip(*weights):
         mult = 1.0
-        if any(values):  # Keeps everything to 0.0 if all values are at 0.0 and prevents a / by 0 error
+        # Keeps everything to 0.0 if all values are at 0.0 and prevents a / by 0 error
+        if any(values):
             try:
                 mult = 1.0 / sum(values)
             except ZeroDivisionError as e:

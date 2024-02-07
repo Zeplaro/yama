@@ -61,7 +61,8 @@ def getComponent(node, attr):
         if index in ["*", ":"]:  # if using the maya wildcard symbols
             indices.append(slice(None))
         elif ":" in index:  # if using a slice to list multiple components
-            slice_args = [int(x) if x else None for x in index.split(":")]  # parsing the string into a proper slice
+            # parsing the string into a proper slice
+            slice_args = [int(x) if x else None for x in index.split(":")]
             indices.append(slice(*slice_args))
         else:
             indices.append(int(index))
