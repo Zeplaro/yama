@@ -44,15 +44,21 @@ def condition_debugger(condition):
     def decorator(func):
         @wraps(func)
         def wrap(*args, **kwargs):
-            print(f"#$@&%*!    Function: '{func.__name__}'; args={args}, kwargs={kwargs}    #$@&%*!")
+            print(
+                f"#$@&%*!    Function: '{func.__name__}'; args={args}, kwargs={kwargs}    #$@&%*!"
+            )
 
             if eval(condition):
-                raise RuntimeError(f"Condition met before: '{func.__name__}'; Condition: '{condition}'")
+                raise RuntimeError(
+                    f"Condition met before: '{func.__name__}'; Condition: '{condition}'"
+                )
 
             result = func(*args, **kwargs)
 
             if eval(condition):
-                raise RuntimeError(f"Condition met after: '{func.__name__}'; Condition: '{condition}'")
+                raise RuntimeError(
+                    f"Condition met after: '{func.__name__}'; Condition: '{condition}'"
+                )
 
             return result
 

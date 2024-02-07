@@ -66,13 +66,17 @@ class Attribute(nodes.Yam):
         """
         super().__init__()
         if not isinstance(MPlug, om.MPlug):
-            raise TypeError(f"MPlug arg should be of type OpenMaya.MPlug not : {MPlug.__class__.__name__}")
+            raise TypeError(
+                f"MPlug arg should be of type OpenMaya.MPlug not : {MPlug.__class__.__name__}"
+            )
         if MPlug.isNull:
             raise ValueError("Given MPlug is Null and does not contain a valid attribute.")
 
         if node:
             if not isinstance(node, nodes.DependNode):
-                raise TypeError(f"Given node arg should be of type DependNode not : {type(node).__name__}")
+                raise TypeError(
+                    f"Given node arg should be of type DependNode not : {type(node).__name__}"
+                )
             self.node = node
         else:
             self.node = nodes.yam(MPlug.node())
@@ -105,7 +109,11 @@ class Attribute(nodes.Yam):
             return nodes.YamList(self[i] for i in range(len(self))[item])
 
         try:
-            if not config.use_singleton or item not in self._attributes or self._attributes[item].MPlug.isNull:
+            if (
+                not config.use_singleton
+                or item not in self._attributes
+                or self._attributes[item].MPlug.isNull
+            ):
                 MPlug = self.MPlug.elementByLogicalIndex(item)
                 self._attributes[item] = Attribute(MPlug, self.node)
             return self._attributes[item]
@@ -242,7 +250,9 @@ class Attribute(nodes.Yam):
         Raises: AttributeError: If the attribute is not a compound attribute and has no children.
         """
         if not self.MPlug.isCompound:
-            raise AttributeError(f"'{self}' is not an compound attribute and has no children attribute")
+            raise AttributeError(
+                f"'{self}' is not an compound attribute and has no children attribute"
+            )
         self._attributes = {}
         self._children = []
         for index in range(self.MPlug.numChildren()):
@@ -374,7 +384,9 @@ class Attribute(nodes.Yam):
 
     def inputs(self, **kwargs):
         if not self.isArray():
-            raise RuntimeError(f"'{self}' is not an array attribute, use .input on none array attributes")
+            raise RuntimeError(
+                f"'{self}' is not an array attribute, use .input on none array attributes"
+            )
         return nodes.YamList(attr.input(**kwargs) for attr in self)
 
     @property
@@ -544,20 +556,27 @@ class Attribute(nodes.Yam):
     @property
     def alias(self):
         return self.MPlug.partialName(
-            useAlias=True, useLongNames=True, includeInstancedIndices=True, includeNonMandatoryIndices=True
+            useAlias=True,
+            useLongNames=True,
+            includeInstancedIndices=True,
+            includeNonMandatoryIndices=True,
         )
 
     @alias.setter
     def alias(self, alias):
         # getting node.attribute name without alias
         real_name = self.MPlug.partialName(
-            includeNodeName=True, useLongNames=True, includeInstancedIndices=True, includeNonMandatoryIndices=True
+            includeNodeName=True,
+            useLongNames=True,
+            includeInstancedIndices=True,
+            includeNonMandatoryIndices=True,
         )
         try:
             cmds.aliasAttr(alias, real_name)
         except RuntimeError as e:
             raise RuntimeError(
-                f"Could not rename attribute :'{real_name}', alias :'{self.attribute}', to '{alias}'; " f"{e}"
+                f"Could not rename attribute :'{real_name}', alias :'{self.attribute}', to '{alias}'; "
+                f"{e}"
             )
 
     @property
@@ -568,7 +587,9 @@ class Attribute(nodes.Yam):
 
     def children(self):
         if not self.MPlug.isCompound:
-            raise RuntimeError(f"'{self}' is not an compound attribute and has no children attribute")
+            raise RuntimeError(
+                f"'{self}' is not an compound attribute and has no children attribute"
+            )
         if self.isArray():
             return self[0].children()
         if not self._children_generated or self.MPlug.numElements() != len(self._children):
@@ -638,7 +659,9 @@ class BlendShapeTarget(Attribute):
         self.setWeights(weights)
 
     def inputTaregetItemIndices(self):
-        return list(self.inputTargetGroupAttr.inputTargetItem.MPlug.getExistingArrayAttributeIndices())
+        return list(
+            self.inputTargetGroupAttr.inputTargetItem.MPlug.getExistingArrayAttributeIndices()
+        )
 
     def values(self):
         # rounding to avoid python approximation, e.g.: (5200 / 1000.0 - 5) -> 0.20000000000000018 instead of 0.2
@@ -681,15 +704,20 @@ class BlendShapeTarget(Attribute):
         if target_value is not None:
             item_index = int(target_value * 1000 + 5000)
         elif item_index is None:
-            raise RuntimeError("At least one of target_value or item_index needed to get deltas; got None.")
+            raise RuntimeError(
+                "At least one of target_value or item_index needed to get deltas; got None."
+            )
 
         delta_values = self.inputTargetGroupAttr.inputTargetItem[item_index].inputPointsTarget.value
-        component_indices = self.inputTargetGroupAttr.inputTargetItem[item_index].inputComponentsTarget.value
+        component_indices = self.inputTargetGroupAttr.inputTargetItem[
+            item_index
+        ].inputComponentsTarget.value
         if component_indices and isinstance(component_indices[0], str):
             component_indices = mayautils.componentListToIndices(component_indices)
         if len(delta_values) != len(component_indices):
             raise RuntimeError(
-                "BlendShape '{}' inputPointsTarget values " "and inputComponentsTarget not in sync".format(self.node)
+                "BlendShape '{}' inputPointsTarget values "
+                "and inputComponentsTarget not in sync".format(self.node)
             )
         return {index: value for index, value in zip(component_indices, delta_values)}
 
@@ -710,8 +738,12 @@ class BlendShapeTarget(Attribute):
     @property
     def geometry(self):
         """Returns the geometry shape connected on the target geometry input if any."""
-        inputTargetItem_index = self.inputTargetGroupAttr.inputTargetItem.MPlug.getExistingArrayAttributeIndices()[0]
-        inputGeomTarget = self.inputTargetGroupAttr.inputTargetItem[inputTargetItem_index].inputGeomTarget
+        inputTargetItem_index = (
+            self.inputTargetGroupAttr.inputTargetItem.MPlug.getExistingArrayAttributeIndices()[0]
+        )
+        inputGeomTarget = self.inputTargetGroupAttr.inputTargetItem[
+            inputTargetItem_index
+        ].inputGeomTarget
         input_attr = inputGeomTarget.input()
         if input_attr:
             return input_attr.node
@@ -732,7 +764,9 @@ class BlendShapeTarget(Attribute):
         if inputGeomTarget.input():
             inputGeomTarget.breakInput()
 
-        cmds.blendShape(self.node.name, edit=True, target=(self.node.geometry, self.index, geometry, 1.0))
+        cmds.blendShape(
+            self.node.name, edit=True, target=(self.node.geometry, self.index, geometry, 1.0)
+        )
         # Setting a new geometry for the target sets the current target value to 0.0.
         self.value = current_value
 
@@ -748,7 +782,12 @@ class BlendShapeTarget(Attribute):
         not work, instead we're using the same mel command used by the shapeEditor UI.
         """
         if self.geometry:
-            cmds.blendShape(self.node.name, e=True, remove=True, t=[self.node.geometry, 0, self.geometry, self.index])
+            cmds.blendShape(
+                self.node.name,
+                e=True,
+                remove=True,
+                t=[self.node.geometry, 0, self.geometry, self.index],
+            )
         else:
             mel.eval(f'blendShapeDeleteTargetGroup("{self.node.name}", "{self.index}");')
 
@@ -772,7 +811,9 @@ def getAttr(attr: Attribute):
     value = cmds.getAttr(attr.name)
     # Fixing cmds.getattr to simply return the tuple in the list that cmds returns for attribute like '.translate',
     # '.rotate', etc...
-    if value.__class__ == list and len(value) == 1 and value[0].__class__ == tuple:  # Not isinstance() for efficiency
+    if (
+        value.__class__ == list and len(value) == 1 and value[0].__class__ == tuple
+    ):  # Not isinstance() for efficiency
         return value[0]
     return value
 
@@ -796,7 +837,16 @@ def setAttr(attr, value, **kwargs):
             raise RuntimeError(f"## Failed to get MPlug value on '{MPlug.name()}': {e}")
 
     attr_type = attr.type()
-    if attr_type in ["double2", "double3", "float2", "float3", "long2", "long3", "short2", "matrix"]:
+    if attr_type in [
+        "double2",
+        "double3",
+        "float2",
+        "float3",
+        "long2",
+        "long3",
+        "short2",
+        "matrix",
+    ]:
         cmds.setAttr(attr.name, *value, type=attr_type)
     elif attr_type == "string":
         cmds.setAttr(attr.name, value, type=attr_type)
@@ -815,7 +865,10 @@ def setAttr(attr, value, **kwargs):
 
 def getMPlugValue(MPlug):
     if MPlug.isArray:
-        return [getMPlugValue(MPlug.elementByLogicalIndex(i)) for i in MPlug.getExistingArrayAttributeIndices()]
+        return [
+            getMPlugValue(MPlug.elementByLogicalIndex(i))
+            for i in MPlug.getExistingArrayAttributeIndices()
+        ]
     attribute = MPlug.attribute()
     attr_type = attribute.apiType()
     if attr_type in (om.MFn.kNumericAttribute, om.MFn.kDoubleLinearAttribute):
@@ -852,7 +905,9 @@ def getMPlugValue(MPlug):
                 component = mfn.get(0)
             except IndexError:
                 if config.verbose:
-                    cmds.warning(f"Failed to get MFnComponentListData on {MPlug.name()}; Assumed it's empty")
+                    cmds.warning(
+                        f"Failed to get MFnComponentListData on {MPlug.name()}; Assumed it's empty"
+                    )
                 return []
             return list(om.MFnSingleIndexedComponent(component).getElements())
         else:
@@ -880,7 +935,10 @@ def getMPlugValue(MPlug):
 
 def setMPlugValue(MPlug, value):
     if MPlug.isArray:
-        return [setMPlugValue(MPlug.elementByLogicalIndex(i), value) for i in MPlug.getExistingArrayAttributeIndices()]
+        return [
+            setMPlugValue(MPlug.elementByLogicalIndex(i), value)
+            for i in MPlug.getExistingArrayAttributeIndices()
+        ]
     attribute = MPlug.attribute()
     attr_type = attribute.apiType()
     if attr_type in (om.MFn.kNumericAttribute, om.MFn.kDoubleLinearAttribute):

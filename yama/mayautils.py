@@ -287,10 +287,14 @@ def sortOutliner(objs=None, key=str):
 
 
 def getActiveCamera():
-    return nodes.yam(cmds.modelEditor(cmds.getPanel(withFocus=True), q=True, activeView=True, camera=True)).shape
+    return nodes.yam(
+        cmds.modelEditor(cmds.getPanel(withFocus=True), q=True, activeView=True, camera=True)
+    ).shape
 
 
-def unlockTRSV(objs=None, unlock=True, breakConnections=True, keyable=True, t=True, r=True, s=True, v=True):
+def unlockTRSV(
+    objs=None, unlock=True, breakConnections=True, keyable=True, t=True, r=True, s=True, v=True
+):
     if not objs:
         objs = nodes.selected()
     else:
@@ -338,10 +342,14 @@ def createPolyNgon(name="pNgon1", radius=0.1, sides=3, upAxis="y", parent=None):
     @return: Mesh polygon shape node.
     """
     if sides < 3:
-        raise ValueError(f"A polygon can not have less than 3 sides; numbr of sides given : {sides}")
+        raise ValueError(
+            f"A polygon can not have less than 3 sides; numbr of sides given : {sides}"
+        )
 
     if config.undoable:
-        ngon = cmds.polyCone(radius=radius, subdivisionsX=sides, height=0, constructionHistory=False, name=name)[0]
+        ngon = cmds.polyCone(
+            radius=radius, subdivisionsX=sides, height=0, constructionHistory=False, name=name
+        )[0]
         cmds.delete(f"{ngon}.f[1:{sides}]")
         cmds.polyNormal(ngon, normalMode=0, constructionHistory=False)
         ngon = nodes.yam(ngon).shape

@@ -139,7 +139,9 @@ def romanToDecimal(roman):
     is not valid; e.g. : 'CLVDXI' returns 666 but 666 is actually written 'DCLXVI'
     """
     if not isinstance(roman, str):
-        raise TypeError(f"Expected type -> str, and not empty; got {roman} -> {type(roman).__name__}.")
+        raise TypeError(
+            f"Expected type -> str, and not empty; got {roman} -> {type(roman).__name__}."
+        )
     if not roman:
         raise ValueError("Cannot convert given empty string to roman numeral.")
 
