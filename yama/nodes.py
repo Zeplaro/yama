@@ -150,7 +150,12 @@ def ls(*args, **kwargs):
 
 def selected(**kwargs):
     """Returns current scene selection as yam objects; kwargs are passed on to 'ls'."""
-    if "os" not in kwargs and "sl" not in kwargs and "orderedSelection" not in kwargs and "selection" not in kwargs:
+    if (
+        "os" not in kwargs
+        and "sl" not in kwargs
+        and "orderedSelection" not in kwargs
+        and "selection" not in kwargs
+    ):
         kwargs["orderedSelection"] = True
     return ls(**kwargs)
 
@@ -253,7 +258,9 @@ class Singleton:
         try:  # Faster than checking for type using isinstance
             handle = om.MObjectHandle(MObject)
         except ValueError:
-            raise TypeError(f"Expected OpenMaya.MObject type, instead got : '{type(MObject).__name__}'")
+            raise TypeError(
+                f"Expected OpenMaya.MObject type, instead got : '{type(MObject).__name__}'"
+            )
         if not handle.isValid():
             raise ValueError("Given MObject does not contain a valid node")
         hash_code = handle.hashCode()
@@ -315,13 +322,15 @@ class Singleton:
         """
         # checking if node type has a supported class, if not defaults to DependNode
         if MObject.hasFn(om.MFn.kDagNode):
-            node_name = om.MDagPath.getAPathTo(MObject).partialPathName()  # Getting the shortest unique name
+            # Getting the shortest unique name
+            node_name = om.MDagPath.getAPathTo(MObject).partialPathName()
         else:
             try:
                 node_name = om.MFnDependencyNode(MObject).name()
             except RuntimeError as e:
                 raise ValueError(f"Given MObject does not contain a valid dependencyNode; {e}")
-        for node_type in reversed(cmds.nodeType(node_name, i=True)):  # checks each inherited types for the node
+        # checks each inherited types for the node
+        for node_type in reversed(cmds.nodeType(node_name, i=True)):
             if node_type in SupportedTypes.classes_str:
                 return SupportedTypes.classes_str[node_type]
         return DependNode
@@ -335,7 +344,9 @@ class Singleton:
         try:  # Faster than checking for type using isinstance
             handle = om.MObjectHandle(MObject)
         except ValueError:
-            raise TypeError(f"Expected OpenMaya.MObject type, instead got : '{type(MObject).__name__}'")
+            raise TypeError(
+                f"Expected OpenMaya.MObject type, instead got : '{type(MObject).__name__}'"
+            )
 
         hash_code = handle.hashCode()
         if hash_code in cls._instances:
@@ -841,7 +852,8 @@ class Transform(DagNode):
 
         if not isinstance(obj, (Transform, components.Component)):
             raise AttributeError(
-                f"wrong type given, expected : 'Transform', 'Component' or 'str', " f"got : {obj.__class__.__name__}"
+                f"wrong type given, expected : 'Transform', 'Component' or 'str', "
+                f"got : {obj.__class__.__name__}"
             )
 
         return utils.distance(self.getPosition(ws=True), obj.getPosition(ws=True))
@@ -874,7 +886,9 @@ class Constraint(Transform):
         """
         if not self._CMDS_FUNC:
             self._raise_no_func()
-        return YamList(self.attr(attr) for attr in self._CMDS_FUNC(self.name, q=True, weightAliasList=True))
+        return YamList(
+            self.attr(attr) for attr in self._CMDS_FUNC(self.name, q=True, weightAliasList=True)
+        )
 
     def weightTargets(self):
         """
@@ -1023,7 +1037,9 @@ class NurbsCurve(ControlPoint):
         elif isinstance(parent, Transform):
             parent = parent.MObject
         else:
-            raise TypeError(f"Expected parent of type str or Transform, got : {parent}, {type(parent).__name__}")
+            raise TypeError(
+                f"Expected parent of type str or Transform, got : {parent}, {type(parent).__name__}"
+            )
         curve = om.MFnNurbsCurve().create(cvs, knots, degree, form, False, True, parent)
         return yam(curve)
 
@@ -1191,7 +1207,9 @@ class Cluster(WeightGeometryFilter):
         if not handle_shape:
             raise RuntimeError(f"No clusterHandle found connected to {self.name}")
 
-        root_grp = createNode("transform", name=self.shortName + "_clusterRoot", parent=handle_shape.parent.parent)
+        root_grp = createNode(
+            "transform", name=self.shortName + "_clusterRoot", parent=handle_shape.parent.parent
+        )
         cluster_grp = createNode("transform", name=self.shortName + "_cluster", parent=root_grp)
 
         cluster_grp.worldMatrix.connectTo(self.matrix, force=True)
@@ -1219,7 +1237,9 @@ class SoftMod(WeightGeometryFilter):
         if not handle_shape:
             raise RuntimeError(f"No softModHandle found connected to {self.name}")
 
-        root_grp = createNode("transform", name=self.shortName + "_softModRoot", parent=handle_shape.parent.parent)
+        root_grp = createNode(
+            "transform", name=self.shortName + "_softModRoot", parent=handle_shape.parent.parent
+        )
         softMod_grp = createNode("transform", name=self.shortName + "_softMod", parent=root_grp)
         falloffRadius = softMod_grp.addAttr(
             "falloffRadius",
@@ -1288,7 +1308,9 @@ class SkinCluster(GeometryFilter):
 
     def setInfluenceWeights(self, influence, weights, geo=None, components=None):
         if not config.undoable:
-            return self.setInfluenceWeightsOM(influence=influence, weights=weights, geo=geo, components=components)
+            return self.setInfluenceWeightsOM(
+                influence=influence, weights=weights, geo=geo, components=components
+            )
 
         if not hasattr(influence, "isAYamNode"):
             influence = self.influences()[influence]
@@ -1328,7 +1350,12 @@ class SkinCluster(GeometryFilter):
     def setWeights(self, weights):
         if config.undoable:
             # Hacking the undo queue ! Setting all weigths to 1.0 on first joint to register a change in the undo queue
-            cmds.skinPercent(self.name, self.geometry.name, transformValue=[self.influences()[0].name, 1.0], zri=True)
+            cmds.skinPercent(
+                self.name,
+                self.geometry.name,
+                transformValue=[self.influences()[0].name, 1.0],
+                zri=True,
+            )
             # for vtx, weight in enumerate(weights):
             #     self.setVertexWeight(index=vtx, values=weight)
         # else:
@@ -1395,7 +1422,9 @@ class SkinCluster(GeometryFilter):
             influence = influence.MDagPath
         else:
             if not isinstance(influence, DagNode):
-                raise TypeError(f"Influence should be of type 'DependNode' not '{type(influence).__name__}'")
+                raise TypeError(
+                    f"Influence should be of type 'DependNode' not '{type(influence).__name__}'"
+                )
             raise RuntimeError("Influence not found in skin cluster")
 
         vtx_list = yams(self.MFn.getPointsAffectedByInfluence(influence)[0].getSelectionStrings())
@@ -1577,12 +1606,19 @@ class BlendShape(WeightGeometryFilter):
             index = existing_target_indices[-1] + 1
 
         if index < 0:
-            raise RuntimeError(f"Target index cannot be negative; got : {index} for target '{target}'.")
+            raise RuntimeError(
+                f"Target index cannot be negative; got : {index} for target '{target}'."
+            )
 
         while index in existing_target_indices:
             index += 1
 
-        cmds.blendShape(self.name, e=True, t=(self.geometry.name, index, str(target), 1.0), topologyCheck=topologyCheck)
+        cmds.blendShape(
+            self.name,
+            e=True,
+            t=(self.geometry.name, index, str(target), 1.0),
+            topologyCheck=topologyCheck,
+        )
         return self.target(self.targetIndices().index(index))
 
     def addEmptyTarget(self, name):
@@ -1603,7 +1639,9 @@ class BlendShape(WeightGeometryFilter):
 
     def addInBetween(self, target, index, value):
         index = self.target(index).index
-        cmds.blendShape(self.name, e=True, inBetween=True, t=(self.geometry.name, index, str(target), value))
+        cmds.blendShape(
+            self.name, e=True, inBetween=True, t=(self.geometry.name, index, str(target), value)
+        )
 
     def getDeltas(self):
         return {target.alias: target.getDeltas() for target in self.targets()}
@@ -1617,7 +1655,9 @@ class BlendShape(WeightGeometryFilter):
                 target = self.addEmptyTarget(target_name)
                 target.setDeltas(delta)
             elif config.verbose:
-                cmds.warning(f"Target {target_name} is missing from {self.name} and was not applied.")
+                cmds.warning(
+                    f"Target {target_name} is missing from {self.name} and was not applied."
+                )
 
     @property
     def data(self):
@@ -1670,7 +1710,9 @@ class UVPin(DependNode):
         elif isinstance(geo, NurbsSurface):
             out_attr = geo.worldSpace
         else:
-            raise NotImplementedError(f"Geometry '{geo}' of type '{type(geo).__name__}' not implemented.")
+            raise NotImplementedError(
+                f"Geometry '{geo}' of type '{type(geo).__name__}' not implemented."
+            )
 
         out_attr.connectTo(self.deformedGeometry, force=True)
 
@@ -1707,10 +1749,14 @@ class UVPin(DependNode):
         if isinstance(geo, Mesh):
             u, v, _ = geo.MFn.getUVAtPoint(point, space=om.MSpace.kWorld)
         elif isinstance(geo, NurbsSurface):
-            point, _, _ = geo.MFn.closestPoint(point, space=om.MSpace.kObject)  # TODO : fails to do it world space
+            point, _, _ = geo.MFn.closestPoint(
+                point, space=om.MSpace.kObject
+            )  # TODO : fails to do it world space
             u, v = geo.MFn.getParamAtPoint(point, True)
         else:
-            raise NotImplementedError(f"Geometry '{geo}' of type '{type(geo).__name__}' not implemeted.")
+            raise NotImplementedError(
+                f"Geometry '{geo}' of type '{type(geo).__name__}' not implemeted."
+            )
         self.normalizedIsoParms.value = False
         self.connectTransform(target, [u, v])
 
@@ -1718,7 +1764,9 @@ class UVPin(DependNode):
 # These contain MFn and MFnData type names per {id#: name, ...}, to be able to get the type name from its id#.
 # Warning : id# for nodes, attribute, etc... of the same type, are not consistent and change between maya versions.
 MFN_TYPE_NAMES = {value: key for key, value in om.MFn.__dict__.items() if isinstance(value, int)}
-MFNDATA_TYPE_NAMES = {value: key for key, value in om.MFnData.__dict__.items() if isinstance(value, int)}
+MFNDATA_TYPE_NAMES = {
+    value: key for key, value in om.MFnData.__dict__.items() if isinstance(value, int)
+}
 
 
 class SupportedTypes:
@@ -1878,7 +1926,9 @@ class SupportedTypes:
     diff = set(classes_MFn.values()) - all_classes
     if diff:
         cmds.warning("#" * 82)
-        cmds.warning(f"There is a node class in classes_MFn dict that is not listed in classes_str : '{diff}'")
+        cmds.warning(
+            f"There is a node class in classes_MFn dict that is not listed in classes_str : '{diff}'"
+        )
         cmds.warning("#" * 82)
 
 
@@ -1923,7 +1973,9 @@ class YamList(list):
         """
         if not self.no_check:
             if not hasattr(item, "isAYamObject"):
-                raise TypeError(f"YamList can only contain Yam objects. '{item}' is '{type(item).__name__}'.")
+                raise TypeError(
+                    f"YamList can only contain Yam objects. '{item}' is '{type(item).__name__}'."
+                )
 
     def _check_all(self):
         """
@@ -1932,7 +1984,9 @@ class YamList(list):
         if not self.no_check:
             for item in self:
                 if not hasattr(item, "isAYamObject"):
-                    raise TypeError(f"YamList can only contain Yam objects. '{item}' is '{type(item).__name__}'.")
+                    raise TypeError(
+                        f"YamList can only contain Yam objects. '{item}' is '{type(item).__name__}'."
+                    )
 
     def append(self, item):
         if not self.no_check:
@@ -1999,7 +2053,9 @@ class YamList(list):
         if not isinstance(nodeType, (tuple, list)):
             nodeType = [nodeType]
         if not all(isinstance(x, str) or hasattr(x, "isAYamObject") for x in nodeType):
-            raise TypeError(f"Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{nodeType}'.")
+            raise TypeError(
+                f"Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{nodeType}'."
+            )
         for i, item in reversed(list(enumerate(self))):
             inherited_types = item.inheritedTypes()
             for type_ in nodeType:
@@ -2020,7 +2076,9 @@ class YamList(list):
         if not isinstance(nodeType, (tuple, list)):
             nodeType = [nodeType]
         if not all(isinstance(x, str) or hasattr(x, "isAYamObject") for x in nodeType):
-            raise TypeError(f"Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{nodeType}'.")
+            raise TypeError(
+                f"Expected : 'str' or Yam or 'list(str, Yam, ...)' but was given '{nodeType}'."
+            )
         for i, item in reversed(list(enumerate(self))):
             inherited_types = item.inheritedTypes()
             for type_ in nodeType:

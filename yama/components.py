@@ -294,9 +294,13 @@ class Component(nodes.Yam):
 
         elif self.third_index is None:
             if isinstance(self.components, TripleIndexed):
-                return self.__class__(self.node, self.components, self.index, self.second_index, item)
+                return self.__class__(
+                    self.node, self.components, self.index, self.second_index, item
+                )
             else:
-                raise IndexError(f"'{self}' is a double index component and cannot get a third index")
+                raise IndexError(
+                    f"'{self}' is a double index component and cannot get a third index"
+                )
         raise IndexError(f"'{self}' cannot get four index")
 
     def __eq__(self, other):
@@ -467,7 +471,7 @@ class ComponentsSlice(nodes.Yam):
                 "ComponentSlice that including a step different than 1 can not be represented by a "
                 "single Maya valid name. Use .names instead"
             )
-        return "{}.{}[{}:{}]".format(self.node, self.components.component_name, self.start, self.stop)
+        return f"{self.node}.{self.components.component_name}[{self.start}:{self.stop}]"
 
     @property
     def names(self):

@@ -44,7 +44,12 @@ def align(objs=None, t=True, r=True):
 @decorators.mayaundo
 @decorators.keepsel
 def aimChain(
-    objs=None, aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType="scene", worldUpObject=None, worldUpVector=(0, 1, 0)
+    objs=None,
+    aimVector=(1, 0, 0),
+    upVector=(0, 1, 0),
+    worldUpType="scene",
+    worldUpObject=None,
+    worldUpVector=(0, 1, 0),
 ):
     """
     Aims the given or selected objects to each other in order. Last object gets the same orientation as the previous
@@ -319,7 +324,9 @@ def extractXYZ(neutral, pose, axis=("y", "xz"), ws=False):
 
 
 @decorators.keepsel
-def makePlanar(objs, firstPointIndex=0, secondPointIndex=-1, thirdPointIndex=1, aimObjsChain=True, **aimKwargs):
+def makePlanar(
+    objs, firstPointIndex=0, secondPointIndex=-1, thirdPointIndex=1, aimObjsChain=True, **aimKwargs
+):
     """
     Aligns the given objects on a three point plane defined by the first, last and objs[midIndex] given objects.
     All objects must be in a parented hierarchy and given in hierarchical order.
@@ -333,10 +340,13 @@ def makePlanar(objs, firstPointIndex=0, secondPointIndex=-1, thirdPointIndex=1, 
     :aimKwargs: all kwargs passed to aimChain call if aimObjsChain is True.
     """
     if len(objs) < 3:
-        raise ValueError("Not enough object given. Minimum 3 object needed to align them on the same plane")
+        raise ValueError(
+            "Not enough object given. Minimum 3 object needed to align them on the same plane"
+        )
     if not -len(objs) < firstPointIndex < len(objs) - 1:
         raise ValueError(
-            f"Must be True : -len(objs) < firstPointIndex < len(objs)-1; " f"Given firstPointIndex : {firstPointIndex}."
+            f"Must be True : -len(objs) < firstPointIndex < len(objs)-1; "
+            f"Given firstPointIndex : {firstPointIndex}."
         )
     if not -len(objs) < secondPointIndex < len(objs) - 1:
         raise ValueError(
@@ -345,7 +355,8 @@ def makePlanar(objs, firstPointIndex=0, secondPointIndex=-1, thirdPointIndex=1, 
         )
     if not -len(objs) < thirdPointIndex < len(objs) - 1:
         raise ValueError(
-            f"Must be True : -len(objs) < thirdPointIndex < len(objs)-1; " f"Given thirdPointIndex : {thirdPointIndex}."
+            f"Must be True : -len(objs) < thirdPointIndex < len(objs)-1; "
+            f"Given thirdPointIndex : {thirdPointIndex}."
         )
 
     # Getting positive indices for corresponding amount of objs.
@@ -368,7 +379,11 @@ def makePlanar(objs, firstPointIndex=0, secondPointIndex=-1, thirdPointIndex=1, 
         aimNull.setXform(m=objs[thirdPointIndex].getXform(m=True, ws=True), ws=True)
 
         # Aiming the first object to the last object with aimNull for up.
-        aimChain([nulls[firstPointIndex], nulls[secondPointIndex]], worldUpType="object", worldUpObject=aimNull)
+        aimChain(
+            [nulls[firstPointIndex], nulls[secondPointIndex]],
+            worldUpType="object",
+            worldUpObject=aimNull,
+        )
 
         # Parenting all nulls to first null and setting z to 0.
         nulls_except_first = nulls[:firstPointIndex] + nulls[firstPointIndex + 1 :]

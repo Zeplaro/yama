@@ -25,13 +25,21 @@ class WeightList(list):
         return super().__getitem__(item)
 
     @classmethod
-    def fromLengthValue(cls, length, value=0.0, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
+    def fromLengthValue(
+        cls, length, value=0.0, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None
+    ):
         if not isinstance(length, int):
-            raise TypeError("length must be int; got : {}, {}".format(length, type(length).__name__))
+            raise TypeError(
+                "length must be int; got : {}, {}".format(length, type(length).__name__)
+            )
         try:
             value = float(value)
         except ValueError:
-            raise ValueError("value must be float or string float; got : {}, {}".format(value, type(value).__name__))
+            raise ValueError(
+                "value must be float or string float; got : {}, {}".format(
+                    value, type(value).__name__
+                )
+            )
         return cls(
             (value for _ in range(length)),
             force_clamp=force_clamp,
@@ -44,7 +52,11 @@ class WeightList(list):
         try:
             value = float(value)
         except ValueError:
-            raise ValueError("Value must be float or string float; got : {}, {}".format(value, type(value).__name__))
+            raise ValueError(
+                "Value must be float or string float; got : {}, {}".format(
+                    value, type(value).__name__
+                )
+            )
 
         if self.force_clamp:
             value = max(min(value, self.max_value), self.min_value)
@@ -207,7 +219,11 @@ def normalizeWeights(weights, force_clamp=True, min_value=0.0, max_value=1.0, ro
     weights = [
         (
             WeightList(
-                weight, force_clamp=force_clamp, min_value=min_value, max_value=max_value, round_value=round_value
+                weight,
+                force_clamp=force_clamp,
+                min_value=min_value,
+                max_value=max_value,
+                round_value=round_value,
             )
             if not isinstance(weight, WeightList)
             else weight
@@ -222,7 +238,9 @@ def normalizeWeights(weights, force_clamp=True, min_value=0.0, max_value=1.0, ro
             try:
                 mult = 1.0 / sum(values)
             except ZeroDivisionError as e:
-                raise ZeroDivisionError(f"The sum of values was equal to 0.0; Values : {values}; {e}")
+                raise ZeroDivisionError(
+                    f"The sum of values was equal to 0.0; Values : {values}; {e}"
+                )
         for i, value in enumerate(values):
             new_weights[i].append(value * mult)
     return new_weights
@@ -233,7 +251,9 @@ def clampWeights(weights, min_value=0.0, max_value=1.0):
         round_value = weights.round_value
     else:
         round_value = None
-    return WeightList(weights, force_clamp=True, min_value=min_value, max_value=max_value, round_value=round_value)
+    return WeightList(
+        weights, force_clamp=True, min_value=min_value, max_value=max_value, round_value=round_value
+    )
 
 
 def roundWeights(weights, round_value=3):
@@ -244,5 +264,9 @@ def roundWeights(weights, round_value=3):
     else:
         force_clamp, min_value, max_value = True, 0.0, 1.0
     return WeightList(
-        weights, force_clamp=force_clamp, min_value=min_value, max_value=max_value, round_value=round_value
+        weights,
+        force_clamp=force_clamp,
+        min_value=min_value,
+        max_value=max_value,
+        round_value=round_value,
     )
