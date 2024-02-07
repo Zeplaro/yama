@@ -18,13 +18,13 @@ def getAttribute(node, attr):
     :param attr: str
     :return: Attribute
     """
-    if '.' in attr:
-        attrs = attr.split('.')
+    if "." in attr:
+        attrs = attr.split(".")
         for attr in attrs:
             node = node.attr(attr)
         return node
     else:
-        MPlug = getMPlug(node.name + '.' + attr)
+        MPlug = getMPlug(node.name + "." + attr)
         return Attribute(MPlug, node)
 
 
@@ -42,7 +42,7 @@ def getMPlug(attr: str) -> om.MPlug:
         if config.verbose:
             cmds.warning(f"Failed to use MSelectionList.getPlug : '{attr}'; {e}")
         node = om_list.getDependNode(0)
-        attribute = attr.split('.', 1)[-1]
+        attribute = attr.split(".", 1)[-1]
         try:
             MPlug = om.MFnDependencyNode(node).findPlug(attribute, False)
         except RuntimeError as e:
@@ -99,7 +99,7 @@ class Attribute(nodes.Yam):
         Gets the element of the array attribute at the given index.
         Returns a list of attribute if given a slice.
         """
-        if item == '*':
+        if item == "*":
             item = slice(None)
         if item.__class__ == slice:  # Not using isinstance() for efficiency
             return nodes.YamList(self[i] for i in range(len(self))[item])
@@ -167,7 +167,7 @@ class Attribute(nodes.Yam):
             raise TypeError(f"'{self}' is not iterable")
 
     def __eq__(self, other):
-        if hasattr(other, 'MPlug'):
+        if hasattr(other, "MPlug"):
             return self.MPlug == other.MPlug
         else:
             try:
@@ -221,8 +221,10 @@ class Attribute(nodes.Yam):
 
             else:  # Using singleton and children are generated but attr still isn't in the stored attributes.
                 if config.verbose:
-                    cmds.warning("Attribute was not generated with _getChildren but still exists ? "
-                                 rf"¯\_(ツ)_/¯ {self.name} {attr}")
+                    cmds.warning(
+                        "Attribute was not generated with _getChildren but still exists ? "
+                        rf"¯\_(ツ)_/¯ {self.name} {attr}"
+                    )
 
         # Regular MPlug getting if not using singleton or children attribute not generated.
         MPlug = getMPlug(f"{self.name}.{attr}")
@@ -245,15 +247,15 @@ class Attribute(nodes.Yam):
         for index in range(self.MPlug.numChildren()):
             child = self.MPlug.child(index)
             attribute = Attribute(child, self.node)
-            name = child.partialName(useLongNames=True, includeInstancedIndices=True).split('.')[-1]
-            short_name = child.partialName(includeInstancedIndices=True).split('.')[-1]
+            name = child.partialName(useLongNames=True, includeInstancedIndices=True).split(".")[-1]
+            short_name = child.partialName(includeInstancedIndices=True).split(".")[-1]
             self._attributes[name] = attribute
             self._attributes[short_name] = attribute
             self._children.append(attribute)
         self._children_generated = True
 
     def hasattr(self, attr):
-        return checks.objExists(f'{self}.{attr}')
+        return checks.objExists(f"{self}.{attr}")
 
     @property
     def attribute(self):
@@ -358,10 +360,10 @@ class Attribute(nodes.Yam):
         :param kwargs: kwargs to pass on to cmds.listConnections
         :return: YamList of Attribute or Yam node objects.
         """
-        if 'scn' not in kwargs and 'skipConversionNodes' not in kwargs:
-            kwargs['skipConversionNodes'] = True
-        if 'p' not in kwargs and 'plugs' not in kwargs:
-            kwargs['plugs'] = True
+        if "scn" not in kwargs and "skipConversionNodes" not in kwargs:
+            kwargs["skipConversionNodes"] = True
+        if "p" not in kwargs and "plugs" not in kwargs:
+            kwargs["plugs"] = True
         return nodes.yams(cmds.listConnections(self.name, **kwargs) or [])
 
     def input(self, **kwargs):
@@ -531,7 +533,7 @@ class Attribute(nodes.Yam):
     @niceName.setter
     def niceName(self, newName):
         if newName is None:
-            newName = ''
+            newName = ""
         cmds.addAttr(self.name, e=True, niceName=newName)
 
     @property
@@ -540,19 +542,22 @@ class Attribute(nodes.Yam):
 
     @property
     def alias(self):
-        return self.MPlug.partialName(useAlias=True, useLongNames=True, includeInstancedIndices=True,
-                                      includeNonMandatoryIndices=True)
+        return self.MPlug.partialName(
+            useAlias=True, useLongNames=True, includeInstancedIndices=True, includeNonMandatoryIndices=True
+        )
 
     @alias.setter
     def alias(self, alias):
         # getting node.attribute name without alias
-        real_name = self.MPlug.partialName(includeNodeName=True, useLongNames=True, includeInstancedIndices=True,
-                                           includeNonMandatoryIndices=True)
+        real_name = self.MPlug.partialName(
+            includeNodeName=True, useLongNames=True, includeInstancedIndices=True, includeNonMandatoryIndices=True
+        )
         try:
             cmds.aliasAttr(alias, real_name)
         except RuntimeError as e:
-            raise RuntimeError(f"Could not rename attribute :'{real_name}', alias :'{self.attribute}', to '{alias}'; "
-                               f"{e}")
+            raise RuntimeError(
+                f"Could not rename attribute :'{real_name}', alias :'{self.attribute}', to '{alias}'; " f"{e}"
+            )
 
     @property
     def hashCode(self):
@@ -586,11 +591,11 @@ class Attribute(nodes.Yam):
 
     @property
     def enumNames(self):
-        return cmds.addAttr(self.name, q=True, enumName=True).split(':')
+        return cmds.addAttr(self.name, q=True, enumName=True).split(":")
 
     @enumNames.setter
     def enumNames(self, names):
-        cmds.addAttr(self.name, enumName=':'.join(names), e=True)
+        cmds.addAttr(self.name, enumName=":".join(names), e=True)
 
 
 class BlendShapeTarget(Attribute):
@@ -610,9 +615,13 @@ class BlendShapeTarget(Attribute):
         if not geometry:
             raise RuntimeError(f"Deformer '{self.node}' is not connected to a geometry")
         weightsAttr = self.weightsAttr
-        return weightlist.WeightList((weightsAttr[x].value for x in range(len(geometry))),
-                                     force_clamp=force_clamp, min_value=min_value, max_value=max_value,
-                                     round_value=round_value)
+        return weightlist.WeightList(
+            (weightsAttr[x].value for x in range(len(geometry))),
+            force_clamp=force_clamp,
+            min_value=min_value,
+            max_value=max_value,
+            round_value=round_value,
+        )
 
     def setWeights(self, weights):
         weightsAttr = self.weightsAttr
@@ -678,8 +687,9 @@ class BlendShapeTarget(Attribute):
         if component_indices and isinstance(component_indices[0], str):
             component_indices = mayautils.componentListToIndices(component_indices)
         if len(delta_values) != len(component_indices):
-            raise RuntimeError("BlendShape '{}' inputPointsTarget values "
-                               "and inputComponentsTarget not in sync".format(self.node))
+            raise RuntimeError(
+                "BlendShape '{}' inputPointsTarget values " "and inputComponentsTarget not in sync".format(self.node)
+            )
         return {index: value for index, value in zip(component_indices, delta_values)}
 
     def setDelta(self, value, delta, inputTargetItem=None):
@@ -785,18 +795,18 @@ def setAttr(attr, value, **kwargs):
             raise RuntimeError(f"## Failed to get MPlug value on '{MPlug.name()}': {e}")
 
     attr_type = attr.type()
-    if attr_type in ['double2', 'double3', 'float2', 'float3', 'long2', 'long3', 'short2', 'matrix']:
+    if attr_type in ["double2", "double3", "float2", "float3", "long2", "long3", "short2", "matrix"]:
         cmds.setAttr(attr.name, *value, type=attr_type)
-    elif attr_type == 'string':
+    elif attr_type == "string":
         cmds.setAttr(attr.name, value, type=attr_type)
-    elif attr_type == 'TdataCompound':
-        cmds.setAttr(attr.name+'[:]', *value, size=len(value))
-    elif attr_type in ['componentList', 'pointArray']:
-        if attr_type == 'componentList':
+    elif attr_type == "TdataCompound":
+        cmds.setAttr(attr.name + "[:]", *value, size=len(value))
+    elif attr_type in ["componentList", "pointArray"]:
+        if attr_type == "componentList":
             # TODO: make work with other than vtx
             # If given a list of integers, tries to set them as vertex components
             if isinstance(value, (list, tuple)) and all(isinstance(x, int) for x in value):
-                value = [f'vtx[{x}]' for x in value]
+                value = [f"vtx[{x}]" for x in value]
         cmds.setAttr(attr.name, len(value), *value, type=attr_type)
     else:
         cmds.setAttr(attr.name, value, **kwargs)
@@ -807,7 +817,7 @@ def getMPlugValue(MPlug):
         return [getMPlugValue(MPlug.elementByLogicalIndex(i)) for i in MPlug.getExistingArrayAttributeIndices()]
     attribute = MPlug.attribute()
     attr_type = attribute.apiType()
-    if attr_type in (om.MFn.kNumericAttribute, om.MFn.kDoubleLinearAttribute, ):
+    if attr_type in (om.MFn.kNumericAttribute, om.MFn.kDoubleLinearAttribute):
         return MPlug.asDouble()
     elif attr_type == om.MFn.kEnumAttribute:
         return MPlug.asInt()
@@ -845,10 +855,12 @@ def getMPlugValue(MPlug):
                 return []
             return list(om.MFnSingleIndexedComponent(component).getElements())
         else:
-            raise NotImplementedError(f"Attribute of MFnData type '{nodes.MFNDATA_TYPE_NAMES[attr_type]}' not supported")
+            raise NotImplementedError(
+                f"Attribute of MFnData type '{nodes.MFNDATA_TYPE_NAMES[attr_type]}' not supported"
+            )
     elif attr_type == om.MFn.kTimeAttribute:
         return MPlug.asMTime().asUnits(om.MTime.uiUnit())
-    elif attr_type in (om.MFn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute, ):
+    elif attr_type in (om.MFn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute):
         data_handle = MPlug.asMDataHandle()
         if attr_type == om.MFn.kMatrixAttribute:
             return list(data_handle.asMatrix())
@@ -860,7 +872,9 @@ def getMPlugValue(MPlug):
             values.append(getMPlugValue(MPlug.child(child_index)))
         return values
     else:
-        raise NotImplementedError(f"Attribute '{MPlug.name()}' of type '{nodes.MFN_TYPE_NAMES[attr_type]}' not supported")
+        raise NotImplementedError(
+            f"Attribute '{MPlug.name()}' of type '{nodes.MFN_TYPE_NAMES[attr_type]}' not supported"
+        )
 
 
 def setMPlugValue(MPlug, value):
@@ -868,13 +882,13 @@ def setMPlugValue(MPlug, value):
         return [setMPlugValue(MPlug.elementByLogicalIndex(i), value) for i in MPlug.getExistingArrayAttributeIndices()]
     attribute = MPlug.attribute()
     attr_type = attribute.apiType()
-    if attr_type in (om.MFn.kNumericAttribute, om.MFn.kDoubleLinearAttribute, ):
+    if attr_type in (om.MFn.kNumericAttribute, om.MFn.kDoubleLinearAttribute):
         MPlug.setDouble(value)
     elif attr_type == om.MFn.kEnumAttribute:
         return MPlug.setInt(value)
     elif attr_type == om.MFn.kDistance:
         MPlug.setMDistance(om.MDistance(value, om.MDistance.uiUnit()))
-    elif attr_type in (om.MFn.kAngle, om.MFn.kDoubleAngleAttribute, ):
+    elif attr_type in (om.MFn.kAngle, om.MFn.kDoubleAngleAttribute):
         MPlug.setMAngle(om.MAngle(value, om.MAngle.uiUnit()))
     elif attr_type == om.MFn.kTypedAttribute:
         mfn = om.MFnTypedAttribute(attribute)
@@ -914,10 +928,12 @@ def setMPlugValue(MPlug, value):
             # Setting the MObject on the MPlug
             MPlug.setMObject(mfnd.object())
         else:
-            raise NotImplementedError(f"Attribute of MFnData type '{nodes.MFNDATA_TYPE_NAMES[attr_type]}' not supported")
+            raise NotImplementedError(
+                f"Attribute of MFnData type '{nodes.MFNDATA_TYPE_NAMES[attr_type]}' not supported"
+            )
     elif attr_type == om.MFn.kTimeAttribute:
         MPlug.setMTime(om.MTime(value, om.MTime.uiUnit()))
-    elif attr_type in (om.MFn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute, ):
+    elif attr_type in (om.MFn.kMatrixAttribute, om.MFn.kFloatMatrixAttribute):
         data_handle = MPlug.asMDataHandle()
         if attr_type == om.MFn.kMatrixAttribute:
             data_handle.setMMatrix(value)
@@ -928,4 +944,6 @@ def setMPlugValue(MPlug, value):
         for child_index in range(MPlug.numChildren()):
             setMPlugValue(MPlug.child(child_index), value[child_index])
     else:
-        raise NotImplementedError(f"Attribute '{MPlug.name()}' of type '{nodes.MFN_TYPE_NAMES[attr_type]}' not supported")
+        raise NotImplementedError(
+            f"Attribute '{MPlug.name()}' of type '{nodes.MFN_TYPE_NAMES[attr_type]}' not supported"
+        )
