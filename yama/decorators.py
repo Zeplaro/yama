@@ -14,6 +14,7 @@ def mayaundo(func):
             return result
         finally:
             cmds.undoInfo(closeChunk=True)
+
     return wrapper
 
 
@@ -24,6 +25,7 @@ def keepsel(func):
         result = func(*args, **kwargs)
         cmds.select(sel)
         return result
+
     return wrapper
 
 
@@ -34,6 +36,7 @@ def verbose(func):
         result = func(*args, **kwargs)
         print(f"---- Result of {func.__name__} is : {result}; of type : {type(result).__name__}")
         return result
+
     return wrapper
 
 
@@ -52,7 +55,9 @@ def condition_debugger(condition):
                 raise RuntimeError(f"Condition met after: '{func.__name__}'; Condition: '{condition}'")
 
             return result
+
         return wrap
+
     return decorator
 
 
@@ -62,8 +67,10 @@ def string_args(func):
     Doing this allows to convert the args to str and still have the same behavior as the equivalent cmds function would
     with the same arguments.
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         args = tuple(utils.recursive_map(str, args, forcerecursiontypes=True))
         return func(*args, **kwargs)
+
     return wrapper
