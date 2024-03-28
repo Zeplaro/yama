@@ -76,7 +76,7 @@ def yam(node):
 
     else:
         raise TypeError(
-            f"yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected; "
+            "yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected; "
             f"got {node.__class__.__name__}."
         )
 
