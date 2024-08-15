@@ -26,25 +26,28 @@ def getSkinClusters(objs, firstOnly=True):
 
 
 def skinAs(
-    objs=None,
-    sourceNamespace=None,
-    targetNamespace=None,
-    useObjectNamespace=False,
-    createMissing=True,
-    prompt=True,
-):
-    # type: ([str | nodes.Transform | nodes.Shape], str, str, bool, bool, bool) -> nodes.YamList[nodes.SkinCluster] | None
+    source: "str | nodes.Transform | nodes.Shape " = None,
+    targets: "[str | nodes.Transform | nodes.Shape, ...]" = None,
+    sourceNamespace: str = None,
+    targetNamespace: str = None,
+    useObjectNamespace: bool = False,
+    createMissing: bool = True,
+    prompt: bool = True,
+    allowNurbsSurfaceTarget: bool = True,
+) -> "nodes.YamList[nodes.SkinCluster] | None":
     """
-    Copies the skinning and skinCLuster settings of one skinned object to any other objects with a different topology.
-    First object given in objs is the skinned object to copy from and the rest being the objects to copy the skin to, if
-    no objects are given then this works on current scene selection.
+    Copies the skinning and skinCLuster settings of the source skinned object to the targets objects with a different
+    topology.
+    If no objects are given then this works on current scene selection, first object is the source all following objects
+    are targets.
 
-    If the first object influences have a namespace and the other objects influences have a different namespace or don't
-    have one then you can use sourceNamespace to remove from the original influences, and/or targetNamespace to add to
-    the new influences. To get the namespace from the list of objects then set useObjectNamespace to True, in this case
-    the sourceNamespace and targetNamespace are ignored and the namespace to remove from the original influences and to
-    add to the new influences is determined per each object namespace.
-    :param objs: List of objects. The first object's skinCluster is copied to the other objects.
+    If the source object influences have a namespace and the target objects influences have a different namespace or
+    don't have one, then you can use sourceNamespace to remove from the original influences, and/or targetNamespace to
+    add to the new influences. To get the namespace from the source and target objects then set useObjectNamespace to
+    True, in this case the sourceNamespace and targetNamespace are ignored, and the namespaces that will be removed from
+    the original influences and that will be added to the new influences are determined per each object namespaces.
+    :param source: The skinned object who's skinCluster will be copied to the targets.
+    :param targets: List of objects. The objects to copy the skinning to.
     :param sourceNamespace: Namespace of the joints skinning the source object.
     :param targetNamespace: Namespace to use to find the joints that will skin the target objects.
     :param useObjectNamespace: If True: uses each objects namespace to determine the source and target namespaces.
@@ -52,30 +55,32 @@ def skinAs(
                           influences that match the source influences.
     :param prompt: If True: will show a dialogue box asking to delete the intermediate shapes before skinning if
                    intermediate shapes are found on the target objects
+    :param allowNurbsSurfaceTarget: If False: will not copy the skinning to nurbsSurface targets.
     """
     from . import mayautils as mut
 
-    if isinstance(objs, str):
-        raise RuntimeError(
-            f"first arg objs='{objs}' is of type {type(objs).__name__} instead of expected type:"
-            " list"
-        )
-    if not objs:
-        objs = nodes.ls(selection=True, transforms=True, flatten=True)
+    if not source or not targets:
+        source, *targets = nodes.ls(selection=True, transforms=True, flatten=True)
 
         def getSkinnable(objs_):
             skinnable = []
             for obj in objs_:
-                if obj.shapes(type="controlPoint") and not obj.shapes(type="nurbsSurface"):
+                if obj.shapes(type="controlPoint"):
+                    if not allowNurbsSurfaceTarget and obj.shapes(type="nurbsSurface"):
+                        continue
                     skinnable.append(obj)
                 skinnable.extend(getSkinnable(obj.children(type="transform")))
             return skinnable
 
-        objs = [objs[0]] + getSkinnable(objs[1:])
-    if len(objs) < 2:
-        raise ValueError("Please select at least two skinnable objects")
-    source = nodes.yam(objs[0])
-    targets = mut.hierarchize(objs[1:], reverse=True)
+        targets = getSkinnable(targets)
+
+        if not targets:
+            raise ValueError("Please select at least two skinnable objects")
+
+    if not isinstance(targets, (list, tuple)):
+        targets = [targets]
+
+    targets = mut.hierarchize(targets, reverse=True)
 
     source_skn = getSkinCluster(source)
     if not source_skn:
@@ -109,9 +114,7 @@ def skinAs(
             free_targets.append(target)
 
         # Checking for intermediate shapes on target
-        intermediate_shapes = nodes.YamList(
-            shape for shape in target.shapes(noIntermediate=False) if shape.intermediateObject.value
-        )
+        intermediate_shapes = target.intermediateShapes()
         if intermediate_shapes and prompt:
             result = cmds.confirmDialog(
                 title="Confirm",
@@ -129,7 +132,16 @@ def skinAs(
                 return
             elif result == "Delete them":
                 cmds.delete(intermediate_shapes.names)
-                return skinAs(objs, sourceNamespace, targetNamespace, useObjectNamespace)
+                return skinAs(
+                    source,
+                    targets,
+                    sourceNamespace,
+                    targetNamespace,
+                    useObjectNamespace,
+                    createMissing,
+                    prompt,
+                    allowNurbsSurfaceTarget,
+                )
 
     source_influences = source_skn.influences()
     target_influences = source_influences
@@ -158,6 +170,18 @@ def skinAs(
         "weightDistribution": source_skn.weightDistribution.value,
     }
     for target in free_targets:
+        if target.isa("nurbsSurface"):
+            skinClusters += skinAsNurbs(
+                source,
+                [target],
+                sourceNamespace=sourceNamespace,
+                targetNamespace=targetNamespace,
+                useObjectNamespace=useObjectNamespace,
+                createMissing=createMissing,
+                prompt=prompt,
+            )
+            continue
+
         if useObjectNamespace:  # getting target influences namespace per target
             targetNamespace = ":".join(target.name.split(":")[:-1])
             if sourceNamespace:
@@ -266,12 +290,8 @@ def copyDeformerWeights(source, target, sourceGeo=None, destinationGeo=None):
     temp_source_geo.name = "temp_source_geo"
     temp_dest_geo.name = "temp_dest_geo"
     # Removing shapeOrig
-    cmds.delete(
-        [x.name for x in temp_source_geo.shapes(noIntermediate=False) if x.intermediateObject.value]
-    )
-    cmds.delete(
-        [x.name for x in temp_dest_geo.shapes(noIntermediate=False) if x.intermediateObject.value]
-    )
+    cmds.delete(temp_source_geo.temp_source_geo.intermediateShapes())
+    cmds.delete(temp_dest_geo.temp_source_geo.intermediateShapes())
 
     # Creating temp skinClusters to copy weights
     source_jnt = nodes.createNode("joint", name="temp_source_jnt")
@@ -447,7 +467,7 @@ def transferInfluenceWeights(skinCluster, influences, target_influence, add_miss
     return True
 
 
-def skinAsNurbs(source=None, targets=None):
+def skinAsNurbs(source=None, targets=None, **skinaskwargs):
     if not isinstance(targets, (list, tuple)):
         targets = [targets]
     if not source or not targets:
@@ -478,7 +498,7 @@ def skinAsNurbs(source=None, targets=None):
 
             verbose = config.verbose
             config.verbose = False
-            plane_skin = skinAs([source, plane])[0]
+            plane_skin = skinAs(source, [plane])[0]
             config.verbose = verbose
             target_skn = getSkinCluster(target)
             if target_skn:
@@ -486,8 +506,7 @@ def skinAsNurbs(source=None, targets=None):
                     f"Given target already has a skinCluster attached : {target}; {target_skn}."
                 )
 
-            target_skin = skinAs([source, target])
-            target_skin = target_skin[0]
+            target_skin = skinAs(source, [target], **skinaskwargs)[0]
 
             for i, _ in enumerate(target.shape.cv):
                 for j, _ in enumerate(plane_skin.influences()):
@@ -581,11 +600,60 @@ def localizeSkinClusterInfluence(skinCluster, influence):
 
     # Undo is often buggy and sets random value back to the bindPreMatrix plug if used, to avoid that we manually set
     # the values before doing the connection.
-    if not bindPreMatrix_attr.input():
+    if not bindPreMatrix_attr.isSettable():
         bindPreMatrix_attr.value = bindPreMatrix_attr.value
 
     # Connecting the result to the influence
     worldInverse_diff_mult.matrixSum.connectTo(bindPreMatrix_attr, force=True)
 
 
-# TODO : skinAs multi to one
+def skinAsMultiToOne(sources=None, target=None, **skinaskwargs):
+    """
+    Copies the skinning of multiple skinned objects to a single object.
+
+    Args:
+        sources: The source skinned objects.
+        target: The object to copy the skinning on.
+        **skinaskwargs: The kwargs to pass on to the skinAs function.
+
+    Returns:
+        nodes.SkinCluster: The created target skinCluster.
+    """
+    if not sources or not target:
+        *sources, target = nodes.ls(selection=True, transforms=True, flatten=True)
+
+        def getSkinnable(objs_):
+            skinnable = []
+            for obj in objs_:
+                if obj.shapes(type="controlPoint") and not obj.shapes(type="nurbsSurface"):
+                    skinnable.append(obj)
+                skinnable.extend(getSkinnable(obj.children(type="transform")))
+            return skinnable
+
+        sources = getSkinnable(sources)
+    if len(sources) < 2:
+        raise ValueError(
+            f"At least 2 sources and 1 target is needed to use skinAsMultiToOne; got : {sources},"
+            f" {target}"
+        )
+    sources = nodes.yams(sources)
+    target = nodes.yam(target)
+    source_types = set(shape.type() for source in sources for shape in source.shapes())
+    if len(set(source_types)) > 1:
+        raise ValueError(f"Given source objects have multiple types : {source_types}")
+    no_skn_sources = [source for source in sources if not getSkinCluster(source)]
+    if no_skn_sources:
+        raise RuntimeError(f"Sources '{no_skn_sources}' do not have skinClusters.")
+
+    temp_sources = nodes.duplicate(*sources)
+    cmds.delete([x for temp in temp_sources for x in temp.intermediateShapes()])
+    verbose = config.verbose
+    config.verbose = False
+    for t_source, source in zip(temp_sources, sources):
+        skinAs(source, [t_source])
+    config.verbose = verbose
+    source, _ = cmds.polyUniteSkinned(*temp_sources, constructionHistory=False)
+    result = skinAs(source, [target], skinaskwargs)
+    cmds.delete(source)
+
+    return result
