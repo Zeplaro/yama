@@ -33,10 +33,12 @@ def createHook(node, parent=None, suffix="hook"):
 
 def hierarchize(objs, reverse=False):
     """Returns a list of objects sorted by their hierarchy in the scene"""
+    objs = nodes.yams(objs)
     return nodes.YamList(sorted(objs, key=lambda x: x.longName, reverse=reverse))
 
 
 def mxConstraint(source=None, target=None):
+    # TODO: make work with jointOrient
     if not source or not target:
         sel = nodes.selected(type="transform")
         if len(sel) != 2:
