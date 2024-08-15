@@ -653,7 +653,7 @@ def skinAsMultiToOne(sources=None, target=None, **skinaskwargs):
         skinAs(source, [t_source])
     config.verbose = verbose
     source, _ = cmds.polyUniteSkinned(*temp_sources, constructionHistory=False)
-    result = skinAs(source, [target], skinaskwargs)
+    result = skinAs(source, [target], **skinaskwargs)
     cmds.delete(source)
 
     return result

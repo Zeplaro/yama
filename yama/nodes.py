@@ -1301,9 +1301,7 @@ class Cluster(WeightGeometryFilter):
             raise RuntimeError(f"No clusterHandle found connected to {self.name}")
 
         root_grp = createNode(
-            "transform",
-            name=self.shortName + "_clusterRoot",
-            parent=handle_shape.parent.parent,
+            "transform", name=self.shortName + "_clusterRoot", parent=handle_shape.parent.parent
         )
         cluster_grp = createNode("transform", name=self.shortName + "_cluster", parent=root_grp)
 
@@ -1332,9 +1330,7 @@ class SoftMod(WeightGeometryFilter):
             raise RuntimeError(f"No softModHandle found connected to {self.name}")
 
         root_grp = createNode(
-            "transform",
-            name=self.shortName + "_softModRoot",
-            parent=handle_shape.parent.parent,
+            "transform", name=self.shortName + "_softModRoot", parent=handle_shape.parent.parent
         )
         softMod_grp = createNode("transform", name=self.shortName + "_softMod", parent=root_grp)
         falloffRadius = softMod_grp.addAttr(
@@ -1595,10 +1591,7 @@ class SkinCluster(GeometryFilter):
         flat_weights = om.MDoubleArray([i[j] for i in weights for j in range(num_influences)])
         # Setting the weights
         self.MFn.setWeights(
-            self.geometry.MDagPath,
-            self.getComponentAtIndex(),
-            influence_array,
-            flat_weights,
+            self.geometry.MDagPath, self.getComponentAtIndex(), influence_array, flat_weights
         )
 
     @property
@@ -1869,10 +1862,7 @@ class BlendShape(WeightGeometryFilter):
     def addInBetween(self, target, index, value):
         index = self.target(index).index
         cmds.blendShape(
-            self.name,
-            e=True,
-            inBetween=True,
-            t=(self.geometry.name, index, str(target), value),
+            self.name, e=True, inBetween=True, t=(self.geometry.name, index, str(target), value)
         )
 
     def getDeltas(self):

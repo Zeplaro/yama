@@ -240,6 +240,7 @@ def snapAlongCurve(objs=None, curve=None, reverse=False):
     :param curve: nodes.NurbsCurve, A nurbs curve object along which the objects will be snapped.
     :param reverse: bool, If set to True, the objects will be snapped in reverse order. Default is False.
     """
+    # TODO: add normalized kwarg by copy then rebuilding curve with keep numspans not cvs
     if not objs or not curve:
         objs = nodes.selected()
         if not objs:
@@ -247,11 +248,14 @@ def snapAlongCurve(objs=None, curve=None, reverse=False):
         if len(objs) < 2:
             raise RuntimeError("Not enough object given or selected.")
         curve = objs.pop()
+    else:
+        objs = nodes.yams(objs)
+        curve = nodes.yam(curve)
 
     if isinstance(curve, nodes.Transform):
         curve = curve.shape
 
-    if not isinstance(curve, nodes.NurbsCurve):
+    if not curve.isa(nodes.NurbsCurve):
         raise TypeError(f"No NurbsCurve found under given curve : {curve}.")
 
     if reverse:
@@ -345,17 +349,17 @@ def makePlanar(
         )
     if not -len(objs) < firstPointIndex < len(objs) - 1:
         raise ValueError(
-            f"Must be True : -len(objs) < firstPointIndex < len(objs)-1; "
+            "Must be True : -len(objs) < firstPointIndex < len(objs)-1; "
             f"Given firstPointIndex : {firstPointIndex}."
         )
     if not -len(objs) < secondPointIndex < len(objs) - 1:
         raise ValueError(
-            f"Must be True : -len(objs) < secondPointIndex < len(objs)-1; "
+            "Must be True : -len(objs) < secondPointIndex < len(objs)-1; "
             f"Given secondPointIndex : {secondPointIndex}."
         )
     if not -len(objs) < thirdPointIndex < len(objs) - 1:
         raise ValueError(
-            f"Must be True : -len(objs) < thirdPointIndex < len(objs)-1; "
+            "Must be True : -len(objs) < thirdPointIndex < len(objs)-1; "
             f"Given thirdPointIndex : {thirdPointIndex}."
         )
 
