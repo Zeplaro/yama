@@ -588,21 +588,10 @@ class DependNode(Yam):
         return checks.objExists(f"{self}.{attr}")
 
     def addAttr(self, longName, **kwargs):
-        # Checks if 'attributeType' or 'at' is in kwargs and has a value
-        if "at" not in kwargs and "attributeType" not in kwargs:
+        if not any(key in kwargs for key in ["at", "attributeType", "pxy", "proxy"]):
             raise RuntimeError(
                 f"Failed to add attribute '{longName}' on '{self}'; No attribute type given"
             )
-
-        # Enabling hasMinValue or hasMaxValue toggle if a min or max value is given
-        if (kwargs.get("min") or kwargs.get("minValue")) and not (
-            "hasMinValue" in kwargs or "hnv" in kwargs
-        ):
-            kwargs["hasMinValue"] = True
-        if (kwargs.get("max") or kwargs.get("maxValue")) and not (
-            "hasMaxValue" in kwargs or "hxv" in kwargs
-        ):
-            kwargs["hasMaxValue"] = True
 
         cmds.addAttr(self.name, longName=longName, **kwargs)
         return self.attr(longName)
@@ -831,8 +820,8 @@ class Transform(DagNode):
 
     def children(self, type=None, noIntermediate=True):
         """
-        Gets all the node's children as a list of DependNode.
-        :param type: Only returns nodes of the given type.
+        Gets all the node's children as a list of Yam objects.
+        :param type: Only returns nodes of the given type·s.
         :param noIntermediate: if True skips intermediate shapes.
         :return: list of DependNode
         """
@@ -850,14 +839,12 @@ class Transform(DagNode):
 
     def shapes(self, type=None, noIntermediate=True):
         """
-        Gets the shapes of the transform as DependNode.
+        Gets the shapes of the transform as Yam objects.
+        :param type: Only returns nodes of the given type·s.
         :param noIntermediate: if True skips intermediate shapes.
         :return: list of Shape object
         """
-        children = yams(self.MDagPath.child(x) for x in range(self.MDagPath.childCount()))
-        children = YamList(x for x in children if isinstance(x, Shape))
-        if noIntermediate:
-            children = YamList(x for x in children if not x.MFn.isIntermediateObject)
+        children = self.children(type=Shape, noIntermediate=noIntermediate)
         if type:
             children.keepType(type)
         return children
@@ -870,6 +857,17 @@ class Transform(DagNode):
         """
         shapes = self.shapes()
         return shapes[0] if shapes else None
+
+    def intermediateShapes(self, type=None):
+        """
+        Gets the intermediate shapes of the transform as yams.
+        :param type: Only returns nodes of the given type·s.
+        :return: list of Shape object
+        """
+        children = YamList(x for x in self.shapes(noIntermediate=False) if x.isIntermediateObject())
+        if type:
+            children.keepType(type)
+        return children
 
     def allDescendents(self, type=None):
         if type:
@@ -1001,6 +999,10 @@ class Shape(DagNode):
         if self.parent is parent:
             return
         cmds.parent(self.name, parent, r=True, s=True)
+
+    def isIntermediateObject(self) -> bool:
+        """Returns True if the node is an intermediate shape object. Faster than checking the maya attribute value."""
+        return self.MFn.isIntermediateObject
 
 
 class ControlPoint(Shape):
@@ -1299,7 +1301,9 @@ class Cluster(WeightGeometryFilter):
             raise RuntimeError(f"No clusterHandle found connected to {self.name}")
 
         root_grp = createNode(
-            "transform", name=self.shortName + "_clusterRoot", parent=handle_shape.parent.parent
+            "transform",
+            name=self.shortName + "_clusterRoot",
+            parent=handle_shape.parent.parent,
         )
         cluster_grp = createNode("transform", name=self.shortName + "_cluster", parent=root_grp)
 
@@ -1328,7 +1332,9 @@ class SoftMod(WeightGeometryFilter):
             raise RuntimeError(f"No softModHandle found connected to {self.name}")
 
         root_grp = createNode(
-            "transform", name=self.shortName + "_softModRoot", parent=handle_shape.parent.parent
+            "transform",
+            name=self.shortName + "_softModRoot",
+            parent=handle_shape.parent.parent,
         )
         softMod_grp = createNode("transform", name=self.shortName + "_softMod", parent=root_grp)
         falloffRadius = softMod_grp.addAttr(
@@ -1589,7 +1595,10 @@ class SkinCluster(GeometryFilter):
         flat_weights = om.MDoubleArray([i[j] for i in weights for j in range(num_influences)])
         # Setting the weights
         self.MFn.setWeights(
-            self.geometry.MDagPath, self.getComponentAtIndex(), influence_array, flat_weights
+            self.geometry.MDagPath,
+            self.getComponentAtIndex(),
+            influence_array,
+            flat_weights,
         )
 
     @property
@@ -1860,7 +1869,10 @@ class BlendShape(WeightGeometryFilter):
     def addInBetween(self, target, index, value):
         index = self.target(index).index
         cmds.blendShape(
-            self.name, e=True, inBetween=True, t=(self.geometry.name, index, str(target), value)
+            self.name,
+            e=True,
+            inBetween=True,
+            t=(self.geometry.name, index, str(target), value),
         )
 
     def getDeltas(self):
@@ -2308,3 +2320,7 @@ class Yum:
 
     def __getattr__(self, item):
         return yam(item)
+
+
+createNurbsCurve = NurbsCurve.create
+createSkinCluster = SkinCluster.create
