@@ -266,6 +266,76 @@ def snapAlongCurve(objs=None, curve=None, reverse=False):
         obj.setPosition([x, y, z], ws=True)
 
 
+def snapAlongSurface(
+    objs=None,
+    surface=None,
+    uValue=0.5,
+    reverse=False,
+    swapDirections=False,
+    normalAxis="y",
+    tangentAxis=("x", "z"),
+):
+    if not objs or not surface:
+        objs = nodes.selected()
+        if not objs:
+            raise RuntimeError("No object given and object selected.")
+        if len(objs) < 2:
+            raise RuntimeError("Not enough object given or selected.")
+        surface = objs.pop()
+    else:
+        objs = nodes.yams(objs)
+        surface = nodes.yam(surface)
+
+    if isinstance(surface, nodes.Transform):
+        surface = surface.shape
+
+    if not surface.isa(nodes.NurbsSurface):
+        raise TypeError(f"No NurbsSurface found under given curve : {surface}.")
+
+    normalAxis = str(normalAxis).lower()
+    if normalAxis not in ("x", "y", "z"):
+        raise ValueError(
+            f"Expected normal axis to be 'x', 'y', or 'z'; got : {normalAxis}"
+        )
+    tangentAxis = str(tangentAxis[0]).lower(), str(tangentAxis[1]).lower()
+    if tangentAxis[0] not in ("x", "y", "z") or tangentAxis[1] not in ("x", "y", "z"):
+        raise ValueError(
+            f"Invalid tangent axis values, expected a tuple containing 'x', 'y', or 'z'; got : {tangentAxis}"
+        )
+
+    if reverse:
+        objs = objs[::-1]
+
+    step = 1.0 / len(objs)
+    swapDirections = bool(swapDirections)
+    uv = [uValue]
+    uv.insert(swapDirections, None)
+    normal_index = "xyz".index(normalAxis.lower())
+    tangents_indices = "xyz".index(tangentAxis[0].lower()), "xyz".index(
+        tangentAxis[1].lower()
+    )
+    for i, obj in enumerate(objs):
+        uv[swapDirections] = step * i
+        matrices = [None, None, None]
+
+        normal = surface.MFn.normal(step * i, 0.5, om.MSpace.kWorld)
+        matrices[normal_index] = [normal.x, normal.y, normal.z, 0.0]
+
+        for i, tangent in enumerate(
+            surface.MFn.tangents(step * i, 0.5, om.MSpace.kWorld)
+        ):
+            matrices[tangents_indices[i]] = [tangent.x, tangent.y, tangent.z, 0.0]
+
+        point = surface.MFn.getPointAtParam(step * i, 0.5, om.MSpace.kWorld)
+        matrices.append([point.x, point.y, point.z, 1.0])
+
+        matrix = []
+        for m in matrices:
+            matrix.extend(m)
+
+        obj.setXform(m=matrix, ws=True)
+
+
 def mirrorPos(obj, table):
     for l_cp in table:
         l_pos = obj.cp[l_cp].getPosition()

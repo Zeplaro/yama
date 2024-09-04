@@ -1100,7 +1100,10 @@ class NurbsCurve(ControlPoint):
         Returns the mesh number of cvs.
         :return: int
         """
-        return self.MFn.numCVs
+        num = self.MFn.numCVsInU
+        if self.form() == 3:  # periodic curve
+            num -= self.degree()
+        return num
 
     @staticmethod
     def create(cvs, knots, degree, form, parent):

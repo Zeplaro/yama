@@ -95,6 +95,11 @@ def alphabeticalToDecimal(alpha):
     return index
 
 
+def generateAlphabeticalList(count):
+    # TODO
+    ...
+
+
 def decimalToRoman(decimal):
     """
     Converts int to roman numeral.
