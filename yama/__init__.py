@@ -2,7 +2,7 @@
 
 __author__ = "Robin Lavigne"
 __email__ = "contact@robinlavigne.com"
-__credits__ = {"emotionalSupport": "Emilie Jolin", "spellchecking": "Pranil Naicker"}
+__credits__ = {"emotionalSupport": "Emilie Jolin"}
 
 
 from .nodes import (
@@ -21,6 +21,8 @@ from .nodes import (
     pointConstraint,
     scaleConstraint,
     aimConstraint,
+    createNurbsCurve,
+    createSkinCluster,
 )
 
 yum = nodes.Yum()
