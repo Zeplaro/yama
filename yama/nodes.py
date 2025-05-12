@@ -818,16 +818,13 @@ class Transform(DagNode):
         except (RuntimeError, TypeError):
             return super().attr(attr)
 
-    def children(self, type=None, noIntermediate=True):
+    def children(self, type=None):
         """
         Gets all the node's children as a list of Yam objects.
         :param type: Only returns nodes of the given type·s.
-        :param noIntermediate: if True skips intermediate shapes.
         :return: list of DependNode
         """
         children = yams(self.MDagPath.child(x) for x in range(self.MDagPath.childCount()))
-        if noIntermediate:
-            children = YamList(x for x in children if not x.MFn.isIntermediateObject)
         if type:
             children.keepType(type)
         return children
@@ -844,7 +841,9 @@ class Transform(DagNode):
         :param noIntermediate: if True skips intermediate shapes.
         :return: list of Shape object
         """
-        children = self.children(type=Shape, noIntermediate=noIntermediate)
+        children = self.children(type=Shape)
+        if noIntermediate:
+            children = YamList(child for child in children if not child.isIntermediateObject())
         if type:
             children.keepType(type)
         return children
@@ -864,10 +863,7 @@ class Transform(DagNode):
         :param type: Only returns nodes of the given type·s.
         :return: list of Shape object
         """
-        children = YamList(x for x in self.shapes(noIntermediate=False) if x.isIntermediateObject())
-        if type:
-            children.keepType(type)
-        return children
+        return YamList(x for x in self.shapes(type=type, noIntermediate=False) if x.isIntermediateObject())
 
     def allDescendents(self, type=None):
         if type:
@@ -1131,7 +1127,7 @@ class NurbsCurve(ControlPoint):
     @property
     def data(self):
         data = {
-            "cvs": self.MFn.cvPositions(),
+            "cvs": self.cv.getPositions(),
             "knots": self.knots(),
             "degree": self.degree(),
             "form": self.form(),
