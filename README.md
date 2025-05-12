@@ -19,13 +19,12 @@ Once I don't feel the need to support Python 2.7 anymore, here is a list of a co
 - [x] Remove imports of `six` and use of `six.string_types`.
 - [x] Update `super` calls to simpler Python 3 way.
 - [x] Use fstrings EVERYWHERE !
-- [x] Remove Python 2 exception fonctions.
+- [x] Remove Python 2 exception functions.
 - [ ] Update type hinting to Python 3 way of doing it.
-- [ ] Update `nodes.yam` to use `functools.singledispatch` instead of too many if, elifs, else.
 - [x] Update `nodes.Yam` abstract class to use proper Python 3 way of doing an abstract class.
-- [ ] Try the walrus operator when usefull.
-- [x] Replace `pass` with `...` when prettier.
-- [ ] Use new dictionnary updating method `|=`
+- [ ] Try the walrus operator when usefull `:=`.
+- [x] Replace `pass` with `...` when relevant prettier.
+- [ ] Use new dictionnary updating method `|=`.
 - [x] Make use of positional-only and keyword-only arguments when usefull.
 
 ## Formated using Black
