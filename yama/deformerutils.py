@@ -482,7 +482,7 @@ def skinAsNurbs(source=None, targets=None, **skinaskwargs):
     for target in targets:
         if not target.shape:
             no_shape.append(target)
-        if not isinstance(target.shape, nodes.NurbsSurface):
+        if not target.shape.isa(nodes.NurbsSurface):
             no_nurbs.append(no_nurbs)
     if no_shape:
         raise RuntimeError(f"Given targets {targets} do not have a shape.")
@@ -607,7 +607,7 @@ def localizeSkinClusterInfluence(skinCluster, influence):
     worldInverse_diff_mult.matrixSum.connectTo(bindPreMatrix_attr, force=True)
 
 
-def skinAsMultiToOne(sources=None, target=None, **skinaskwargs):
+def skinAsManyToOne(sources=None, target=None, **skinaskwargs):
     """
     Copies the skinning of multiple skinned objects to a single object.
 
