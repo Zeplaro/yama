@@ -923,6 +923,10 @@ class Transform(DagNode):
 
         return utils.distance(self.getPosition(ws=True), obj.getPosition(ws=True))
 
+    def crateIntermediateShape(self):
+        """Creates an intermediate shape for the transform and returns it as a Shape object."""
+        return yam(cmds.deformableShape(self.name, createOriginalGeometry=True)[-1]).node
+
 
 class Joint(Transform):
     pass
