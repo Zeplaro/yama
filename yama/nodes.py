@@ -1091,12 +1091,23 @@ class NurbsCurve(ControlPoint):
     _MFN_FUNC = om.MFnNurbsCurve
     _MFN_OBJECT = "MDagPath"
 
+    """
+    MFnNurbsCurve and MFnNurbsSurface `.form` property returned values does not match to the open, closed, periodic form 
+    values that are stored in the `.form` attribute of a curve or surface shape object in a scene.
+    This dictionary matches the returned MFn `.form` property value to the corresponding in-scene form value.
+    """
+    _NURBS_FORM_API_TO_SCENEATTR = {
+        om.MFnNurbsCurve.kOpen: 0,
+        om.MFnNurbsCurve.kClosed: 1,
+        om.MFnNurbsCurve.kPeriodic: 2,
+    }
+
     def __len__(self):
         """
         Returns the mesh number of cvs.
         :return: int
         """
-        num = self.MFn.numCVsInU
+        num = self.MFn.numCVs
         if self.form() == 3:  # periodic curve
             num -= self.degree()
         return num
@@ -1141,12 +1152,14 @@ class NurbsCurve(ControlPoint):
         return self.MFn.degree
 
     def form(self):
-        return self.MFn.form
+        return self._NURBS_FORM_API_TO_SCENEATTR[self.MFn.form]
 
 
 class NurbsSurface(SurfaceShape):
     _MFN_FUNC = om.MFnNurbsSurface
     _MFN_OBJECT = "MDagPath"
+
+    _NURBS_FORM_API_TO_SCENEATTR = NurbsCurve._NURBS_FORM_API_TO_SCENEATTR
 
     def __len__(self):
         return self.lenU() * self.lenV()
