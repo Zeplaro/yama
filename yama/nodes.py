@@ -1380,7 +1380,7 @@ class SkinCluster(GeometryFilter):
         cls,
         geometry: "str | DagNode",
         influences: "[str | Joint, ...]",
-        name: str = None,
+        name: str = "skinCluster",
         createBindPose: bool = True,
         weights: "[[float, ...], int] | None" = None,
         setDefaultWeights: bool = False,
@@ -1420,7 +1420,7 @@ class SkinCluster(GeometryFilter):
         influences = yams(influences)
 
         # Creating the skinCluster with its connections to the geometry
-        skinCluster = yam(cmds.deformer(str(geometry), type="skinCluster")[0])
+        skinCluster = yam(cmds.deformer(str(geometry), type="skinCluster", name=name)[0])
 
         if lockGeometryTRS:
             geometry = yam(geometry)
