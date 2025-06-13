@@ -923,7 +923,7 @@ class Transform(DagNode):
 
         return utils.distance(self.getPosition(ws=True), obj.getPosition(ws=True))
 
-    def crateIntermediateShape(self):
+    def createIntermediateShape(self):
         """Creates an intermediate shape for the transform and returns it as a Shape object."""
         return yam(cmds.deformableShape(self.name, createOriginalGeometry=True)[-1]).node
 
@@ -1009,6 +1009,10 @@ class ControlPoint(Shape):
     """
     Handles shape that have control point; e.g.: Mesh, NurbsCurve, NurbsSurface, Lattice
     """
+    # The following saves a cmds call when getting shape input and outputs.
+    _LOCALSHAPEINATTR = None
+    _LOCALSHAPEOUTATTR = None
+    _WORLDSHAPEOUTATTR = None
 
     def __len__(self):
         return len(cmds.ls(self.name + ".cp[*]", fl=True))
@@ -1034,6 +1038,27 @@ class ControlPoint(Shape):
         except (RuntimeError, TypeError):
             return super().attr(attr)
 
+    @property
+    def shapeInputAttr(self):
+        """Returns the attribute corresponding to the local input shape"""
+        if not self._LOCALSHAPEINATTR:
+            return self.attr(cmds.deformableShape(self.name, localShapeInAttr=True)[0])
+        return self.attr(self._LOCALSHAPEINATTR)
+
+    @property
+    def shapeOutputAttr(self):
+        """Returns the attribute corresponding to the local input shape"""
+        if not self._LOCALSHAPEOUTATTR:
+            return self.attr(cmds.deformableShape(self.name, localShapeOutAttr=True)[0])
+        return self.attr(self._LOCALSHAPEOUTATTR)
+
+    @property
+    def shapeWorldOutputAttr(self):
+        """Returns the attribute corresponding to the local input shape"""
+        if not self._WORLDSHAPEOUTATTR:
+            return self.attr(cmds.deformableShape(self.name, worldShapeOutAttr=True)[0])
+        return self.attr(self._WORLDSHAPEOUTATTR)
+
 
 class SurfaceShape(ControlPoint):
     """
@@ -1047,6 +1072,10 @@ class SurfaceShape(ControlPoint):
 class Mesh(SurfaceShape):
     _MFN_FUNC = om.MFnMesh
     _MFN_OBJECT = "MDagPath"
+    # The following saves a cmds call when getting shape input and outputs.
+    _LOCALSHAPEINATTR = "inMesh"
+    _LOCALSHAPEOUTATTR = "outMesh"
+    _WORLDSHAPEOUTATTR = "worldMesh"
 
     def __len__(self):
         """
@@ -1094,6 +1123,10 @@ class Mesh(SurfaceShape):
 class NurbsCurve(ControlPoint):
     _MFN_FUNC = om.MFnNurbsCurve
     _MFN_OBJECT = "MDagPath"
+    # The following saves a cmds call when getting shape input and outputs.
+    _LOCALSHAPEINATTR = "create"
+    _LOCALSHAPEOUTATTR = "local"
+    _WORLDSHAPEOUTATTR = "worldSpace"
 
     """
     MFnNurbsCurve and MFnNurbsSurface `.form` property returned values does not match to the open, closed, periodic form 
@@ -1162,6 +1195,10 @@ class NurbsCurve(ControlPoint):
 class NurbsSurface(SurfaceShape):
     _MFN_FUNC = om.MFnNurbsSurface
     _MFN_OBJECT = "MDagPath"
+    # The following saves a cmds call when getting shape input and outputs.
+    _LOCALSHAPEINATTR = "create"
+    _LOCALSHAPEOUTATTR = "local"
+    _WORLDSHAPEOUTATTR = "worldSpace"
 
     _NURBS_FORM_API_TO_SCENEATTR = NurbsCurve._NURBS_FORM_API_TO_SCENEATTR
 
@@ -1216,6 +1253,11 @@ class NurbsSurface(SurfaceShape):
 
 
 class Lattice(ControlPoint):
+    # The following saves a cmds call when getting shape input and outputs.
+    _LOCALSHAPEINATTR = "latticeIntput"
+    _LOCALSHAPEOUTATTR = "latticeOutput"
+    _WORLDSHAPEOUTATTR = "worldLattice"
+
     def __len__(self):
         """
         Returns the number of points in the lattice
