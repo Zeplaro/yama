@@ -6,6 +6,30 @@ The main functions used would be createNode to create a new node and get it init
 yam or yams to initialize existing objects into their proper class type.
 """
 
+__all__ = [
+    "gmo",
+    "yam",
+    "yams",
+    "createNode",
+    "spaceLocator",
+    "duplicate",
+    "ls",
+    "selected",
+    "select",
+    "listAttr",
+    "listHistory",
+    "findDeformers",
+    "constraint",
+    "parentConstraint",
+    "pointConstraint",
+    "orientConstraint",
+    "scaleConstraint",
+    "aimConstraint",
+    "YamList",
+    "createNurbsCurve",
+    "createSkinCluster",
+]
+
 import abc
 import math
 
@@ -233,12 +257,78 @@ def listHistory(*args, type: "str | [str, ...]" = None, **kwargs) -> ["DependNod
     Returns:
         list[DependNode, ...]
     """
-    history = yams(cmds.listHistory(*args, **kwargs) or [])
+    history = cmds.listHistory(*args, **kwargs) or []
 
     if type:
-        history = [x for x in history if x.isa(type)]
+        history = cmds.ls(history, type=type)
 
-    return history
+    return yams(history)
+
+
+@decorators.string_args
+def findDeformers(objs, type=None):
+    """
+    Wrapper for cmds.findDeformers returning Component objects.
+
+    Notes:
+        Unlike cmds.findDeformers(), this function can take a 'type' kwargs to filter nodes per types.
+
+    Warnings:
+         Like its cmds counterpart, findDeformers will not always return the deformers in the current deformation order,
+         especially if the deformers have been reordered after their creation.
+         If you need to know the order of deformation use listHistory(objs, pdo=True, type="geometryFilter") instead.
+
+    Args:
+        objs (DependNode | str | list): The node or nodes to query the deformers from.
+        type (str | list): Filters only the nodes of this type.
+    Returns:
+        list[DependNode, ...]
+    """
+    deformers = cmds.findDeformers(objs) or []
+    if type:
+        deformers = cmds.ls(deformers, type=type)
+    return yams(deformers)
+
+
+@decorators.string_args
+def isa(
+    node: "str | DependNode",
+    type_: "str | list | tuple | type",
+    *,
+    _nodetypes: list = None,
+) -> bool:
+    """
+    Returns True if the given node is of the given type·s.
+
+    Args:
+        node (str | DependNode): The node to check the type of.
+        type_ (str | list | tuple | type): node type or list of type to check against.
+        _nodetypes (list): For internal recursive use only. Do not provide a value.
+                           Avoids having to call cmds.nodeType at every recursion when _type is a list.
+
+    Returns:
+        bool
+    """
+    if isinstance(type_, str):
+        if not _nodetypes:
+            _nodetypes = cmds.nodeType(str(node), inherited=True)
+        return type_ in _nodetypes
+
+    elif isinstance(type_, (list, tuple)):
+        if not _nodetypes:
+            _nodetypes = cmds.nodeType(str(node), inherited=True)
+        for t in type_:
+            if isa(node, t, _nodetypes=_nodetypes):
+                return True
+        return False
+
+    elif isinstance(type_, type):
+        return isinstance(node, type_)
+
+    raise TypeError(
+        f"{type(type_).__name__} is not a valid parameter type for .isa() , "
+        "valid types are: str, list, tuple, type."
+    )
 
 
 @decorators.string_args
@@ -449,8 +539,8 @@ class DependNode(Yam):
     implemented, are defined with a '1' suffix.
     e.g.:
     >>> node = yam('pCube1')
-    >>> node.MObject   # <-- returns a api 2.0 object
-    >>> node.MObject1  # <-- returns a api 1.0 object
+    >>> node.MObject   # <-- returns an api 2.0 object
+    >>> node.MObject1  # <-- returns an api 1.0 object
     """
 
     _MFN_FUNC = om.MFnDependencyNode
@@ -594,7 +684,13 @@ class DependNode(Yam):
             )
 
         cmds.addAttr(self.name, longName=longName, **kwargs)
-        return self.attr(longName)
+        attr = self.attr(longName)
+
+        if not kwargs.get("hidden", True) and not kwargs.get("keyable", False):
+            attr.hidden = False
+
+        return attr
+
 
     def listRelatives(self, **kwargs):
         """
@@ -1066,8 +1162,6 @@ class SurfaceShape(ControlPoint):
     Mainly used to check object isinstance.
     """
 
-    pass
-
 
 class Mesh(SurfaceShape):
     _MFN_FUNC = om.MFnMesh
@@ -1120,24 +1214,21 @@ class Mesh(SurfaceShape):
         return vtxs
 
 
+"""
+MFnNurbsCurve and MFnNurbsSurface `.form` property returned values does not match to the open, closed, periodic form 
+values that are stored in the `.form` attribute of a curve or surface shape object in a scene.
+This dictionary matches the returned MFn `.form` property value to the corresponding in-scene form value.
+"""
+_NURBS_FORM_API_TO_SCENEATTR = {
+    om.MFnNurbsCurve.kOpen: 0,
+    om.MFnNurbsCurve.kClosed: 1,
+    om.MFnNurbsCurve.kPeriodic: 2,
+}
+
+
 class NurbsCurve(ControlPoint):
     _MFN_FUNC = om.MFnNurbsCurve
     _MFN_OBJECT = "MDagPath"
-    # The following saves a cmds call when getting shape input and outputs.
-    _LOCALSHAPEINATTR = "create"
-    _LOCALSHAPEOUTATTR = "local"
-    _WORLDSHAPEOUTATTR = "worldSpace"
-
-    """
-    MFnNurbsCurve and MFnNurbsSurface `.form` property returned values does not match to the open, closed, periodic form 
-    values that are stored in the `.form` attribute of a curve or surface shape object in a scene.
-    This dictionary matches the returned MFn `.form` property value to the corresponding in-scene form value.
-    """
-    _NURBS_FORM_API_TO_SCENEATTR = {
-        om.MFnNurbsCurve.kOpen: 0,
-        om.MFnNurbsCurve.kClosed: 1,
-        om.MFnNurbsCurve.kPeriodic: 2,
-    }
 
     def __len__(self):
         """
@@ -1189,7 +1280,7 @@ class NurbsCurve(ControlPoint):
         return self.MFn.degree
 
     def form(self):
-        return self._NURBS_FORM_API_TO_SCENEATTR[self.MFn.form]
+        return _NURBS_FORM_API_TO_SCENEATTR[self.MFn.form]
 
 
 class NurbsSurface(SurfaceShape):
@@ -1199,8 +1290,6 @@ class NurbsSurface(SurfaceShape):
     _LOCALSHAPEINATTR = "create"
     _LOCALSHAPEOUTATTR = "local"
     _WORLDSHAPEOUTATTR = "worldSpace"
-
-    _NURBS_FORM_API_TO_SCENEATTR = NurbsCurve._NURBS_FORM_API_TO_SCENEATTR
 
     def __len__(self):
         return self.lenU() * self.lenV()
@@ -1426,11 +1515,11 @@ class SkinCluster(GeometryFilter):
         cls,
         geometry: "str | DagNode",
         influences: "[str | Joint, ...]",
-        name: str = "skinCluster",
         createBindPose: bool = True,
         weights: "[[float, ...], int] | None" = None,
-        setDefaultWeights: bool = False,
+        setDefaultWeights: bool = True,
         lockGeometryTRS: bool = True,
+        **kwargs,
     ) -> "SkinCluster":
         """
         Creates a skinCluster node on the given mesh with the given influences.
@@ -1448,7 +1537,6 @@ class SkinCluster(GeometryFilter):
         Args:
             geometry (str|DagNode): The geometry to deform with the created skinCluster.
             influences (list): A list of skinCluster influences.
-            name (str): The name of the created skinCluster node.
             createBindPose (bool): If True: create a dagPose node and connects it to the skinCluster and influences.
             weights: (list|None): The weights for the skinCluster in the same format as returned by the .getWeights
                                   method.
@@ -1457,6 +1545,7 @@ class SkinCluster(GeometryFilter):
                                       weights are set on the skinCluster.
             lockGeometryTRS (bool): If True: locks the translate, rotate, and scale attributes of the given geometry
                                     transform.
+            kwargs: Additional keyword arguments passed to the cmds.deformer function.
 
         Returns:
             (SkinCluster): The initialized skinCluster object for the skinCluster node.
@@ -1466,7 +1555,7 @@ class SkinCluster(GeometryFilter):
         influences = yams(influences)
 
         # Creating the skinCluster with its connections to the geometry
-        skinCluster = yam(cmds.deformer(str(geometry), type="skinCluster", name=name)[0])
+        skinCluster = yam(cmds.deformer(str(geometry), type="skinCluster", **kwargs)[0])
 
         if lockGeometryTRS:
             geometry = yam(geometry)
@@ -1475,9 +1564,6 @@ class SkinCluster(GeometryFilter):
             for trs in "trs":
                 for xyz in "xyz":
                     geometry.attr(trs + xyz).lock()
-
-        if name:
-            skinCluster.name = name
 
         # Connecting the influences to the skinCluster
         for index, inf in enumerate(influences):
