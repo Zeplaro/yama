@@ -19,6 +19,7 @@ __all__ = [
     "listAttr",
     "listHistory",
     "findDeformers",
+    "isa",
     "constraint",
     "parentConstraint",
     "pointConstraint",
