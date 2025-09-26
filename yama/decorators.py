@@ -2,7 +2,7 @@
 
 from functools import wraps
 from maya import cmds
-from . import utils
+from . import utils, nodes
 
 
 def mayaundo(func):
@@ -80,3 +80,40 @@ def string_args(func):
         return func(*args, **kwargs)
 
     return wrapper
+
+
+class Yammds:
+    """
+    Wraps a module functions to return yamified results (i.e. strings that are object names are converted to Yam objects).
+    Usage:
+        import yama
+        cmds = yammds(cmds)
+        cmds.ls() # returns a list of Yam objects instead of strings
+    """
+    def __init__(self, module):
+        self.module = module
+
+    def __getattr__(self, item):
+        result = getattr(self.module, item)
+        if callable(result):
+            return self._cook(result)
+        else:
+            return result
+
+    def _cook(self, func):
+        """Wraps a function to yamify its results."""
+
+        def recursive_encode(item):
+            if isinstance(item, (list, tuple, set)):
+                return type(item)(recursive_encode(x) for x in item)
+            elif isinstance(item, str) and self.module.objExists(item):
+                return nodes.yam(item)
+            else:
+                return item
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            result = func(*args, **kwargs)
+            return recursive_encode(result)
+
+        return wrapper
