@@ -87,25 +87,26 @@ class Yammds:
     Wraps a module functions to return yamified results (i.e. strings that are object names are converted to Yam objects).
     Usage:
         import yama
-        cmds = yammds(cmds)
+        cmds = Yammds(cmds)
         cmds.ls() # returns a list of Yam objects instead of strings
     """
     def __init__(self, module):
+        self.__doc__ = getattr(module, '__doc__', self.__class__.__doc__)
         self.module = module
 
     def __getattr__(self, item):
-        result = getattr(self.module, item)
-        if callable(result):
-            return self._cook(result)
-        else:
-            return result
+        attr = getattr(self.module, item)
+        return self._cook(attr) if callable(attr) else attr
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} wrapping {self.module!r}>"
 
     def _cook(self, func):
         """Wraps a function to yamify its results."""
 
-        def recursive_encode(item):
+        def recursive_yam(item):
             if isinstance(item, (list, tuple, set)):
-                return type(item)(recursive_encode(x) for x in item)
+                return type(item)(recursive_yam(x) for x in item)
             elif isinstance(item, str) and self.module.objExists(item):
                 return nodes.yam(item)
             else:
@@ -114,6 +115,6 @@ class Yammds:
         @wraps(func)
         def wrapper(*args, **kwargs):
             result = func(*args, **kwargs)
-            return recursive_encode(result)
+            return recursive_yam(result)
 
         return wrapper
