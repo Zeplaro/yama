@@ -364,8 +364,7 @@ class ClassAssignor:
     Class used to assign the proper class to a node depending on its maya type.
     """
     @classmethod
-    def initialize_node(cls, MObject):
-        # type: (ClassAssignor, om.MObject) -> DependNode
+    def initialize_node(cls, MObject: om.MObject) -> "DependNode":
         """
         Returns the node instance corresponding to the given MObject.
         :param MObject: A valid OpenMaya MObject corresponding to a node.
