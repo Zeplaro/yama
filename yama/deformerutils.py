@@ -290,8 +290,8 @@ def copyDeformerWeights(source, target, sourceGeo=None, destinationGeo=None):
     temp_source_geo.name = "temp_source_geo"
     temp_dest_geo.name = "temp_dest_geo"
     # Removing shapeOrig
-    cmds.delete(temp_source_geo.temp_source_geo.intermediateShapes())
-    cmds.delete(temp_dest_geo.temp_source_geo.intermediateShapes())
+    cmds.delete(temp_source_geo.intermediateShapes())
+    cmds.delete(temp_dest_geo.intermediateShapes())
 
     # Creating temp skinClusters to copy weights  TODO: replace skinCluster creation?
     source_jnt = nodes.createNode("joint", name="temp_source_jnt")
