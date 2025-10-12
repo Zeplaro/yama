@@ -106,7 +106,7 @@ def yam(node):
             f"got {node.__class__.__name__}."
         )
 
-    yam_node = Singleton(MObject)
+    yam_node = ClassAssignor.initialize_node(MObject)
     if attribute:
         return yam_node.attr(attribute)
     return yam_node
@@ -359,19 +359,15 @@ def aimConstraint(*args, **kwargs):
     return constraint(*args, type="aimConstraint", **kwargs)
 
 
-class Singleton:
+class ClassAssignor:
     """
-    Handles the instances of Yam nodes to return already instantiated nodes instead of creating a new object if the node
-    has already been instantiated.
+    Class used to assign the proper class to a node depending on its maya type.
     """
-
-    _instances = {}
-
-    def __new__(cls, MObject):
-        # type: (Singleton, om.MObject) -> DependNode
+    @classmethod
+    def initialize_node(cls, MObject):
+        # type: (ClassAssignor, om.MObject) -> DependNode
         """
-        Returns the node instance corresponding to the given MObject if it has already been instantiated, otherwise it
-        returns a new instance of the given nodeClass corresponding to the given MObject.
+        Returns the node instance corresponding to the given MObject.
         :param MObject: A valid OpenMaya MObject corresponding to a node.
         """
         try:  # Faster than checking for type using isinstance
@@ -382,21 +378,15 @@ class Singleton:
             )
         if not handle.isValid():
             raise ValueError("Given MObject does not contain a valid node")
-        hash_code = handle.hashCode()
 
-        if config.use_singleton and hash_code in cls._instances:
-            return cls._instances[hash_code]
-
-        else:  # finding if node type has a supported class
-            type_id = MObject.apiType()
-            # skips the SupportedTypes.getclass if exact type is in supported_class
-            if type_id in SupportedTypes.classes_MFn:
-                assigned_class = SupportedTypes.classes_MFn[type_id]
-            else:
-                assigned_class = cls.getclass_cmds(MObject)
-            yam_node = assigned_class(MObject)
-            cls._instances[hash_code] = yam_node
-            return yam_node
+        type_id = MObject.apiType()
+        # skips the SupportedTypes.getclass if exact type is in supported_class
+        if type_id in SupportedTypes.classes_MFn:
+            assigned_class = SupportedTypes.classes_MFn[type_id]
+        else:
+            assigned_class = cls.getclass_cmds(MObject)
+        yam_node = assigned_class(MObject)
+        return yam_node
 
     @classmethod
     def getclass(cls, MObject):
@@ -453,24 +443,6 @@ class Singleton:
             if node_type in SupportedTypes.classes_str:
                 return SupportedTypes.classes_str[node_type]
         return DependNode
-
-    @classmethod
-    def clear(cls):
-        cls._instances = {}
-
-    @classmethod
-    def exists(cls, MObject):
-        try:  # Faster than checking for type using isinstance
-            handle = om.MObjectHandle(MObject)
-        except ValueError:
-            raise TypeError(
-                f"Expected OpenMaya.MObject type, instead got : '{type(MObject).__name__}'"
-            )
-
-        hash_code = handle.hashCode()
-        if hash_code in cls._instances:
-            return cls._instances[hash_code]
-        return False
 
 
 class Yam(abc.ABC):
