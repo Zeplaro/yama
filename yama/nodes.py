@@ -2325,9 +2325,6 @@ class YamList(list):
             return str(list(self)) == str(list(other))
         return str(list(self)) == str(other)
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
     def __getitem__(self, item):
         if item.__class__ == slice:
             return YamList(super().__getitem__(item), no_init_check=True)
