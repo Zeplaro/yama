@@ -1522,15 +1522,18 @@ class SkinCluster(GeometryFilter):
         Returns:
             (SkinCluster): The initialized skinCluster object for the skinCluster node.
         """
+        if not isinstance(geometry, Yam):
+            geometry = yam(geometry)
+
         if isinstance(influences, (str, Yam)):
             influences = [influences]
         influences = yams(influences)
 
         # Creating the skinCluster with its connections to the geometry
-        skinCluster = yam(cmds.deformer(str(geometry), type="skinCluster", **kwargs)[0])
+        skinCluster = yam(cmds.deformer(geometry.name, type="skinCluster", **kwargs)[0])
+        skinCluster.geomMatrix.value = geometry.worlMatrix.value
 
         if lockGeometryTRS:
-            geometry = yam(geometry)
             if geometry.isa("shape"):
                 geometry = geometry.parent
             for trs in "trs":
