@@ -527,7 +527,6 @@ class DependNode(Yam):
         self.MObject = MObject
         self._MObject1 = None
         self._MFn = None
-        self._attributes = {}
         self._hashCode = None
         self._types = None
 
@@ -638,13 +637,7 @@ class DependNode(Yam):
         """
         from . import attributes
 
-        if config.use_singleton:
-            if attr in self._attributes and not self._attributes[attr].MPlug.isNull:
-                return self._attributes[attr]
-
-        attribute = attributes.getAttribute(self, attr)
-        self._attributes[attr] = attribute
-        return attribute
+        return attributes.getAttribute(self, attr)
 
     def hasattr(self, attr):
         return checks.objExists(f"{self}.{attr}")
