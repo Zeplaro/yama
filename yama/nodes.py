@@ -1217,7 +1217,7 @@ class NurbsCurve(ControlPoint):
         :return: int
         """
         num = self.MFn.numCVs
-        if self.form() == self.MFn.kClosed:  # closed curve
+        if self.form() == _NURBS_FORM_API_TO_SCENEATTR[om.MFnNurbsCurve.kPeriodic]:
             num -= self.degree()
         return num
 
