@@ -180,23 +180,13 @@ def romanToDecimal(roman):
     return result
 
 
-def distance(vectorA, vectorB):
-    # TODO: replace with python 3.8 math.dist when dropping python 2 support
-    return math.sqrt(sum((x - y) ** 2.0 for x, y in zip(vectorA, vectorB)))
-
-
-def getRegularPolygonCoordinates(sides=3, radius=0.5):
-    angle = 0
+def getRegularPolygonCoordinates(sides=3, radius=0.5, reverse=False):
     step = 2 * math.pi / sides
-
-    coordinates = []
-    for i in range(sides):
-        x = math.cos(angle) * radius
-        y = math.sin(angle) * radius
-        coordinates.append((x, y))
-        angle -= step  # Substracting to have the face normal face up when used to build regular polygon in maya
-
-    return coordinates
+    angles = (step * x for x in range(sides))
+    points = [(math.cos(angle) * radius, math.sin(angle) * radius) for angle in angles]
+    if reverse:
+        points.reverse()
+    return points
 
 
 def recursive_map(func, iterable, *, recursiontypes=(tuple, list), forcerecursiontypes=False):
