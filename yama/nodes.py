@@ -1429,9 +1429,9 @@ class Cluster(WeightGeometryFilter):
             raise RuntimeError(f"No clusterHandle found connected to {self.name}")
 
         root_grp = createNode(
-            "transform", name=self.shortName + "_clusterRoot", parent=handle_shape.parent.parent
+            "transform", name=f"{self.shortName}_clusterRoot", parent=handle_shape.parent.parent
         )
-        cluster_grp = createNode("transform", name=self.shortName + "_cluster", parent=root_grp)
+        cluster_grp = createNode("transform", name=f"{self.shortName}_cluster", parent=root_grp)
 
         cluster_grp.worldMatrix.connectTo(self.matrix, force=True)
         cluster_grp.matrix.connectTo(self.weightedMatrix, force=True)
@@ -1531,6 +1531,10 @@ class SkinCluster(GeometryFilter):
         Returns:
             (SkinCluster): The initialized skinCluster object for the skinCluster node.
         """
+        """Popping ignoreSelected kwarg because for some reason it creates but does not connects the deformer to the 
+        driven geometry if ignoreSelected is set to True."""
+        kwargs.pop("ignoreSelected", None)
+
         if not isinstance(geometry, Yam):
             geometry = yam(geometry)
 
@@ -1540,7 +1544,7 @@ class SkinCluster(GeometryFilter):
 
         # Creating the skinCluster with its connections to the geometry
         skinCluster = yam(cmds.deformer(geometry.name, type="skinCluster", **kwargs)[0])
-        skinCluster.geomMatrix.value = geometry.worlMatrix.value
+        skinCluster.geomMatrix.value = geometry.worldMatrix.value
 
         if lockGeometryTRS:
             if geometry.isa("shape"):
