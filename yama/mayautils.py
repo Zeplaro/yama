@@ -331,13 +331,13 @@ def unlockTRSV(
                 obj.v.breakConnection()
 
 
-def createPolyNgon(name="pNgon1", radius=0.1, sides=3, upAxis="y", parent=None):
+def createNgon(sides=3, diameter=1, name="pNgon1", upAxis="y", parent=None):
     """
     Creates a single face regular polygon with given number of sides.
 
-    @param name: str, name for the created polygon
-    @param radius: flaot, the radius for the polygon.
     @param sides: int, the number of sides for the polygon.
+    @param diameter: flaot, the radius for the polygon.
+    @param name: str, name for the created polygon
     @param upAxis: 'x', 'y', or 'z', up axis to which the polygon face normal will point to.
     @param parent: the parent transform in which to put the created shape.
 
@@ -347,32 +347,36 @@ def createPolyNgon(name="pNgon1", radius=0.1, sides=3, upAxis="y", parent=None):
         raise ValueError(
             f"A polygon can not have less than 3 sides; numbr of sides given : {sides}"
         )
+    up_axis = upAxis.lower()
+    if up_axis[-1] not in "xyz":
+        raise ValueError(f"upAxis arg can only be 'x', 'y', 'z', '-x', '-y', or '-z' not '{upAxis}'")
+    reverse = up_axis[0] == "-"
+    up_axis = up_axis[-1]
+    up_axis_index = "xyz".index(up_axis)
+    if up_axis == "y":
+        reverse = not reverse
+
+    points_2d = utils.getRegularPolygonCoordinates(sides, diameter/2, reverse=reverse)
+    points_3d = []
+    for point in points_2d:
+        point = list(point)
+        point.insert(up_axis_index, 0.0)
+        points_3d.append(point)
 
     if config.undoable:
-        ngon = cmds.polyCone(
-            radius=radius, subdivisionsX=sides, height=0, constructionHistory=False, name=name
-        )[0]
-        cmds.delete(f"{ngon}.f[1:{sides}]")
-        cmds.polyNormal(ngon, normalMode=0, constructionHistory=False)
-        ngon = nodes.yam(ngon).shape
-        if parent:
-            parent = nodes.yam(parent)
-            ngon.parent = parent
+        ngon = cmds.polyCreateFacet(point=points_3d, name=name, constructionHistory=False)[0]
+        ngon = nodes.yam(ngon)
 
     else:
-        mfn = om.MFnMesh()
-        coordinates = utils.getRegularPolygonCoordinates(sides, radius)
-        coordinates.insert("xyz".index(upAxis), 0)
-        u, v = zip(*coordinates)
-        points = [om.MPoint(coordinate) for coordinate in coordinates]
-        create_args = [points, [sides], list(range(sides)), u, v]
+        u, v = zip(*points_2d)
+        points_3d = [om.MPoint(point) for point in points_3d]
+        create_args = (points_3d, [sides], list(range(sides)), u, v)
         if parent:
             parent = nodes.yam(parent)
             create_args.append(parent.MObject)
-        ngon = mfn.create(*create_args)
+        ngon = om.MFnMesh().create(*create_args)
         ngon = nodes.yam(ngon)
         ngon.name = name
-        ngon = ngon.shape
 
     return ngon
 
