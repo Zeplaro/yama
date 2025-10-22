@@ -607,20 +607,21 @@ def localizeSkinClusterInfluence(skinCluster, influence):
     worldInverse_diff_mult.matrixSum.connectTo(bindPreMatrix_attr, force=True)
 
 
-def skinAsManyToOne(sources=None, target=None, **skinaskwargs):
+def skinAsMulti(sources=None, targets=None, **skinaskwargs):
     """
-    Copies the skinning of multiple skinned objects to a single object.
+    Copies the skinning of multiple skinned objects to a multiple object.
 
     Args:
         sources: The source skinned objects.
-        target: The object to copy the skinning on.
+        targets: The objects to copy the skinning on.
         **skinaskwargs: The kwargs to pass on to the skinAs function.
 
     Returns:
-        nodes.SkinCluster: The created target skinCluster.
+        nodes.SkinCluster: The created target skinClusters.
     """
-    if not sources or not target:
-        *sources, target = nodes.ls(selection=True, transforms=True, flatten=True)
+    if not sources or not targets:
+        *sources, targets = nodes.ls(selection=True, transforms=True, flatten=True)
+        targets = [targets]
 
         def getSkinnable(objs_):
             skinnable = []
@@ -634,10 +635,10 @@ def skinAsManyToOne(sources=None, target=None, **skinaskwargs):
     if len(sources) < 2:
         raise ValueError(
             f"At least 2 sources and 1 target is needed to use skinAsMultiToOne; got : {sources},"
-            f" {target}"
+            f" {targets}"
         )
     sources = nodes.yams(sources)
-    target = nodes.yam(target)
+    targets = nodes.yams(targets)
     source_types = set(shape.type() for source in sources for shape in source.shapes())
     if len(set(source_types)) > 1:
         raise ValueError(f"Given source objects have multiple types : {source_types}")
@@ -646,6 +647,9 @@ def skinAsManyToOne(sources=None, target=None, **skinaskwargs):
         raise RuntimeError(f"Sources '{no_skn_sources}' do not have skinClusters.")
 
     temp_sources = nodes.duplicate(*sources)
+    for temp, source in zip(temp_sources, sources):
+        if ":" in source.name and ":" not in temp.name:
+            temp.name = f"{str(source).split(':')[0]:{temp}}"
     cmds.delete([x for temp in temp_sources for x in temp.intermediateShapes()])
     verbose = config.verbose
     config.verbose = False
@@ -653,7 +657,7 @@ def skinAsManyToOne(sources=None, target=None, **skinaskwargs):
         skinAs(source, [t_source])
     config.verbose = verbose
     source, _ = cmds.polyUniteSkinned(*temp_sources, constructionHistory=False)
-    result = skinAs(source, [target], **skinaskwargs)
+    result = skinAs(source, targets, **skinaskwargs)
     cmds.delete(source)
 
     return result
