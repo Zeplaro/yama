@@ -82,9 +82,6 @@ class Attribute(nodes.Yam):
             self.node = nodes.yam(MPlug.node())
         self.MPlug = MPlug
         self._MPlug1 = None
-        self._attributes = {}  # Dict of attribute children names and short names to MPlug
-        self._children = []  # List of all children Attributes
-        self._children_generated = False
         self._hashCode = None
         self._types = None
 
@@ -110,14 +107,7 @@ class Attribute(nodes.Yam):
             return nodes.YamList(self[i] for i in range(len(self))[item])
 
         try:
-            if (
-                not config.use_singleton
-                or item not in self._attributes
-                or self._attributes[item].MPlug.isNull
-            ):
-                MPlug = self.MPlug.elementByLogicalIndex(item)
-                self._attributes[item] = Attribute(MPlug, self.node)
-            return self._attributes[item]
+            return Attribute(self.MPlug.elementByLogicalIndex(item), self.node)
         except (RuntimeError, TypeError):
             raise TypeError(f"'{self}' is not an array attribute and cannot use __getitem__")
 
@@ -219,52 +209,8 @@ class Attribute(nodes.Yam):
         if self.isArray():  # If array attribute returns the attribute under the array index 0.
             return self[0].attr(attr)
 
-        if config.use_singleton:
-            if attr in self._attributes:
-                # Making sure the stored Plug is still valid.
-                if not self._attributes[attr].MPlug.isNull:
-                    return self._attributes[attr]
-
-            elif not self._children_generated:
-                self._getChildren()  # Generates children attributes in stored attributes.
-                return self.attr(attr)
-
-            else:  # Using singleton and children are generated but attr still isn't in the stored attributes.
-                if config.verbose:
-                    cmds.warning(
-                        "Attribute was not generated with _getChildren but still exists ? "
-                        rf"¯\_(ツ)_/¯ {self.name} {attr}"
-                    )
-
-        # Regular MPlug getting if not using singleton or children attribute not generated.
-        MPlug = getMPlug(f"{self.name}.{attr}")
-        attribute = Attribute(MPlug, self.node)
-        self._attributes[attr] = attribute
+        attribute = Attribute(getMPlug(f"{self.name}.{attr}"), self.node)
         return attribute
-
-    def _getChildren(self):
-        """
-        Generates a dictionary of Attribute objects for each child of this attribute if it is a compound attribute.
-        Stores the attributes in the self._attributes dictionary, with the long and short names of the attribute as the
-        keys.
-
-        Raises: AttributeError: If the attribute is not a compound attribute and has no children.
-        """
-        if not self.MPlug.isCompound:
-            raise AttributeError(
-                f"'{self}' is not an compound attribute and has no children attribute"
-            )
-        self._attributes = {}
-        self._children = []
-        for index in range(self.MPlug.numChildren()):
-            child = self.MPlug.child(index)
-            attribute = Attribute(child, self.node)
-            name = child.partialName(useLongNames=True, includeInstancedIndices=True).split(".")[-1]
-            short_name = child.partialName(includeInstancedIndices=True).split(".")[-1]
-            self._attributes[name] = attribute
-            self._attributes[short_name] = attribute
-            self._children.append(attribute)
-        self._children_generated = True
 
     def hasattr(self, attr):
         return checks.objExists(f"{self}.{attr}")
@@ -589,9 +535,12 @@ class Attribute(nodes.Yam):
             )
         if self.isArray():
             return self[0].children()
-        if not self._children_generated or self.MPlug.numElements() != len(self._children):
-            self._getChildren()
-        return nodes.YamList(self._children)
+
+        children = []
+        for index in range(self.MPlug.numChildren()):
+            children.append(Attribute(self.MPlug.child(index), self.node))
+
+        return children
 
     def isArray(self):
         return self.MPlug.isArray
