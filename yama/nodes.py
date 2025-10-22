@@ -18,6 +18,7 @@ __all__ = [
     "select",
     "listAttr",
     "listHistory",
+    "listRelatives",
     "findDeformers",
     "isa",
     "constraint",
@@ -264,6 +265,21 @@ def listHistory(*args, type: "str | [str, ...]" = None, **kwargs) -> ["DependNod
         history = cmds.ls(history, type=type)
 
     return yams(history)
+
+
+@decorators.string_args
+def listRelatives(*args, **kwargs) -> ["DependNode", ...]:
+    """
+    Wrapper for cmds.listRelatives returning Yam objects.
+
+    Args:
+        args (DependNode | str): The node to query the relatives from.
+        kwargs: kwargs passed on to cmds.listRelatives .
+    Returns:
+        list[DependNode, ...]
+    """
+    kwargs["fullPath"] = True  # Needed in case of multiple obj with same name
+    return yams(cmds.listRelatives(*args, **kwargs) or [])
 
 
 @decorators.string_args
