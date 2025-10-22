@@ -1201,9 +1201,9 @@ values that are stored in the `.form` attribute of a curve or surface shape obje
 This dictionary matches the returned MFn `.form` property value to the corresponding in-scene form value.
 """
 _NURBS_FORM_API_TO_SCENEATTR = {
-    om.MFnNurbsCurve.kOpen: 0,
-    om.MFnNurbsCurve.kClosed: 1,
-    om.MFnNurbsCurve.kPeriodic: 2,
+    om.MFnNurbsCurve.kOpen: 0,  # MFnNurbsCurve.kOpen returns 1
+    om.MFnNurbsCurve.kClosed: 1,  # MFnNurbsCurve.kClosed returns 2
+    om.MFnNurbsCurve.kPeriodic: 2,  # MFnNurbsCurve.kPeriodic returns 3
 }
 
 
@@ -1217,7 +1217,7 @@ class NurbsCurve(ControlPoint):
         :return: int
         """
         num = self.MFn.numCVs
-        if self.form() == 3:  # periodic curve
+        if self.form() == self.MFn.kClosed:  # closed curve
             num -= self.degree()
         return num
 
