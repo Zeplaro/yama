@@ -72,17 +72,17 @@ def yam(node):
     Handles all node class assignment to assign the proper class depending on the node type.
     Also works with passing a 'node.attribute'.
 
-    examples :
-    >> yam('skincluster42')
-    ---> SkinCluster('skincluster42')
+    Examples:
+        >>> yam('skinCluster42')
+        SkinCluster('skincluster42')
 
-    >> yam('pCube1.tz')
-    ---> Attribute('pCube1.tz')
+        >>> yam('pCube1.tz')
+        Attribute('pCube1.tz')
     """
 
     attribute = None
 
-    if hasattr(node, "isAYamObject"):
+    if isinstance(node, Yam):
         return node
 
     elif isinstance(node, str):
@@ -470,11 +470,6 @@ class Yam(abc.ABC):
     @abc.abstractmethod
     def name(self):
         pass
-
-    @property
-    def isAYamObject(self):
-        """Used to check if an object is an instance of Yam with the faster hasattr instead of slower isinstance."""
-        return True
 
     def __str__(self):
         return self.name
@@ -2322,11 +2317,10 @@ class YamList(list):
         Check that the given item is a Yam object and raises an error if it is not.
         :param item: object to check
         """
-        if not self.no_check:
-            if not hasattr(item, "isAYamObject"):
-                raise TypeError(
-                    f"YamList can only contain Yam objects. '{item}' is '{type(item).__name__}'."
-                )
+        if not self.no_check and not isinstance(item, Yam):
+            raise TypeError(
+                f"YamList can only contain Yam objects. '{item}' is '{type(item).__name__}'."
+            )
 
     def _check_all(self):
         """
@@ -2334,7 +2328,7 @@ class YamList(list):
         """
         if not self.no_check:
             for item in self:
-                if not hasattr(item, "isAYamObject"):
+                if not isinstance(item, Yam):
                     raise TypeError(
                         f"YamList can only contain Yam objects. '{item}' is"
                         f" '{type(item).__name__}'."
