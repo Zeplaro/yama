@@ -5,7 +5,7 @@ Contains all the class and functions for maya components.
 """
 # TODO : Improve getComponent func
 # TODO : fix setPositionsOM on cvs ?
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 
 from maya import cmds
 import maya.api.OpenMaya as om
@@ -75,8 +75,6 @@ class Components(nodes.Yam):
     """
     Base class for components not indexed.
     """
-
-    __metaclass__ = ABCMeta
 
     def __init__(self, node, apiType):
         super().__init__()
