@@ -831,7 +831,10 @@ def getMPlugValue(MPlug):
         if attr_type == om.MFnData.kString:
             return MPlug.asString()
         elif attr_type == om.MFnData.kMatrix:
-            mfn = om.MFnMatrixData(MPlug.asMObject())
+            try:
+                mfn =  om.MFnMatrixData(MPlug.asMObject())
+            except RuntimeError:
+                return ([1.0] + [0.0] * 4) * 3 + [1.0]  # Zero matrix (I swear...)
             return list(mfn.matrix())
         elif attr_type == om.MFnData.kPointArray:
             # TODO: fails to get MPlug.asMObject() if empty data
