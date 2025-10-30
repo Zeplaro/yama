@@ -404,8 +404,8 @@ class ClassAssignor:
         yam_node = assigned_class(MObject)
         return yam_node
 
-    @classmethod
-    def getclass(cls, MObject):
+    @staticmethod
+    def getclass(MObject):
         """
         Gets the class that most closely corresponds to the given MObject.
 
@@ -430,8 +430,8 @@ class ClassAssignor:
             return node_class
         raise ValueError("Given MObject does not contain a valid dependencyNode.")
 
-    @classmethod
-    def getclass_cmds(cls, MObject):
+    @staticmethod
+    def getclass_cmds(MObject):
         """
         Old way to get the class that most closely corresponds to the given MObject.
 
