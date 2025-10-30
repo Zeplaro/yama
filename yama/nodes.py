@@ -33,6 +33,7 @@ __all__ = [
 ]
 
 import abc
+import functools
 import math
 
 from maya import cmds
@@ -460,11 +461,43 @@ class ClassAssignor:
         return DependNode
 
 
-class Yam(abc.ABC):
+class YamMeta(abc.ABCMeta):
+    """Metaclass for Yam objects to prevent setting new attributes outside __init__."""
+
+    def __new__(mcls, name, bases, namespace):
+        original_init = namespace.get("__init__")
+        if original_init:
+
+            @functools.wraps(original_init)
+            def new_init(self, *args, **kwargs):
+                """Wraps the original __init__ to allow setting new attributes only during __init__."""
+                self._setattr_allowed += 1
+                original_init(self, *args, **kwargs)
+                self._setattr_allowed -= 1
+
+            namespace["__init__"] = new_init
+
+        return super().__new__(mcls, name, bases, namespace)
+
+
+class Yam(abc.ABC, metaclass=YamMeta):
     """
     Abstract class for all objects related to maya nodes, attributes and components.
     Should not be instantiated by itself.
     """
+
+    # Internal variable used to allow setting new attributes only during __init__
+    _setattr_allowed = 0
+
+    def __setattr__(self, key, value):
+        """Prevents setting new attributes outside __init__"""
+        if self._setattr_allowed > 0 or hasattr(self, key):
+            super().__setattr__(key, value)
+        else:
+            raise AttributeError(
+                f"Cannot set new attributes outside __init__; "
+                f"To set a Maya attribute value, use: {self}.{key}.value = {value}"
+            )
 
     @property
     @abc.abstractmethod
