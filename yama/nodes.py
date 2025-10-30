@@ -481,10 +481,7 @@ class YamMeta(abc.ABCMeta):
 
 
 class Yam(abc.ABC, metaclass=YamMeta):
-    """
-    Abstract class for all objects related to maya nodes, attributes and components.
-    Should not be instantiated by itself.
-    """
+    """Abstract class for all objects related to maya nodes, attributes and components."""
 
     # Internal variable used to allow setting new attributes only during __init__
     _setattr_allowed = 0
