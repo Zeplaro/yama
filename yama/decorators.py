@@ -1,6 +1,8 @@
 # encoding: utf8
 
+import uuid
 from functools import wraps
+
 from maya import cmds
 from . import utils, nodes
 
@@ -8,12 +10,12 @@ from . import utils, nodes
 def mayaundo(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
+        chunk_id = uuid.uuid4()
         try:
-            cmds.undoInfo(openChunk=True)
-            result = func(*args, **kwargs)
-            return result
+            cmds.undoInfo(openChunk=True, chunkName=chunk_id)
+            return func(*args, **kwargs)
         finally:
-            cmds.undoInfo(closeChunk=True)
+            cmds.undoInfo(closeChunk=True, chunkName=chunk_id)
 
     return wrapper
 
@@ -38,33 +40,6 @@ def verbose(func):
         return result
 
     return wrapper
-
-
-def condition_debugger(condition):
-    def decorator(func):
-        @wraps(func)
-        def wrap(*args, **kwargs):
-            print(
-                f"#$@&%*!    Function: '{func.__name__}'; args={args}, kwargs={kwargs}    #$@&%*!"
-            )
-
-            if eval(condition):
-                raise RuntimeError(
-                    f"Condition met before: '{func.__name__}'; Condition: '{condition}'"
-                )
-
-            result = func(*args, **kwargs)
-
-            if eval(condition):
-                raise RuntimeError(
-                    f"Condition met after: '{func.__name__}'; Condition: '{condition}'"
-                )
-
-            return result
-
-        return wrap
-
-    return decorator
 
 
 def string_args(func):
