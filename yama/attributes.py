@@ -362,15 +362,43 @@ class Attribute(nodes.Yam):
 
     def types(self):
         if self._types is None:
-            self._types = ["attribute", cmds.getAttr(self.name, type=True)]
+            self._types = ["attribute", self.getType()]
         return self._types
 
     def type(self):
+        return self.types()[-1]
+
+    def getType(self):
         """
         Returns the type of data currently in the attribute.
         :return: str
         """
-        return self.types()[-1]
+        def get_type_with_api(attr):
+            attribute = attr.MObject
+            api_type = attribute.apiType()
+
+            if api_type == om.MFn.kTypedAttribute:
+                typed_attribute = om.MFnTypedAttribute(attribute)
+                api_type = typed_attribute.attrType()
+
+            return MFN_TO_CMDS_ATTR_TYPES.get(api_type)
+
+        try:
+            attr_type = cmds.getAttr(self.name, type=True)
+            if not attr_type:  # Attribute is valid but does not exist yet
+                attr_type = get_type_with_api(self)
+        except RuntimeError:
+            attr_type = get_type_with_api(self)
+            if not attr_type and self.isArray():  # failed because attribute is not initialized
+                # setting the first array element to force initialize the attribute
+                first_element = self[0]
+                setAttr(first_element, first_element.get())
+                attr_type = cmds.getAttr(self.name, type=True)
+
+        if not attr_type:
+            cmds.warning("Could not find attribute type")
+
+        return attr_type
 
     @property
     def defaultValue(self):
@@ -604,14 +632,14 @@ class BlendShapeTarget(Attribute):
     def weights(self, weights):
         self.setWeights(weights)
 
-    def inputTaregetItemIndices(self):
+    def inputTargetItemIndices(self):
         return list(
             self.inputTargetGroupAttr.inputTargetItem.MPlug.getExistingArrayAttributeIndices()
         )
 
     def values(self):
         # rounding to avoid python approximation, e.g.: (5200 / 1000.0 - 5) -> 0.20000000000000018 instead of 0.2
-        return [round(item_index / 1000.0 - 5, 6) for item_index in self.inputTaregetItemIndices()]
+        return [round(item_index / 1000.0 - 5, 6) for item_index in self.inputTargetItemIndices()]
 
     def getDeltas(self):
         """
@@ -799,9 +827,9 @@ def setAttr(attr, value, **kwargs):
     elif attr_type == "TdataCompound":
         length = len(value)
         try:
-            cmds.setAttr(f"{attr.name}[:]", *value, size=length)
+            cmds.setAttr(attr.name + f"[:]", *value, size=length)
         except RuntimeError:
-            cmds.setAttr(f"{attr.name}[0:{length-1}]", *value, size=length)
+            cmds.setAttr(attr.name + f"[0:{length-1}]", *value, size=length)
     elif attr_type in ["componentList", "pointArray"]:
         if attr_type == "componentList":
             # TODO: make work with other than vtx
@@ -979,3 +1007,20 @@ def setMPlugValue(MPlug, value):
         raise NotImplementedError(
             f"Attribute '{MPlug.name()}' of type '{nodes.MFN_TYPE_NAMES[attr_type]}' not supported"
         )
+
+
+"""
+Used to match the MPlug MFn type to its corresponding cmds type in case the attribute is valid but does not exist yet 
+(e.g.: an unused component of an array attribute), to pass to a cmds.setAttr call for exemple.
+"""
+MFN_TO_CMDS_ATTR_TYPES = {
+    om.MFnData.kPointArray: "pointArray",
+    om.MFnData.kComponentList: "componentList",
+    om.MFnData.kString: "string",
+    om.MFn.kMatrixAttribute: "matrix",
+    om.MFn.kFloatMatrixAttribute: "matrix",
+    om.MFn.kAttribute2Double: "double2",
+    om.MFn.kAttribute3Double: "double3",
+    om.MFn.kCompoundAttribute: "TdataCompound",
+    om.MFn.kNumericAttribute: "TdataCompound"
+}
