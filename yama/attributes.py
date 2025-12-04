@@ -797,7 +797,11 @@ def setAttr(attr, value, **kwargs):
     elif attr_type == "string":
         cmds.setAttr(attr.name, value, type=attr_type)
     elif attr_type == "TdataCompound":
-        cmds.setAttr(attr.name + "[:]", *value, size=len(value))
+        length = len(value)
+        try:
+            cmds.setAttr(f"{attr.name}[:]", *value, size=length)
+        except RuntimeError:
+            cmds.setAttr(f"{attr.name}[0:{length-1}]", *value, size=length)
     elif attr_type in ["componentList", "pointArray"]:
         if attr_type == "componentList":
             # TODO: make work with other than vtx
