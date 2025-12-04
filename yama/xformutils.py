@@ -17,7 +17,7 @@ def align(objs=None, t=True, r=True):
         objs = nodes.selected()
     if not objs and len(objs) > 2:
         raise ValueError("Not enough object selected.")
-    objs = nodes.yams(objs)
+    objs = nodes.yams(*objs)
     poses = [x.getPosition(ws=True) for x in objs]
 
     t_step, t_start, r_step, r_start = None, None, None, None
