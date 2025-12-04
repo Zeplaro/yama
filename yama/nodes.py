@@ -103,10 +103,13 @@ def yam(node):
         return attributes.Attribute(MPlug=node)
 
     else:
-        raise TypeError(
-            "yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected; "
-            f"got {node.__class__.__name__}."
-        )
+        try:
+            return yam(str(node))  # If the node is an instance of another node wrapping library.
+        except:
+            raise TypeError(
+                "yam(): str, OpenMaya.MObject, OpenMaya.MDagPath or OpenMaya.MPlug expected; "
+                f"got {repr(node)}."
+            )
 
     yam_node = ClassAssignor.initialize_node(MObject)
     if attribute:
@@ -487,7 +490,10 @@ class Yam(abc.ABC, metaclass=YamMeta):
     _setattr_allowed = 0
 
     def __setattr__(self, key, value):
-        """Prevents setting new attributes outside __init__"""
+        """
+        Prevents setting new attributes outside the __init__ call.
+        Use .setattr to set new attributes outside the __init__ call purposefully.
+        """
         if self._setattr_allowed > 0 or hasattr(self, key):
             super().__setattr__(key, value)
         else:
@@ -495,6 +501,10 @@ class Yam(abc.ABC, metaclass=YamMeta):
                 f"Cannot set new attributes outside __init__; "
                 f"To set a Maya attribute value, use: {self}.{key}.value = {value}"
             )
+
+    def setattr(self, key, value):
+        """Sets new or existing attribute to the given value even outside the __init__ call."""
+        super().__setattr__(key, value)
 
     @property
     @abc.abstractmethod
@@ -2361,7 +2371,7 @@ class YamList(list):
                 if not isinstance(item, Yam):
                     raise TypeError(
                         f"YamList can only contain Yam objects. '{item}' is"
-                        f" '{type(item).__name__}'."
+                        f" '{repr(item)}'."
                     )
 
     def append(self, item):
