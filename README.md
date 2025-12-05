@@ -12,4 +12,4 @@ Yama is mostly a fancy way for me to store my maya scripts, and a playground to 
 _To-do_
 
 ## Formated using Black
-Setting : `--line-length 100 --target-version py37 --target-version py39 --preview`
+Setting : `--line-length 100 --target-version py310 --preview`
