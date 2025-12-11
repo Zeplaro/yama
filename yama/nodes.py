@@ -35,6 +35,7 @@ __all__ = [
 import abc
 import functools
 import math
+from typing import Iterable
 
 from maya import cmds
 import maya.api.OpenMaya as om
@@ -67,8 +68,7 @@ def getMObject(node: str) -> om.MObject:
 gmo = getMObject
 
 
-def yam(node):
-    # type: (Yam | str | om.MObject | om.MDagPath | om.MPlug) -> DependNode | 'attributes.Attribute'
+def yam(node: "Yam | str | om.MObject | om.MDagPath | om.MPlug") -> "DependNode | attributes.Attribute":
     """
     Handles all node class assignment to assign the proper class depending on the node type.
     Also works with passing a 'node.attribute'.
@@ -117,27 +117,16 @@ def yam(node):
     return yam_node
 
 
-def yams(*nodes):
-    # type: (*(Yam | str | om.MObject | om.MDagPath | om.MPlug | list | tuple, ...)) -> YamList
+def yams(nodes: "Iterable[Yam | str | om.MObject | om.MDagPath | om.MPlug]") -> "YamList[Yam]":
     """
     Returns each node or attributes initialized as their appropriate DependNode or Attribute. See 'yam' function.
     :param nodes: Yam | str | om.MObject | om.MDagPath | om.MPlug of existing nodes.
     :return: YamList of DependNode
     """
-    try:
-        return YamList(yam(node) for node in nodes)
-    # in case a list or tuple was passed as single argument instead of an unpacked list.
-    except TypeError as e:
-        try:  # trying again using the first element of the nodes.
-            return YamList(yam(node) for node in nodes[0])
-        # to raise the proper TypeError in case an element of the nodes[0] is the wrong type.
-        except TypeError as f:
-            raise f
-        except Exception:  # in case there was actually an issue with the given nodes.
-            raise e
+    return YamList(yam(node) for node in nodes)
 
 
-def createNode(*args, **kwargs):
+def createNode(*args, **kwargs) -> "DependNode":
     """
     Creates a node and returns it as its appropriate class depending on its type.
     :param args: cmds args for cmds.createNode
@@ -149,7 +138,7 @@ def createNode(*args, **kwargs):
     return yam(cmds.createNode(*args, **kwargs))
 
 
-def spaceLocator(name="locator", pos=(0, 0, 0), rot=(0, 0, 0), parent=None, ws=False):
+def spaceLocator(name: str = "locator", pos: list[float, float, float] = (0, 0, 0), rot: list[float, float, float] =(0, 0, 0), parent: "str | DependNode" = None, ws: bool = False) -> "Transform":
     """
     Creates a locator.
     :param name: str, the locator name
@@ -166,21 +155,21 @@ def spaceLocator(name="locator", pos=(0, 0, 0), rot=(0, 0, 0), parent=None, ws=F
 
 
 @decorators.string_args
-def duplicate(*objs, **kwargs):
+def duplicate(*objs, **kwargs) -> "YamList[DependNode]":
     """Wrapper for cmds.duplicate"""
     kwargs["fullPath"] = True
     return yams(cmds.duplicate(objs, **kwargs))
 
 
 @decorators.string_args
-def ls(*args, **kwargs):
+def ls(*args, **kwargs) -> "YamList[DependNode | attributes.Attribute]":
     """Wrapper for 'maya.cmds.ls' but returning yam objects."""
     if "fl" not in kwargs and "flatten" not in kwargs:
         kwargs["flatten"] = True
     return yams(cmds.ls(*args, **kwargs))
 
 
-def selected(**kwargs):
+def selected(**kwargs) -> "YamList[DependNode]":
     """Returns current scene selection as yam objects; kwargs are passed on to 'ls'."""
     if (
         "os" not in kwargs
@@ -193,13 +182,13 @@ def selected(**kwargs):
 
 
 @decorators.string_args
-def select(*args, **kwargs):
+def select(*args, **kwargs) -> None:
     """Set current scene selection with given args and kwargs. Allows to pass yam object into the select function."""
     cmds.select(*args, **kwargs)
 
 
 @decorators.string_args
-def listAttr(*args, **kwargs):
+def listAttr(*args, **kwargs) -> "YamList[attributes.Attribute]":
     """
     Wrapper for cmds.listAttr returning Component objects.
 
@@ -249,7 +238,7 @@ def listAttr(*args, **kwargs):
 
 
 @decorators.string_args
-def listHistory(*args, type: "str | [str, ...]" = None, **kwargs) -> ["DependNode", ...]:
+def listHistory(*args, type: "str | list[str]" = None, **kwargs) -> "YamList[DependNode]":
     """
     Wrapper for cmds.listHistory returning Yam objects.
 
@@ -272,7 +261,7 @@ def listHistory(*args, type: "str | [str, ...]" = None, **kwargs) -> ["DependNod
 
 
 @decorators.string_args
-def listRelatives(*args, **kwargs) -> ["DependNode", ...]:
+def listRelatives(*args, **kwargs) -> "YamList[DependNode]":
     """
     Wrapper for cmds.listRelatives returning Yam objects.
 
@@ -287,7 +276,7 @@ def listRelatives(*args, **kwargs) -> ["DependNode", ...]:
 
 
 @decorators.string_args
-def findDeformers(objs, type=None):
+def findDeformers(objs, type: str | list[str] = None) -> "YamList[DependNode]":
     """
     Wrapper for cmds.findDeformers returning Component objects.
 
@@ -582,12 +571,6 @@ class DependNode(Yam):
         self._types = None
 
     @property
-    def isAYamNode(self):
-        """Used to check if an object is an instance of DependNode with the faster hasattr instead of slower
-        isinstance."""
-        return True
-
-    @property
     def MFn(self):
         """
         Gets the associated api 2.0 MFn object
@@ -752,13 +735,7 @@ class DependNode(Yam):
         :param kwargs: kwargs passed on to cmds.listConnections
         :return: list[Attribute, ...]
         """
-        type_ = None
-        if "type" in kwargs:
-            type_ = kwargs.pop("type")
-        nodes = yams(cmds.listHistory(self.name, **kwargs))
-        if type_:
-            nodes.keepType(type_)
-        return nodes
+        return listHistory(self.name, **kwargs)
 
     def type(self) -> str:
         """
@@ -1686,7 +1663,7 @@ class SkinCluster(GeometryFilter):
         """
         if isinstance(influence, str):
             influence = yam(influence)
-        if hasattr(influence, "isAYamNode"):
+        if isinstance(influence, DependNode):
             influence = self.influences().index(influence)
         if not geo or not components:
             geo = self.geometry.MDagPath
@@ -1699,7 +1676,7 @@ class SkinCluster(GeometryFilter):
                 influence=influence, weights=weights, geo=geo, components=components
             )
 
-        if not hasattr(influence, "isAYamNode"):
+        if not isinstance(influence, DependNode):
             influence = self.influences()[influence]
 
         attr_index = self.indexForInfluenceObject(influence)
@@ -1708,7 +1685,7 @@ class SkinCluster(GeometryFilter):
             self.weightList[i].weights[attr_index].value = weight
 
     def setInfluenceWeightsOM(self, influence, weights, geo=None, components=None):
-        if hasattr(influence, "isAYamNode"):
+        if isinstance(influence, DependNode):
             inf_index = self.influences().index(influence)
         else:
             inf_index = influence
@@ -1806,20 +1783,24 @@ class SkinCluster(GeometryFilter):
         :param influence: DependNode
         :return: YamList of components
         """
-        influence = yam(influence)
-        if influence in self.influences():
-            influence = influence.MDagPath
-        else:
-            if not isinstance(influence, DagNode):
-                raise TypeError(
-                    f"Influence should be of type 'DependNode' not '{type(influence).__name__}'"
-                )
-            raise RuntimeError("Influence not found in skin cluster")
+        from . import components
 
-        vtx_list = yams(self.MFn.getPointsAffectedByInfluence(influence)[0].getSelectionStrings())
+        influences = self.influences()
+        if not isinstance(influence, int):
+            influence = yam(influence)
+            if influence not in influences:
+                if not isinstance(influence, DagNode):
+                    raise TypeError(
+                        f"Influence should be of type 'DependNode' not '{type(influence).__name__}'"
+                    )
+                raise RuntimeError(f"Influence {influence} not found in skin cluster")
+        else:
+            influence = influences[influence]
+
+        vtx_list = yams(self.MFn.getPointsAffectedByInfluence(influence.MDagPath)[0].getSelectionStrings())
         vtxs = YamList()
         for vtx in vtx_list:
-            if hasattr(vtx, "isAYamComponent"):
+            if isinstance(vtx, components.Component):
                 vtxs.append(vtx)
             else:
                 for vtx_ in vtx:
@@ -1910,7 +1891,7 @@ class SkinCluster(GeometryFilter):
         self.dQWeights = data["dQWeights"]
 
     def addInfluence(self, influence):
-        if hasattr(influence, "isAYamNode"):
+        if isinstance(influence, DependNode):
             influence = influence.name
         cmds.skinCluster(self.name, edit=True, addInfluence=influence, weight=0.0)
 
