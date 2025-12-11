@@ -260,12 +260,6 @@ class Component(nodes.Yam):
         self.third_index = thirdIndex
         self._types = None
 
-    @property
-    def isAYamComponent(self):
-        """Used to check if an object is an instance of Component using the faster hasattr method instead of the slower
-        isinstance method."""
-        return True
-
     def __str__(self):
         return self.name
 
