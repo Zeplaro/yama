@@ -91,13 +91,13 @@ def yam(node: "Yam | str | om.MObject | om.MDagPath | om.MPlug") -> "DependNode 
             node, attribute = node.split(".", 1)
         MObject = getMObject(node)
 
-    elif node.__class__ == om.MObject:  # Not using isinstance() for efficiency
+    elif isinstance(node, om.MObject):  # Not using isinstance() for efficiency
         MObject = node
 
-    elif node.__class__ == om.MDagPath:  # Not using isinstance() for efficiency
+    elif isinstance(node, om.MDagPath):  # Not using isinstance() for efficiency
         MObject = node.node()
 
-    elif node.__class__ == om.MPlug:  # Not using isinstance() for efficiency
+    elif isinstance(node, om.MPlug):  # Not using isinstance() for efficiency
         from . import attributes
 
         return attributes.Attribute(MPlug=node)
@@ -2329,7 +2329,7 @@ class YamList(list):
         return str(list(self)) == str(other)
 
     def __getitem__(self, item):
-        if item.__class__ == slice:
+        if  isinstance(item, slice):
             return YamList(super().__getitem__(item), no_init_check=True)
         return super().__getitem__(item)
 

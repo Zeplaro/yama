@@ -20,7 +20,7 @@ class WeightList(list):
         return f"{self.__class__.__name__}({super().__repr__()})"
 
     def __getitem__(self, item):
-        if item.__class__ == slice:
+        if isinstance(item, slice):
             return self.emptyCopy(super().__getitem__(item))
         return super().__getitem__(item)
 

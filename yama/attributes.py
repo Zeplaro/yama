@@ -103,7 +103,7 @@ class Attribute(nodes.Yam):
         """
         if item == "*":
             item = slice(None)
-        if item.__class__ == slice:  # Not using isinstance() for efficiency
+        if isinstance(item, slice):  # Not using isinstance() for efficiency
             return nodes.YamList(self[i] for i in range(len(self))[item])
 
         try:
@@ -785,9 +785,7 @@ def getAttr(attr: Attribute):
     value = cmds.getAttr(attr.name)
     # Fixing cmds.getattr to simply return the tuple in the list that cmds returns for attribute like '.translate',
     # '.rotate', etc...
-    if (
-        value.__class__ == list and len(value) == 1 and value[0].__class__ == tuple
-    ):  # Not isinstance() for efficiency
+    if isinstance(value, list) and len(value) == 1 and isinstance(value[0], tuple):
         return value[0]
     return value
 
