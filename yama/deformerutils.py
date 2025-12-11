@@ -152,14 +152,14 @@ def skinAs(
             cmds.warning("useObjectNamespace is True but no namespace was found on source object")
     elif sourceNamespace or targetNamespace:
         if sourceNamespace:
-            replace_args = [sourceNamespace + ":", ""]
+            replace_args = [f"{sourceNamespace}:", ""]
             if targetNamespace:
-                replace_args[1] = targetNamespace + ":"
+                replace_args[1] = f"{targetNamespace}:"
             target_influences = nodes.yams(
                 inf.name.replace(*replace_args) for inf in source_influences
             )
         else:
-            target_influences = nodes.yams(targetNamespace + ":" + inf for inf in source_influences)
+            target_influences = nodes.yams(f"{targetNamespace}:{inf}" for inf in source_influences)
 
     skinClusters = nodes.YamList()
     kwargs = {
@@ -185,9 +185,9 @@ def skinAs(
         if useObjectNamespace:  # getting target influences namespace per target
             targetNamespace = ":".join(target.name.split(":")[:-1])
             if sourceNamespace:
-                replace_args = [sourceNamespace + ":", ""]
+                replace_args = [f"{sourceNamespace}:", ""]
                 if targetNamespace:
-                    replace_args[1] = targetNamespace + ":"
+                    replace_args[1] = f"{targetNamespace}:"
                 target_influences = []
                 for inf in source_influences:
                     target_name = inf.name.replace(*replace_args)
@@ -198,7 +198,7 @@ def skinAs(
                     target_influences.append(target_inf)
             elif targetNamespace:
                 target_influences = nodes.yams(
-                    targetNamespace + ":" + inf for inf in source_influences
+                    f"{targetNamespace}:{inf}" for inf in source_influences
                 )
             else:
                 target_influences = source_influences
@@ -220,7 +220,7 @@ def skinAs(
             ia=("oneToOne", "label", "closestJoint"),
         )
         if config.verbose:
-            print(target + " skinned -> " + target_skinCluster.name)
+            print(f"{target} skinned -> {target_skinCluster}")
         skinClusters.append(target_skinCluster)
     return skinClusters
 
