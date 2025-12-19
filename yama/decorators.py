@@ -57,32 +57,22 @@ def string_args(func):
     return wrapper
 
 
-class Yammds:
+def yammds(wrapped_module, /):
     """
     Wraps a module functions to return yamified results (i.e. strings that are object names are converted to Yam objects).
     Usage:
         import yama
-        cmds = Yammds(cmds)
-        cmds.ls() # returns a list of Yam objects instead of strings
+        ymds = yammds(cmds)
+        ymds.ls() # returns a list of Yam objects instead of strings
     """
-    def __init__(self, module):
-        self.__doc__ = getattr(module, '__doc__', self.__class__.__doc__)
-        self.module = module
 
-    def __getattr__(self, item):
-        attr = getattr(self.module, item)
-        return self._cook(attr) if callable(attr) else attr
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} wrapping {self.module!r}>"
-
-    def _cook(self, func):
+    def cook(func):
         """Wraps a function to yamify its results."""
 
         def recursive_yam(item):
             if isinstance(item, (list, tuple, set)):
                 return type(item)(recursive_yam(x) for x in item)
-            elif isinstance(item, str) and self.module.objExists(item):
+            elif isinstance(item, str) and wrapped_module.objExists(item):
                 return nodes.yam(item)
             else:
                 return item
@@ -93,3 +83,13 @@ class Yammds:
             return recursive_yam(result)
 
         return wrapper
+
+    class ModuleWrapper:
+        """Wraps a module to yamify its callable attributes' results."""
+        module = wrapped_module
+        __doc__ = wrapped_module.__doc__
+        def __getattr__(self, item):
+            attr = getattr(wrapped_module, item)
+            return cook(attr) if callable(attr) else attr
+
+    return ModuleWrapper()
