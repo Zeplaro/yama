@@ -35,50 +35,72 @@ class WeightList(list):
 
     def __add__(self, other):
         if isinstance(other, (int, float)):
-            other = self.fromLengthValue(len(self), other)
+            self.__class__(x + other for x in self)
         return self.__class__(x + y for (x, y) in zip(self, other))
 
     def __iadd__(self, other):
         if isinstance(other, (int, float)):
-            other = self.fromLengthValue(len(self), other)
-        for i, y in enumerate(other):
-            self[i] += y
+            for i in range(len(self)):
+                self[i] += other
+        else:
+            for i, y in enumerate(other):
+                self[i] += y
         return self
 
     def __sub__(self, other):
         if isinstance(other, (int, float)):
-            other = self.fromLengthValue(len(self), other)
+            return self.__class__(x - other for x in self)
         return self.__class__(x - y for (x, y) in zip(self, other))
 
     def __isub__(self, other):
         if isinstance(other, (int, float)):
-            other = self.fromLengthValue(len(self), other)
-        for i, y in enumerate(other):
-            self[i] -= y
+            for i in range(len(self)):
+                self[i] -= other
+        else:
+            for i, y in enumerate(other):
+                self[i] -= y
         return self
 
     def __mul__(self, other):
         if isinstance(other, (int, float)):
-            other = self.fromLengthValue(len(self), other)
+            return self.__class__(x * other for x in self)
         return self.__class__(x * y for (x, y) in zip(self, other))
 
     def __imul__(self, other):
         if isinstance(other, (int, float)):
-            other = self.fromLengthValue(len(self), other)
-        for i, y in enumerate(other):
-            self[i] *= y
+            for i in range(len(self)):
+                self[i] *= other
+        else:
+            for i, y in enumerate(other):
+                self[i] *= y
         return self
 
     def __truediv__(self, other):
         if isinstance(other, (int, float)):
-            other = self.fromLengthValue(len(self), other)
+            return self.__class__(x / other for x in self)
         return self.__class__(x / y for (x, y) in zip(self, other))
 
     def __itruediv__(self, other):
         if isinstance(other, (int, float)):
-            other = self.fromLengthValue(len(self), other)
-        for i, y in enumerate(other):
-            self[i] /= y
+            for i in range(len(self)):
+                self[i] /= other
+        else:
+            for i, y in enumerate(other):
+                self[i] /= y
+        return self
+
+    def __floordiv__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(x // other for x in self)
+        return self.__class__(x // y for (x, y) in zip(self, other))
+
+    def __ifloordiv__(self, other):
+        if isinstance(other, (int, float)):
+            for i in range(len(self)):
+                self[i] //= other
+        else:
+            for i, y in enumerate(other):
+                self[i] //= y
         return self
 
     def __neg__(self):
