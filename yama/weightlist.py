@@ -4,19 +4,19 @@ from . import io
 
 
 class WeightList(list):
-    def __init__(self, data=None, /, *, min_value=None, max_value=None, round_value=None):
+    def __init__(self, data=None, /, *, min_value=None, max_value=None, decimals=None):
         super().__init__()
         self.min_value = min_value
         self.max_value = max_value
-        self.round_value = round_value
+        self.decimals = decimals
 
         # Forces initial arg to go through __setitem__ to verify values are floats, clamped and rounded
         if data:
             super().__init__(data)
         if min_value is not None or max_value is not None:
             self.clamp(min_value, max_value)
-        if round_value is not None:
-            self.round(round_value)
+        if decimals is not None:
+            self.round(decimals)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({super().__repr__()})"
@@ -27,7 +27,7 @@ class WeightList(list):
         return super().__getitem__(item)
 
     @classmethod
-    def fromLengthValue(cls, length, value=0.0, min_value=0.0, max_value=1.0, round_value=None):
+    def fromLengthValue(cls, length, value=0.0, min_value=0.0, max_value=1.0, decimals=None):
         if not isinstance(length, int):
             raise TypeError(
                 "length must be int; got : {}, {}".format(length, type(length).__name__)
@@ -44,7 +44,7 @@ class WeightList(list):
             (value for _ in range(length)),
             min_value=min_value,
             max_value=max_value,
-            round_value=round_value,
+            decimals=decimals,
         )
 
     def __add__(self, other):
@@ -124,13 +124,13 @@ class WeightList(list):
             if not min_value < value < max_value:
                 self[i] = max(min(value, max_value), min_value)
 
-    def round(self, round_value=None):
-        if round_value is None and self.round_value is not None:
-            round_value = self.round_value
+    def round(self, decimals=None):
+        if decimals is None and self.decimals is not None:
+            decimals = self.decimals
         else:
-            raise RuntimeError("No round_value value provided or set on the object.")
+            raise RuntimeError("No decimals value provided or set on the object.")
         for i, value in enumerate(self):
-            self[i] = round(value, round_value)
+            self[i] = round(value, decimals)
 
     def replaceWeights(self, weights):
         del self[:]
@@ -153,14 +153,14 @@ class WeightList(list):
             data,
             min_value=self.min_value,
             max_value=self.max_value,
-            round_value=self.round_value,
+            decimals=self.decimals,
         )
 
     def copy(self):
         return self.emptyCopy(self)
 
 
-def normalizeWeights(weights, min_value=0.0, max_value=1.0, round_value=None):
+def normalizeWeights(weights, min_value=0.0, max_value=1.0, decimals=None):
     """
     Normalizes a list of weights.
 
@@ -168,14 +168,14 @@ def normalizeWeights(weights, min_value=0.0, max_value=1.0, round_value=None):
         weights (list): A list of weights. Each weight can be a WeightList object or a numeric value.
         min_value (float, optional): The minimum value for clamping. Defaults to 0.0.
         max_value (float, optional): The maximum value for clamping. Defaults to 1.0.
-        round_value (int, optional): The number of decimal places to round the normalized values. Defaults to None.
+        decimals (int, optional): The number of decimal places to round the normalized values. Defaults to None.
 
     Returns:
         list: A list of normalized weights, where each weight is a WeightList object.
 
     Note:
         - If a weight in the 'weights' list is already a WeightList object, it will be used as is.
-        - If 'round_value' is specified, the normalized values will be rounded to the specified decimal places.
+        - If 'decimals' is specified, the normalized values will be rounded to the specified decimal places.
     """
     # Checking that all given weights are WeightList
     weights = [
@@ -184,7 +184,7 @@ def normalizeWeights(weights, min_value=0.0, max_value=1.0, round_value=None):
                 weight,
                 min_value=min_value,
                 max_value=max_value,
-                round_value=round_value,
+                decimals=decimals,
             )
             if not isinstance(weight, WeightList)
             else weight
@@ -209,15 +209,15 @@ def normalizeWeights(weights, min_value=0.0, max_value=1.0, round_value=None):
 
 def clampWeights(weights, min_value=0.0, max_value=1.0):
     if isinstance(weights, WeightList):
-        round_value = weights.round_value
+        decimals = weights.decimals
     else:
-        round_value = None
+        decimals = None
     return WeightList(
-        weights, min_value=min_value, max_value=max_value, round_value=round_value
+        weights, min_value=min_value, max_value=max_value, decimals=decimals
     )
 
 
-def roundWeights(weights, round_value=3):
+def roundWeights(weights, decimals=3):
     if isinstance(weights, WeightList):
         min_value = weights.min_value
         max_value = weights.max_value
@@ -227,5 +227,5 @@ def roundWeights(weights, round_value=3):
         weights,
         min_value=min_value,
         max_value=max_value,
-        round_value=round_value,
+        decimals=decimals,
     )

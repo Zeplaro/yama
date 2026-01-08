@@ -1394,7 +1394,7 @@ class GeometryFilter(DependNode):
 
 
 class WeightGeometryFilter(GeometryFilter):
-    def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
+    def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, decimals=None):
         geometry = self.geometry
         if not geometry:
             raise RuntimeError(f"Deformer '{self}' is not connected to a geometry")
@@ -1404,7 +1404,7 @@ class WeightGeometryFilter(GeometryFilter):
             force_clamp=force_clamp,
             min_value=min_value,
             max_value=max_value,
-            round_value=round_value,
+            decimals=decimals,
         )
 
     def setWeights(self, weights):
@@ -1694,7 +1694,7 @@ class SkinCluster(GeometryFilter):
             components = self.getComponentAtIndex()
         self.MFn.setWeights(geo, components, om.MIntArray([inf_index]), om.MDoubleArray(weights))
 
-    def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
+    def getWeights(self, force_clamp=True, min_value=0.0, max_value=1.0, decimals=None):
         weights = []
         # Getting the weights
         weights_array, num_influences = self.MFn.getWeights(
@@ -1708,7 +1708,7 @@ class SkinCluster(GeometryFilter):
                     force_clamp=force_clamp,
                     min_value=min_value,
                     max_value=max_value,
-                    round_value=round_value,
+                    decimals=decimals,
                 )
             )
         return weights
@@ -1746,13 +1746,13 @@ class SkinCluster(GeometryFilter):
     def weights(self, weights):
         self.setWeights(weights)
 
-    def getDQWeigts(self, force_clamp=True, min_value=0.0, max_value=1.0, round_value=None):
+    def getDQWeigts(self, force_clamp=True, min_value=0.0, max_value=1.0, decimals=None):
         return weightlist.WeightList(
             self.MFn.getBlendWeights(self.geometry.MDagPath, self.getComponentAtIndex()),
             force_clamp=force_clamp,
             min_value=min_value,
             max_value=max_value,
-            round_value=round_value,
+            decimals=decimals,
         )
 
     def setDQWeights(self, weights):
