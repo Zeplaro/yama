@@ -1394,7 +1394,7 @@ class GeometryFilter(DependNode):
 
 
 class WeightGeometryFilter(GeometryFilter):
-    def getWeights(self, min_value=0.0, max_value=1.0, decimals=None):
+    def getWeights(self, min_value=None, max_value=None, decimals=None):
         geometry = self.geometry
         if not geometry:
             raise RuntimeError(f"Deformer '{self}' is not connected to a geometry")
@@ -1693,7 +1693,7 @@ class SkinCluster(GeometryFilter):
             components = self.getComponentAtIndex()
         self.MFn.setWeights(geo, components, om.MIntArray([inf_index]), om.MDoubleArray(weights))
 
-    def getWeights(self, min_value=0.0, max_value=1.0, decimals=None):
+    def getWeights(self, min_value=None, max_value=None, decimals=None):
         weights = []
         # Getting the weights
         weights_array, num_influences = self.MFn.getWeights(
@@ -1744,7 +1744,7 @@ class SkinCluster(GeometryFilter):
     def weights(self, weights):
         self.setWeights(weights)
 
-    def getDQWeigts(self, min_value=0.0, max_value=1.0, decimals=None):
+    def getDQWeigts(self, min_value=None, max_value=None, decimals=None):
         return weightlist.WeightList(
             self.MFn.getBlendWeights(self.geometry.MDagPath, self.getComponentAtIndex()),
             min_value=min_value,

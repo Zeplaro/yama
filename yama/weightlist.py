@@ -27,7 +27,7 @@ class WeightList(list):
         return super().__getitem__(item)
 
     @classmethod
-    def fromLengthValue(cls, length, value=0.0, min_value=0.0, max_value=1.0, decimals=None):
+    def fromLengthValue(cls, length, value=0.0, min_value=None, max_value=None, decimals=None):
         if not isinstance(length, int):
             raise TypeError(
                 "length must be int; got : {}, {}".format(length, type(length).__name__)
@@ -160,14 +160,14 @@ class WeightList(list):
         return self.emptyCopy(self)
 
 
-def normalizeWeights(weights, min_value=0.0, max_value=1.0, decimals=None):
+def normalizeWeights(weights, min_value=None, max_value=None, decimals=None):
     """
     Normalizes a list of weights.
 
     Args:
         weights (list): A list of weights. Each weight can be a WeightList object or a numeric value.
-        min_value (float, optional): The minimum value for clamping. Defaults to 0.0.
-        max_value (float, optional): The maximum value for clamping. Defaults to 1.0.
+        min_value (float, optional): The minimum value for clamping. Defaults to None.
+        max_value (float, optional): The maximum value for clamping. Defaults to None.
         decimals (int, optional): The number of decimal places to round the normalized values. Defaults to None.
 
     Returns:
@@ -207,7 +207,7 @@ def normalizeWeights(weights, min_value=0.0, max_value=1.0, decimals=None):
     return new_weights
 
 
-def clampWeights(weights, min_value=0.0, max_value=1.0):
+def clampWeights(weights, min_value=None, max_value=None):
     if isinstance(weights, WeightList):
         decimals = weights.decimals
     else:
@@ -222,7 +222,7 @@ def roundWeights(weights, decimals=3):
         min_value = weights.min_value
         max_value = weights.max_value
     else:
-        min_value, max_value = 0.0, 1.0
+        min_value, max_value = None, None
     return WeightList(
         weights,
         min_value=min_value,

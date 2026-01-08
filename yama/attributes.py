@@ -606,7 +606,7 @@ class BlendShapeTarget(Attribute):
     def weightsAttr(self):
         return self.inputTargetGroupAttr.targetWeights
 
-    def getWeights(self, min_value=0.0, max_value=1.0, decimals=None):
+    def getWeights(self, min_value=None, max_value=None, decimals=None):
         geometry = self.node.geometry
         if not geometry:
             raise RuntimeError(f"Deformer '{self.node}' is not connected to a geometry")
