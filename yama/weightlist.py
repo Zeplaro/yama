@@ -12,8 +12,7 @@ class WeightList(list):
 
         # Forces initial arg to go through __setitem__ to verify values are floats, clamped and rounded
         if data:
-            for i in data:
-                self.append(i)
+            super().__init__(data)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({super().__repr__()})"
@@ -43,26 +42,6 @@ class WeightList(list):
             max_value=max_value,
             round_value=round_value,
         )
-
-    def _cleanValue(self, value):
-        try:
-            value = float(value)
-        except ValueError:
-            raise ValueError(
-                "Value must be float or string float; got : {}, {}".format(
-                    value, type(value).__name__
-                )
-            )
-
-        if self.round_value is not None:
-            value = round(value, self.round_value)
-
-        return value
-
-    def __setitem__(self, key, value):
-        value = self._cleanValue(value)
-
-        super().__setitem__(key, value)
 
     def __add__(self, other):
         if isinstance(other, (int, float)):
@@ -131,18 +110,6 @@ class WeightList(list):
             return self[k]
         except IndexError:
             return value
-
-    def append(self, value):
-        value = self._cleanValue(value)
-        super().append(value)
-
-    def extend(self, other):
-        for i in other:
-            self.append(i)
-
-    def insert(self, index, value):
-        value = self._cleanValue(value)
-        super().insert(index, value)
 
     def clamp(self, min_value=None, max_value=None):
         if min_value is None:
