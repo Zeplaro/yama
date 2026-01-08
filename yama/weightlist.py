@@ -36,7 +36,7 @@ class WeightList(list):
 
     def __add__(self, other):
         if isinstance(other, (int, float)):
-            self.__class__(x + other for x in self)
+            return self.__class__(x + other for x in self)
         return self.__class__(x + y for (x, y) in zip(self, other))
 
     def __iadd__(self, other):
