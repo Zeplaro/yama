@@ -169,15 +169,13 @@ class WeightList(list):
         return self.__class__(self, min_value=min_value, max_value=max_value, decimals=decimals)
 
 
-def normalizeWeights(weights, /):
+def normalizeWeights(weights, /, *, sum_value=1.0):
     """
     Normalizes a list of weights.
 
     Args:
         weights (list): A list of weights. Each weight can be a WeightList object or a numeric value.
-        min_value (float, optional): The minimum value for clamping. Defaults to None.
-        max_value (float, optional): The maximum value for clamping. Defaults to None.
-        decimals (int, optional): The number of decimal places to round the normalized values. Defaults to None.
+        sum_value (float, optional): The value to which the weights should sum. Default is 1.0.
 
     Returns:
         list: A list of normalized weights, where each weight is a WeightList object.
@@ -191,7 +189,7 @@ def normalizeWeights(weights, /):
     for values in itertools.zip_longest(*weights, fillvalue=0.0):
         divisor = sum(values) or 1.0
         for i, value in enumerate(values):
-            new_weights[i].append(value / (divisor / 1.0))
+            new_weights[i].append(value / (divisor / sum_value))
     return new_weights
 
 
