@@ -1,4 +1,5 @@
 # encoding: utf8
+import itertools
 
 from . import io
 
@@ -168,7 +169,7 @@ class WeightList(list):
         return self.__class__(self, min_value=min_value, max_value=max_value, decimals=decimals)
 
 
-def normalizeWeights(weights, /, min_value=None, max_value=None, decimals=None):
+def normalizeWeights(weights, /):
     """
     Normalizes a list of weights.
 
@@ -186,27 +187,11 @@ def normalizeWeights(weights, /, min_value=None, max_value=None, decimals=None):
         - If 'decimals' is specified, the normalized values will be rounded to the specified decimal places.
     """
     # Checking that all given weights are WeightList
-    weights = [
-        (
-            WeightList(weight, min_value=min_value, max_value=max_value, decimals=decimals)
-            if not isinstance(weight, WeightList)
-            else weight
-        )
-        for weight in weights
-    ]
     new_weights = [WeightList() for _ in weights]
-    for values in zip(*weights):
-        mult = 1.0
-        # Keeps everything to 0.0 if all values are at 0.0 and prevents a / by 0 error
-        if any(values):
-            try:
-                mult = 1.0 / sum(values)
-            except ZeroDivisionError as e:
-                raise ZeroDivisionError(
-                    f"The sum of values was equal to 0.0; Values : {values}; {e}"
-                )
+    for values in itertools.zip_longest(*weights, fillvalue=0.0):
+        divisor = sum(values) or 1.0
         for i, value in enumerate(values):
-            new_weights[i].append(value * mult)
+            new_weights[i].append(value / (divisor / 1.0))
     return new_weights
 
 
