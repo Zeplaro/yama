@@ -4,7 +4,7 @@ from . import io
 
 
 class WeightList(list):
-    def __init__(self, data=None, /, *, min_value=0.0, max_value=1.0, round_value=None):
+    def __init__(self, data=None, /, *, min_value=None, max_value=None, round_value=None):
         super().__init__()
         self.min_value = min_value
         self.max_value = max_value
@@ -13,6 +13,10 @@ class WeightList(list):
         # Forces initial arg to go through __setitem__ to verify values are floats, clamped and rounded
         if data:
             super().__init__(data)
+        if min_value is not None or max_value is not None:
+            self.clamp(min_value, max_value)
+        if round_value is not None:
+            self.round(round_value)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({super().__repr__()})"
