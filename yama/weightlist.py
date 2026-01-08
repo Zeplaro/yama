@@ -102,19 +102,11 @@ class WeightList(list):
             return value
 
     def clamp(self, min_value=None, max_value=None):
-        if min_value is None:
-            min_value = self.min_value
-        if max_value is None:
-            max_value = self.max_value
         for i, value in enumerate(self):
             if not min_value < value < max_value:
                 self[i] = max(min(value, max_value), min_value)
 
     def round(self, decimals=None):
-        if decimals is None and self.decimals is not None:
-            decimals = self.decimals
-        else:
-            raise RuntimeError("No decimals value provided or set on the object.")
         for i, value in enumerate(self):
             self[i] = round(value, decimals)
 
@@ -158,12 +150,7 @@ def normalizeWeights(weights, min_value=None, max_value=None, decimals=None):
     # Checking that all given weights are WeightList
     weights = [
         (
-            WeightList(
-                weight,
-                min_value=min_value,
-                max_value=max_value,
-                decimals=decimals,
-            )
+            WeightList(weight, min_value=min_value, max_value=max_value, decimals=decimals)
             if not isinstance(weight, WeightList)
             else weight
         )
@@ -186,24 +173,8 @@ def normalizeWeights(weights, min_value=None, max_value=None, decimals=None):
 
 
 def clampWeights(weights, min_value=None, max_value=None):
-    if isinstance(weights, WeightList):
-        decimals = weights.decimals
-    else:
-        decimals = None
-    return WeightList(
-        weights, min_value=min_value, max_value=max_value, decimals=decimals
-    )
+    return WeightList(weights, min_value=min_value, max_value=max_value)
 
 
 def roundWeights(weights, decimals=3):
-    if isinstance(weights, WeightList):
-        min_value = weights.min_value
-        max_value = weights.max_value
-    else:
-        min_value, max_value = None, None
-    return WeightList(
-        weights,
-        min_value=min_value,
-        max_value=max_value,
-        decimals=decimals,
-    )
+    return WeightList(weights, decimals=decimals)
