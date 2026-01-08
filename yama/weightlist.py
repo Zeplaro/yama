@@ -6,9 +6,6 @@ from . import io
 class WeightList(list):
     def __init__(self, data=None, /, *, min_value=None, max_value=None, decimals=None):
         super().__init__()
-        self.min_value = min_value
-        self.max_value = max_value
-        self.decimals = decimals
 
         # Forces initial arg to go through __setitem__ to verify values are floats, clamped and rounded
         if data:
@@ -23,7 +20,7 @@ class WeightList(list):
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            return self.emptyCopy(super().__getitem__(item))
+            return self.__class__(super().__getitem__(item))
         return super().__getitem__(item)
 
     @classmethod
@@ -50,7 +47,7 @@ class WeightList(list):
     def __add__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other)
-        return self.emptyCopy(x + y for (x, y) in zip(self, other))
+        return self.__class__(x + y for (x, y) in zip(self, other))
 
     def __iadd__(self, other):
         if isinstance(other, (int, float)):
@@ -62,7 +59,7 @@ class WeightList(list):
     def __sub__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other)
-        return self.emptyCopy(x - y for (x, y) in zip(self, other))
+        return self.__class__(x - y for (x, y) in zip(self, other))
 
     def __isub__(self, other):
         if isinstance(other, (int, float)):
@@ -74,7 +71,7 @@ class WeightList(list):
     def __mul__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other)
-        return self.emptyCopy(x * y for (x, y) in zip(self, other))
+        return self.__class__(x * y for (x, y) in zip(self, other))
 
     def __imul__(self, other):
         if isinstance(other, (int, float)):
@@ -86,7 +83,7 @@ class WeightList(list):
     def __truediv__(self, other):
         if isinstance(other, (int, float)):
             other = self.fromLengthValue(len(self), other)
-        return self.emptyCopy(x / y for (x, y) in zip(self, other))
+        return self.__class__(x / y for (x, y) in zip(self, other))
 
     def __itruediv__(self, other):
         if isinstance(other, (int, float)):
@@ -96,10 +93,10 @@ class WeightList(list):
         return self
 
     def __neg__(self):
-        return self.emptyCopy(-x for x in self)
+        return self.__class__(-x for x in self)
 
     def __invert__(self):
-        return self.emptyCopy(1 - x for x in self)
+        return self.__class__(1 - x for x in self)
 
     def __eq__(self, other):
         if isinstance(other, (int, float)):
@@ -148,16 +145,8 @@ class WeightList(list):
                 self.append(i)
         return data
 
-    def emptyCopy(self, data=None):
-        return type(self)(
-            data,
-            min_value=self.min_value,
-            max_value=self.max_value,
-            decimals=self.decimals,
-        )
-
-    def copy(self):
-        return self.emptyCopy(self)
+    def copy(self, *, min_value=None, max_value=None, decimals=None):
+        return self.__class__(self, min_value=min_value, max_value=max_value, decimals=decimals)
 
 
 def normalizeWeights(weights, min_value=None, max_value=None, decimals=None):
@@ -191,7 +180,7 @@ def normalizeWeights(weights, min_value=None, max_value=None, decimals=None):
         )
         for weight in weights
     ]
-    new_weights = [weight.emptyCopy() for weight in weights]
+    new_weights = [WeightList() for _ in weights]
     for values in zip(*weights):
         mult = 1.0
         # Keeps everything to 0.0 if all values are at 0.0 and prevents a / by 0 error
