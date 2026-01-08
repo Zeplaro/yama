@@ -26,12 +26,6 @@ class WeightList(list):
 
     @classmethod
     def fromLengthValue(cls, length, value=0.0):
-        if not isinstance(length, int):
-            raise TypeError(f"length must be int; got : {length}, {type(length).__name__}")
-        try:
-            value = float(value)
-        except ValueError:
-            raise ValueError(f"value must be float or string float; got : {value}, {type(value).__name__}")
         return cls(value for _ in range(length))
 
     def __add__(self, other):
@@ -48,6 +42,8 @@ class WeightList(list):
                 self[i] += y
         return self
 
+    __radd__ = __add__
+
     def __sub__(self, other):
         if isinstance(other, (int, float)):
             return self.__class__(x - other for x in self)
@@ -61,6 +57,11 @@ class WeightList(list):
             for i, y in enumerate(other):
                 self[i] -= y
         return self
+
+    def __rsub__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(other - x for x in self)
+        return self.__class__(x - y for (x, y) in zip(other, self))
 
     def __mul__(self, other):
         if isinstance(other, (int, float)):
@@ -76,6 +77,8 @@ class WeightList(list):
                 self[i] *= y
         return self
 
+    __rmul__ = __mul__
+
     def __truediv__(self, other):
         if isinstance(other, (int, float)):
             return self.__class__(x / other for x in self)
@@ -90,6 +93,11 @@ class WeightList(list):
                 self[i] /= y
         return self
 
+    def __rtruediv__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(other / x for x in self)
+        return self.__class__(x / y for (x, y) in zip(other, self))
+
     def __floordiv__(self, other):
         if isinstance(other, (int, float)):
             return self.__class__(x // other for x in self)
@@ -103,6 +111,11 @@ class WeightList(list):
             for i, y in enumerate(other):
                 self[i] //= y
         return self
+
+    def __rfloordiv__(self, other):
+        if isinstance(other, (int, float)):
+            return self.__class__(other // x for x in self)
+        return self.__class__(x // y for (x, y) in zip(other, self))
 
     def __neg__(self):
         return self.__class__(-x for x in self)
