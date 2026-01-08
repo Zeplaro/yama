@@ -124,9 +124,25 @@ class WeightList(list):
             return value
 
     def clamp(self, min_value=None, max_value=None):
-        for i, value in enumerate(self):
-            if not min_value < value < max_value:
-                self[i] = max(min(value, max_value), min_value)
+        if min_value is None and max_value is None:
+            return
+        elif min_value is not None and max_value is not None and min_value >= max_value:
+            raise ValueError(f"min_value must be less than max_value; got : {min_value} >= {max_value}")
+
+        if min_value is None:
+            for i, value in enumerate(self):
+                if value > max_value:
+                    self[i] = max_value
+        elif max_value is None:
+            for i, value in enumerate(self):
+                if value < min_value:
+                    self[i] = min_value
+        else:
+            for i, value in enumerate(self):
+                if value < min_value:
+                    self[i] = min_value
+                elif value > max_value:
+                    self[i] = max_value
 
     def round(self, decimals=None, /):
         for i, value in enumerate(self):
