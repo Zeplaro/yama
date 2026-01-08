@@ -24,25 +24,14 @@ class WeightList(list):
         return super().__getitem__(item)
 
     @classmethod
-    def fromLengthValue(cls, length, value=0.0, min_value=None, max_value=None, decimals=None):
+    def fromLengthValue(cls, length, value=0.0):
         if not isinstance(length, int):
-            raise TypeError(
-                "length must be int; got : {}, {}".format(length, type(length).__name__)
-            )
+            raise TypeError(f"length must be int; got : {length}, {type(length).__name__}")
         try:
             value = float(value)
         except ValueError:
-            raise ValueError(
-                "value must be float or string float; got : {}, {}".format(
-                    value, type(value).__name__
-                )
-            )
-        return cls(
-            (value for _ in range(length)),
-            min_value=min_value,
-            max_value=max_value,
-            decimals=decimals,
-        )
+            raise ValueError(f"value must be float or string float; got : {value}, {type(value).__name__}")
+        return cls(value for _ in range(length))
 
     def __add__(self, other):
         if isinstance(other, (int, float)):
