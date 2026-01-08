@@ -689,10 +689,10 @@ class BlendShapeTarget(Attribute):
             component_indices = mayautils.componentListToIndices(component_indices)
         if len(delta_values) != len(component_indices):
             raise RuntimeError(
-                "BlendShape '{}' inputPointsTarget values "
-                "and inputComponentsTarget not in sync".format(self.node)
+                f"BlendShape '{self.node}' inputPointsTarget values "
+                "and inputComponentsTarget not in sync"
             )
-        return {index: value for index, value in zip(component_indices, delta_values)}
+        return component_indices, weightlist.VectorList(delta_values)
 
     def setDelta(self, value, delta, inputTargetItem=None):
         if not inputTargetItem:
@@ -701,10 +701,9 @@ class BlendShapeTarget(Attribute):
         item_index = int(value * 1000 + 5000)
 
         plug = inputTargetItem[item_index]
-        component_indexes = list(delta)
+        component_indexes, delta_values = delta
         # Needed if components come from a json file with str keys
         component_indexes = [int(x) for x in component_indexes]
-        delta_values = list(delta.values())
         plug.inputPointsTarget.value = delta_values
         plug.inputComponentsTarget.value = component_indexes
 
