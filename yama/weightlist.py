@@ -95,7 +95,7 @@ class WeightList(list):
     def __hash__(self):
         return hash(tuple(self))
 
-    def get(self, k, value=None):
+    def get(self, k, value=None, /):
         try:
             return self[k]
         except IndexError:
@@ -106,11 +106,11 @@ class WeightList(list):
             if not min_value < value < max_value:
                 self[i] = max(min(value, max_value), min_value)
 
-    def round(self, decimals=None):
+    def round(self, decimals=None, /):
         for i, value in enumerate(self):
             self[i] = round(value, decimals)
 
-    def replaceWeights(self, weights):
+    def replaceWeights(self, weights, /):
         del self[:]
         for i in weights:
             self.append(i)
@@ -130,7 +130,7 @@ class WeightList(list):
         return self.__class__(self, min_value=min_value, max_value=max_value, decimals=decimals)
 
 
-def normalizeWeights(weights, min_value=None, max_value=None, decimals=None):
+def normalizeWeights(weights, /, min_value=None, max_value=None, decimals=None):
     """
     Normalizes a list of weights.
 
