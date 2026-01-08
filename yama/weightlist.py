@@ -169,6 +169,54 @@ class WeightList(list):
         return self.__class__(self, min_value=min_value, max_value=max_value, decimals=decimals)
 
 
+class VectorList(WeightList):
+    def __init__(self, data=None, /, *, min_value=None, max_value=None, decimals=None):
+        if data:
+            super().__init__(WeightList(x, min_value=min_value, max_value=max_value, decimals=decimals) for x in data)
+
+    def __str__(self):
+        return f"{self.__class__.__name__}{[list(x) for x in self]}"
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({list(self)})"
+
+    def append(self, values, /):
+        super().append(WeightList(values))
+
+    def extend(self, vectors, /):
+        super().extend(VectorList(vectors))
+
+    def insert(self, index, values, /):
+        super().insert(index, WeightList(values))
+
+    @classmethod
+    def fromLengthValue(cls, length, value=(0.0, 0.0, 0.0), vector_length=3):
+        if isinstance(value, (float, int)):
+            value = tuple(value for _ in range(vector_length))
+        else:
+            value = tuple(value)
+        return cls(WeightList(value) for _ in range(length))
+
+    def copy(self, *, min_value=None, max_value=None, decimals=None):
+        return self.__class__((x.copy() for x in self), min_value=min_value, max_value=max_value, decimals=decimals)
+
+    def clamp(self, min_value=None, max_value=None):
+        if min_value is None and max_value is None:
+            return
+        elif min_value is not None and max_value is not None and min_value >= max_value:
+            raise ValueError(f"min_value must be less than max_value; got : {min_value} >= {max_value}")
+        for vector in self:
+            vector.clamp(min_value, max_value)
+
+    def replaceWeights(self, weights, /):
+        del self[:]
+        for values in weights:
+            self.append(values)
+
+    def aslist(self):
+        return [list(vector) for vector in self]
+
+
 def normalizeWeights(weights, /, *, sum_value=1.0):
     """
     Normalizes a list of weights.
