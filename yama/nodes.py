@@ -587,7 +587,6 @@ class DependNode(Yam):
         Needs a maya api 2.0 MObject associated to the node and a MFnDependencyNode initialized with the MObject.
         :param MObject: maya api MObject
         """
-        super().__init__()
         self.MObject = MObject
         self._MObject1 = None
         self._MFn = None

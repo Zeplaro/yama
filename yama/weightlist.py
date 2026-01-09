@@ -6,9 +6,6 @@ from . import io
 
 class WeightList(list):
     def __init__(self, data=None, /, *, min_value=None, max_value=None, decimals=None):
-        super().__init__()
-
-        # Forces initial arg to go through __setitem__ to verify values are floats, clamped and rounded
         if data:
             super().__init__(data)
         if min_value is not None or max_value is not None:

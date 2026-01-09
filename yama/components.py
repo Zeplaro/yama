@@ -77,7 +77,6 @@ class Components(nodes.Yam):
     """
 
     def __init__(self, node, apiType):
-        super().__init__()
         if not isinstance(node, nodes.ControlPoint):
             raise TypeError(
                 f"Expected component node of type ControlPoint, instead got : {node},"
@@ -146,9 +145,6 @@ class SingleIndexed(Components):
     Base class for components indexed by a single index.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def __iter__(self):
         for i in range(len(self)):
             yield self.index(i)
@@ -158,9 +154,6 @@ class MeshVertices(SingleIndexed):
     """
     Class for mesh vertices.
     """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
     def getPositions(self, ws=False):
         if ws:
@@ -187,9 +180,6 @@ class CurveCVs(SingleIndexed):
     """
     Class for curve cvs.
     """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
     def getPositions(self, ws=False):
         if ws:
@@ -219,9 +209,6 @@ class DoubleIndexed(Components):
     Base class for components indexed by two indices.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def __iter__(self):
         for u in range(self.node.lenU()):
             for v in range(self.node.lenV()):
@@ -232,9 +219,6 @@ class TripleIndexed(Components):
     """
     Base class for components indexed by three indices.
     """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
     def __iter__(self):
         lenx, leny, lenz = self.node.lenXYZ()
@@ -250,7 +234,6 @@ class Component(nodes.Yam):
     """
 
     def __init__(self, node, components, index, secondIndex=None, thirdIndex=None):
-        super().__init__()
         if isinstance(node, nodes.Transform):
             node = node.shape
         self.node = node
@@ -309,8 +292,7 @@ class Component(nodes.Yam):
     def __hash__(self):
         return hash((self.node.hashCode(), self.type(), self.indices()))
 
-    def exists(self):
-        return checks.objExists(self)
+    exists = checks.objExists
 
     @property
     def name(self):
@@ -344,8 +326,6 @@ class Component(nodes.Yam):
 
 
 class MeshVertex(Component):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
     def getPosition(self, ws=False):
         if ws:
@@ -371,8 +351,6 @@ class MeshVertex(Component):
 
 
 class CurveCV(Component):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
     def getPosition(self, ws=False):
         if ws:
@@ -404,7 +382,6 @@ class ComponentsSlice(nodes.Yam):
     """
 
     def __init__(self, node, components, components_slice):
-        super().__init__()
         self.node = node
         self.components = components
         self._slice = components_slice
@@ -501,11 +478,8 @@ class ComponentsSlice(nodes.Yam):
         for x, value in zip(self, values):
             x.setPosition(value, ws=ws)
 
-    def getPosition(self, ws=False):
-        return self.getPositions(ws=ws)
-
-    def setPosition(self, value, ws=False):
-        self.setPositions(value, ws=ws)
+    getPosition = getPositions
+    setPosition = setPositions
 
 
 class SupportedTypes:

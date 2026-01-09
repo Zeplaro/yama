@@ -65,7 +65,6 @@ class Attribute(nodes.Yam):
         :param node (Depend): the node of the attribute attr.
         :param attr (OpenMaya.MPlug):
         """
-        super().__init__()
         if not isinstance(MPlug, om.MPlug):
             raise TypeError(
                 f"MPlug arg should be of type OpenMaya.MPlug not : {MPlug.__class__.__name__}"
