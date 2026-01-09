@@ -274,6 +274,21 @@ def listRelatives(*args, **kwargs) -> "YamList[DependNode]":
     kwargs["fullPath"] = True  # Needed in case of multiple obj with same name
     return yams(cmds.listRelatives(*args, **kwargs) or [])
 
+@decorators.string_args
+def listConnections(*args, **kwargs):
+    """
+    Wrapper for cmds.listConnections returning Yam objects.
+
+    Args:
+        args (DependNode | str): The node to query the connections from.
+        kwargs: kwargs passed on to cmds.listConnections .
+    Returns:
+        list[DependNode, ...]
+    """
+    if "scn" not in kwargs and "skipConversionNodes" not in kwargs:
+        kwargs["scn"] = True
+    return yams(cmds.listConnections(*args, **kwargs) or [])
+
 
 @decorators.string_args
 def findDeformers(objs, type: str | list[str] = None) -> "YamList[DependNode]":
@@ -684,17 +699,7 @@ class DependNode(Yam):
 
     addAttr = addAttr
     listRelatives = listRelatives
-
-    def listConnections(self, **kwargs):
-        """
-        Returns the maya cmds.listConnections as DependNode, Attribute or Component objects.
-        'skipConversionNodes' set to True by default if not in kwargs.
-        :param kwargs: kwargs passed on to cmds.listConnections
-        :return: list[Attribute, ...]
-        """
-        if "scn" not in kwargs and "skipConversionNodes" not in kwargs:
-            kwargs["scn"] = True
-        return yams(cmds.listConnections(self.name, **kwargs) or [])
+    listConnections = listConnections
 
     def inputs(self, **kwargs):
         """
