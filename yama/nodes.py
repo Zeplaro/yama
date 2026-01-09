@@ -622,9 +622,6 @@ class DependNode(Yam):
             except (RuntimeError, TypeError):
                 return False
 
-    def __hash__(self):
-        return self.hashCode()
-
     @property
     def MObject1(self):
         """
@@ -685,18 +682,8 @@ class DependNode(Yam):
     def hasattr(self, attr):
         return checks.objExists(f"{self}.{attr}")
 
-    def addAttr(self, longName, **kwargs):
-        return addAttr(self, longName, **kwargs)
-
-
-    def listRelatives(self, **kwargs):
-        """
-        Returns the maya cmds.listRelatives as DependNode objects.
-        :param kwargs: kwargs passed on to cmds.listRelatives
-        :return: list[DependNode, ...]
-        """
-        kwargs["fullPath"] = True  # Needed in case of multiple obj with same name
-        return yams(cmds.listRelatives(self.name, **kwargs) or [])
+    addAttr = addAttr
+    listRelatives = listRelatives
 
     def listConnections(self, **kwargs):
         """
@@ -756,6 +743,8 @@ class DependNode(Yam):
         if not self._hashCode:
             self._hashCode = om.MObjectHandle(self.MObject).hashCode()
         return self._hashCode
+
+    __hash__ = hashCode
 
     def uuid(self, asString=True):
         if asString:
