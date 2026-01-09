@@ -300,6 +300,31 @@ def findDeformers(objs, type: str | list[str] = None) -> "YamList[DependNode]":
     return yams(deformers)
 
 
+def addAttr(node, /, longName, **kwargs):
+    """
+    Wrapper for cmds.addAttr that returns the created Attribute object.
+    :param node: DependNode | str
+    :param longName: str
+    :param kwargs: kwargs passed on to cmds.addAttr
+    :return: Attribute object
+    """
+    if not any(key in kwargs for key in ["at", "attributeType", "pxy", "proxy"]):
+        raise RuntimeError(
+            f"Failed to add attribute '{longName}' on '{node}'; No attribute type or proxy given"
+        )
+
+    # converting proxy kwarg to str in case an Attribute object was given
+    if any(key in kwargs for key in ["pxy", "proxy"]):
+        kwargs["prx"] = str(kwargs.get("pxy", kwargs.get("proxy")))
+
+    cmds.addAttr(str(node), longName=longName, **kwargs)
+
+    if isinstance(node, DependNode):
+        return node.attr(longName)
+    else:
+        return yam(f"{node}.{longName}")
+
+
 @decorators.string_args
 def isa(
     node: "str | DependNode",
@@ -677,18 +702,7 @@ class DependNode(Yam):
         return checks.objExists(f"{self}.{attr}")
 
     def addAttr(self, longName, **kwargs):
-        if not any(key in kwargs for key in ["at", "attributeType", "pxy", "proxy"]):
-            raise RuntimeError(
-                f"Failed to add attribute '{longName}' on '{self}'; No attribute type given"
-            )
-
-        cmds.addAttr(self.name, longName=longName, **kwargs)
-        attr = self.attr(longName)
-
-        if not kwargs.get("hidden", True) and not kwargs.get("keyable", False):
-            attr.hidden = False
-
-        return attr
+        return addAttr(self, longName, **kwargs)
 
 
     def listRelatives(self, **kwargs):
