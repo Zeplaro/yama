@@ -700,32 +700,10 @@ class DependNode(Yam):
     addAttr = addAttr
     listRelatives = listRelatives
     listConnections = listConnections
-
-    def inputs(self, **kwargs):
-        """
-        Returns listConnections with destination connections disabled.
-        See listConnections for more info.
-        """
-        return self.listConnections(destination=False, **kwargs)
-
-    def outputs(self, **kwargs):
-        """
-        Returns listConnections with source connections disabled.
-        See listConnections for more info.
-        """
-        return self.listConnections(source=False, **kwargs)
-
-    def listAttr(self, **kwargs):
-        return listAttr(self, **kwargs)
-
-    def listHistory(self, **kwargs):
-        """
-        Returns the maya cmds.listHistory as DependNode, Attribute or Component objects.
-        Allows the kwarg 'type' (unlike cmds.listHistory) to only return objects of given type.
-        :param kwargs: kwargs passed on to cmds.listConnections
-        :return: list[Attribute, ...]
-        """
-        return listHistory(self.name, **kwargs)
+    inputs = functools.partial(listConnections, destination=False)
+    outputs = functools.partial(listConnections, source=False)
+    listAttr = listAttr
+    listHistory = listHistory
 
     def type(self) -> str:
         """
@@ -1908,9 +1886,6 @@ class BlendShape(WeightGeometryFilter):
       in-between values are used.
     """
 
-    def __getitem__(self, item):
-        return self.target(item)
-
     def __contains__(self, item):
         """
         Checks if the blendShape node contains a given target.
@@ -1946,6 +1921,8 @@ class BlendShape(WeightGeometryFilter):
             return targets[index]
         except IndexError:
             raise IndexError(f"BlendShape target index out of range : {index}.")
+
+    __getitem__ = target
 
     @property
     def weightsAttr(self):
