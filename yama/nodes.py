@@ -623,7 +623,7 @@ class DependNode(Yam):
                 return False
 
     def __hash__(self):
-        return self.hashCode
+        return self.hashCode()
 
     @property
     def MObject1(self):
@@ -752,7 +752,6 @@ class DependNode(Yam):
             self._types = cmds.nodeType(self.name, inherited=True)
         return self._types
 
-    @property
     def hashCode(self):
         if not self._hashCode:
             self._hashCode = om.MObjectHandle(self.MObject).hashCode()

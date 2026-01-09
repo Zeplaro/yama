@@ -175,7 +175,7 @@ class Attribute(nodes.Yam):
                 return False
 
     def __hash__(self):
-        return self.hashCode
+        return self.hashCode()
 
     @property
     def MPlug1(self):
@@ -550,7 +550,6 @@ class Attribute(nodes.Yam):
                 f" '{alias}'; {e}"
             )
 
-    @property
     def hashCode(self):
         if self._hashCode is None:
             self._hashCode = om.MObjectHandle(self.MPlug.attribute()).hashCode()

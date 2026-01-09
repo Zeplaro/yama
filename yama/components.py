@@ -116,7 +116,7 @@ class Components(nodes.Yam):
                 return False
 
     def __hash__(self):
-        return hash((self.node.hashCode, self.api_type))
+        return hash((self.node.hashCode(), self.api_type))
 
     @property
     def name(self):
@@ -307,7 +307,7 @@ class Component(nodes.Yam):
         return hash(self) == hash(other)
 
     def __hash__(self):
-        return hash((self.node.hashCode, self.type(), self.indices()))
+        return hash((self.node.hashCode(), self.type(), self.indices()))
 
     def exists(self):
         return checks.objExists(self)
@@ -468,7 +468,7 @@ class ComponentsSlice(nodes.Yam):
         return False
 
     def __hash__(self):
-        return hash((self.node.hashCode, self.components.api_type, self.indices))
+        return hash((self.node.hashCode(), self.components.api_type, self.indices))
 
     @property
     def name(self):
