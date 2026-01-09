@@ -3,6 +3,7 @@
 """
 Contains all the class and functions for maya attributes.
 """
+import functools
 
 from maya import cmds, mel
 import maya.api.OpenMaya as om
@@ -88,14 +89,6 @@ class Attribute(nodes.Yam):
     def __repr__(self):
         return f"{self.__class__.__name__}('{self.node}.{self.attribute}')"
 
-    def __getattr__(self, attr):
-        """
-        Gets sub attributes of self.
-        :param attr (str): the sub-attribute name.
-        :return: Attribute object.
-        """
-        return self.attr(attr)
-
     def __getitem__(self, item):
         """
         Gets the element of the array attribute at the given index.
@@ -116,14 +109,14 @@ class Attribute(nodes.Yam):
         Using self.name for + operator.
         :return: str
         """
-        return self.name + other
+        return f"{self.name}{other}"
 
     def __radd__(self, other):
         """
         Using self.name for reverse + operator.
         :return: str
         """
-        return other + self.name
+        return f"{other}{self.name}"
 
     def __contains__(self, item):
         """
@@ -131,27 +124,6 @@ class Attribute(nodes.Yam):
         :return: str
         """
         return item in self.attribute
-
-    def __rshift__(self, other):
-        """
-        Using the >> operator to connect self to the other attribute.
-        :return: None
-        """
-        self.connectTo(other)
-
-    def __lshift__(self, other):
-        """
-        Using the << operator to connect the other attribute to self.
-        :return: None
-        """
-        self.connectFrom(other)
-
-    def __floordiv__(self, other):
-        """
-        Using the // operator to disconnect self from the other attribute.
-        :return: None
-        """
-        self.disconnect(other)
 
     def __len__(self):
         return self.MPlug.numElements()
@@ -173,9 +145,6 @@ class Attribute(nodes.Yam):
                 return self.MPlug == nodes.yam(other).MPlug
             except (TypeError, checks.ObjExistsError, AttributeError):
                 return False
-
-    def __hash__(self):
-        return self.hashCode()
 
     @property
     def MPlug1(self):
@@ -211,6 +180,8 @@ class Attribute(nodes.Yam):
 
         attribute = Attribute(getMPlug(f"{self.name}.{attr}"), self.node)
         return attribute
+
+    __getattr__ = attr
 
     def hasattr(self, attr):
         return checks.objExists(f"{self}.{attr}")
@@ -251,12 +222,7 @@ class Attribute(nodes.Yam):
         """
         self.value = value
 
-    def exists(self):
-        """
-        Checks if the attribute exists.
-        :return: bool
-        """
-        return checks.objExists(self)
+    exists = checks.objExists
 
     @property
     def index(self):
@@ -284,32 +250,32 @@ class Attribute(nodes.Yam):
         """
         return not self.MPlug.isFreeToChange()
 
-    def connectTo(self, attr, **kwargs):
+    def connectTo(self, attr, /, **kwargs):
         """
         Connect this attribute to the given attr.
         kwargs are passed on to cmds.connectAttr
         """
-        if isinstance(attr, Attribute):
-            attr = attr.name
-        cmds.connectAttr(self.name, attr, **kwargs)
+        cmds.connectAttr(self.name, str(attr), **kwargs)
 
-    def connectFrom(self, attr, **kwargs):
+    __rshift__ = connectTo
+
+    def connectFrom(self, attr, /, **kwargs):
         """
         Connect the given attr to this attribute.
         kwargs are passed on to cmds.connectAttr
         """
-        if isinstance(attr, Attribute):
-            attr = attr.name
-        cmds.connectAttr(attr, self.name, **kwargs)
+        cmds.connectAttr(str(attr), self.name, **kwargs)
 
-    def disconnect(self, attr):
+    __lshift__ = connectFrom
+
+    def disconnect(self, attr, /):
         """
         Disconnect the connection between self (source) and attr (destination)
         :param attr: str or Attribute
         """
-        if isinstance(attr, Attribute):
-            attr = attr.name
-        cmds.disconnectAttr(self.name, attr)
+        cmds.disconnectAttr(self.name, str(attr))
+
+    __floordiv__ = disconnect
 
     def listConnections(self, **kwargs):
         """
@@ -318,11 +284,9 @@ class Attribute(nodes.Yam):
         :param kwargs: kwargs to pass on to cmds.listConnections
         :return: YamList of Attribute or Yam node objects.
         """
-        if "scn" not in kwargs and "skipConversionNodes" not in kwargs:
-            kwargs["skipConversionNodes"] = True
         if "p" not in kwargs and "plugs" not in kwargs:
             kwargs["plugs"] = True
-        return nodes.yams(cmds.listConnections(self.name, **kwargs) or [])
+        return nodes.listConnections(self.name, **kwargs)
 
     def input(self, **kwargs):
         connection = self.listConnections(destination=False, **kwargs)
@@ -343,8 +307,7 @@ class Attribute(nodes.Yam):
         except AssertionError:
             raise RuntimeError(f"Attribute {self} does not have a source connection")
 
-    def outputs(self, **kwargs):
-        return self.listConnections(source=False, **kwargs)
+    outputs = functools.partial(listConnections, source=False)
 
     def breakConnection(self):
         connection = self.input()
@@ -352,13 +315,7 @@ class Attribute(nodes.Yam):
             connection.disconnect(self)
             return connection
 
-    def listAttr(self, **kwargs):
-        """
-        List the attributes of this attribute via cmds.listAttr.
-        :param kwargs: kwargs to pass on to cmds.listAttr.
-        :return: YamList of Attribute objects.
-        """
-        return nodes.listAttr(self, **kwargs)
+    listAttr = nodes.listAttr
 
     def types(self):
         if self._types is None:
@@ -485,12 +442,8 @@ class Attribute(nodes.Yam):
         """
         When value is False, sets the attribute as hidden.
         """
-        if value:
-            cmds.setAttr(self.name, keyable=False)
-            cmds.setAttr(self.name, channelBox=True)
-        else:
-            cmds.setAttr(self.name, keyable=False)
-            cmds.setAttr(self.name, channelBox=False)
+        cmds.setAttr(self.name, keyable=False)
+        cmds.setAttr(self.name, channelBox=value)
 
     @property
     def hidden(self):
@@ -503,12 +456,8 @@ class Attribute(nodes.Yam):
         """
         When value is False, sets the attribute as channelBox (displayable).
         """
-        if value:
-            cmds.setAttr(self.name, keyable=False)
-            cmds.setAttr(self.name, channelBox=False)
-        else:
-            cmds.setAttr(self.name, keyable=False)
-            cmds.setAttr(self.name, channelBox=True)
+        cmds.setAttr(self.name, keyable=False)
+        cmds.setAttr(self.name, channelBox=not value)
 
     @property
     def niceName(self):
@@ -554,6 +503,8 @@ class Attribute(nodes.Yam):
         if self._hashCode is None:
             self._hashCode = om.MObjectHandle(self.MPlug.attribute()).hashCode()
         return self._hashCode
+
+    __hash__ = hashCode
 
     def children(self):
         if not self.MPlug.isCompound:
