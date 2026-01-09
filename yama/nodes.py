@@ -589,24 +589,16 @@ class DependNode(Yam):
             self._MFn = self._MFN_FUNC(getattr(self, self._MFN_OBJECT))
         return self._MFn
 
-    def __getattr__(self, attr):
-        """
-        Returns an Attribute linked to self.
-        :param attr: str
-        :return: Attribute object
-        """
-        return self.attr(attr)
-
     def __add__(self, other):
         """
         Adds the node's name and returns a str
         :param other: str or DependNode
         :return: str
         """
-        return self.name + other
+        return f"{self.name}{other}"
 
     def __iadd__(self, other):
-        self.rename(self.name + str(other))
+        self.rename(f"{self.name}{other}")
 
     def __radd__(self, other):
         """
@@ -614,7 +606,7 @@ class DependNode(Yam):
         :param other: str or DependNode
         :return: str
         """
-        return other + self.name
+        return f"{other}{self.name}"
 
     def __eq__(self, other):
         """
@@ -681,6 +673,8 @@ class DependNode(Yam):
         from . import attributes
 
         return attributes.getAttribute(self, attr)
+
+    __getattr__ = attr
 
     def isa(self, type_, /):
         if isinstance(type_, str) and type_ == self.type():
