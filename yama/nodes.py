@@ -325,10 +325,10 @@ def addAttr(node, /, longName, **kwargs):
         return yam(f"{node}.{longName}")
 
 
-@decorators.string_args
 def isa(
-    node: "str | DependNode",
+    item: "str | Yam",
     type_: "str | list | tuple | type",
+    /,
     *,
     _nodetypes: list = None,
 ) -> bool:
@@ -336,7 +336,7 @@ def isa(
     Returns True if the given node is of the given type·s.
 
     Args:
-        node (str | DependNode): The node to check the type of.
+        item (str | Yam): The node to check the type of.
         type_ (str | list | tuple | type): node type or list of type to check against.
         _nodetypes (list): For internal recursive use only. Do not provide a value.
                            Avoids having to call cmds.nodeType at every recursion when _type is a list.
@@ -344,21 +344,24 @@ def isa(
     Returns:
         bool
     """
+    if not _nodetypes and "." in (attribute := str(item)):
+        _nodetypes = ["attribute", cmds.getAttr(attribute, type=True) or yam(item).type()]
+
     if isinstance(type_, str):
         if not _nodetypes:
-            _nodetypes = cmds.nodeType(str(node), inherited=True)
+            _nodetypes = cmds.nodeType(str(item), inherited=True)
         return type_ in _nodetypes
 
     elif isinstance(type_, (list, tuple)):
         if not _nodetypes:
-            _nodetypes = cmds.nodeType(str(node), inherited=True)
+            _nodetypes = cmds.nodeType(str(item), inherited=True)
         for t in type_:
-            if isa(node, t, _nodetypes=_nodetypes):
+            if isa(item, t, _nodetypes=_nodetypes):
                 return True
         return False
 
     elif isinstance(type_, type):
-        return isinstance(node, type_)
+        return isinstance(item, type_)
 
     raise TypeError(
         f"{type(type_).__name__} is not a valid parameter type for .isa() , "
@@ -546,25 +549,6 @@ class Yam(abc.ABC, metaclass=YamMeta):
     def types(self):
         pass
 
-    def isa(self, types) -> bool:
-        """Returns True is self is of the given type."""
-        if isinstance(types, str):
-            return types in self.types()
-
-        elif isinstance(types, (list, tuple)):
-            for t in types:
-                if self.isa(t):
-                    return True
-            return False
-
-        elif isinstance(types, type):
-            return isinstance(self, types)
-
-        raise TypeError(
-            f"{type(types).__name__} is not a valid parameter type for .isa() , "
-            "valid  types are: str, list, tuple, type."
-        )
-
 
 class DependNode(Yam):
     """
@@ -698,6 +682,12 @@ class DependNode(Yam):
 
         return attributes.getAttribute(self, attr)
 
+    def isa(self, type_, /):
+        if isinstance(type_, str) and type_ == self.type():
+            return True
+
+        return isa(self, type_, _nodetypes=self.types())
+
     def hasattr(self, attr):
         return checks.objExists(f"{self}.{attr}")
 
@@ -758,7 +748,7 @@ class DependNode(Yam):
         """
         return self.types()[-1]
 
-    def types(self) -> [str, ...]:
+    def types(self) -> list[str]:
         """
         Lists the inherited maya types.
         e.g.: for a joint -> ['containerBase', 'entity', 'dagNode', 'transform', 'joint']
