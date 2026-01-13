@@ -922,10 +922,7 @@ class Transform(DagNode):
         """
         return YamList(x for x in self.shapes(type=type, noIntermediate=False) if x.isIntermediateObject())
 
-    def allDescendents(self, type=None):
-        if type:
-            return self.listRelatives(allDescendents=True, type=type)
-        return self.listRelatives(allDescendents=True)
+    allDescendents = functools.partial(listRelatives, allDescendents=True)
 
     def getXform(self, **kwargs):
         """
