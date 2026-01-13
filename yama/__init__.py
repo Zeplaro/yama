@@ -6,7 +6,7 @@ __credits__ = {"emotionalSupport": "Emilie Jolin"}
 
 from maya import cmds
 from .nodes import *
-from . import decorators
+from . import decorators, nodes
 
 yum = nodes.Yum()
-ymmds = decorators.Yammds(cmds)
+ymds = decorators.yammds(cmds)
