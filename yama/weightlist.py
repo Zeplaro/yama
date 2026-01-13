@@ -22,8 +22,8 @@ class WeightList(list):
         return super().__getitem__(item)
 
     @classmethod
-    def fromLengthValue(cls, length, value=0.0):
-        return cls(value for _ in range(length))
+    def fromLengthValue(cls, length, value=0.0, **kwargs):
+        return cls((value for _ in range(length)), **kwargs)
 
     def __add__(self, other):
         if isinstance(other, (int, float)):
