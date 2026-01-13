@@ -9,7 +9,7 @@ from maya import cmds, mel
 import maya.api.OpenMaya as om
 import maya.OpenMaya as om1
 
-from . import config, nodes, weightlist, checks, mayautils
+from . import config, nodes, weightlist, checks, mayautils, decorators
 
 
 def getAttribute(node, attr):
@@ -249,13 +249,7 @@ class Attribute(nodes.Yam):
         """
         return not self.MPlug.isFreeToChange()
 
-    def connectTo(self, attr, /, **kwargs):
-        """
-        Connect this attribute to the given attr.
-        kwargs are passed on to cmds.connectAttr
-        """
-        cmds.connectAttr(self.name, str(attr), **kwargs)
-
+    connectTo = decorators.string_args(cmds.connectAttr)
     __rshift__ = connectTo
 
     def connectFrom(self, attr, /, **kwargs):
@@ -266,14 +260,7 @@ class Attribute(nodes.Yam):
         cmds.connectAttr(str(attr), self.name, **kwargs)
 
     __lshift__ = connectFrom
-
-    def disconnect(self, attr, /):
-        """
-        Disconnect the connection between self (source) and attr (destination)
-        :param attr: str or Attribute
-        """
-        cmds.disconnectAttr(self.name, str(attr))
-
+    disconnect = decorators.string_args(cmds.disconnectAttr)
     __floordiv__ = disconnect
 
     def listConnections(self, **kwargs):
