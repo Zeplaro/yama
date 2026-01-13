@@ -516,7 +516,7 @@ class Attribute(nodes.Yam):
         @return: Attribute
         """
         if not self.isArray():
-            raise RuntimeError("The attribute {} is not an array attribute.".format(repr(self)))
+            raise RuntimeError(f"The attribute {repr(self)} is not an array attribute.")
         existing_indices = self.indices() or [-1]
         next_index = existing_indices[-1] + 1
         return self[next_index]
