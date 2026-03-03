@@ -25,7 +25,7 @@ def getAttribute(node, attr):
             node = node.attr(attr)
         return node
     else:
-        MPlug = getMPlug(node.name + "." + attr)
+        MPlug = getMPlug(f"{node.name}.{attr}")
         return Attribute(MPlug, node)
 
 
