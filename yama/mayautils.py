@@ -1,5 +1,8 @@
 # encoding: utf8
 
+import itertools
+from typing import Literal
+
 from maya import cmds, mel
 import maya.api.OpenMaya as om
 from . import nodes, xformutils, decorators, config, utils
@@ -349,14 +352,16 @@ def createNgon(sides=3, diameter=1, name="pNgon1", upAxis="y", parent=None):
         )
     up_axis = upAxis.lower()
     if up_axis[-1] not in "xyz":
-        raise ValueError(f"upAxis arg can only be 'x', 'y', 'z', '-x', '-y', or '-z' not '{upAxis}'")
+        raise ValueError(
+            f"upAxis arg can only be 'x', 'y', 'z', '-x', '-y', or '-z' not '{upAxis}'"
+        )
     reverse = up_axis[0] == "-"
     up_axis = up_axis[-1]
     up_axis_index = "xyz".index(up_axis)
     if up_axis == "y":
         reverse = not reverse
 
-    points_2d = utils.getRegularPolygonCoordinates(sides, diameter/2, reverse=reverse)
+    points_2d = utils.getRegularPolygonCoordinates(sides, diameter / 2, reverse=reverse)
     points_3d = []
     for point in points_2d:
         point = list(point)
@@ -381,7 +386,7 @@ def createNgon(sides=3, diameter=1, name="pNgon1", upAxis="y", parent=None):
     return ngon
 
 
-def componentListToIndices(components):
+def unpackMayaSlices(components):
     """
     Unpacks a list of components to a flat list of component indices.
     Maya's componentList attributes store components. Getting the value of this type of attributes returns a list of
@@ -397,3 +402,44 @@ def componentListToIndices(components):
         else:
             indices.append(int(pack))
     return indices
+
+
+def packToMayaSlices(indices: list[int], /) -> list[str]:
+    ranges = []
+    for k, g in itertools.groupby(enumerate(indices), key=lambda x: x[0] - x[1]):
+        group = list(g)
+        start = group[0][1]
+        end = group[-1][1]
+
+        if start == end:
+            ranges.append(str(start))
+        else:
+            ranges.append(f"{start}:{end}")
+    return ranges
+
+
+def getMatrixFromNormal(
+    normal: tuple[float, float, float],
+    normalAxis: Literal["x", "y", "z", "-x", "-y", "-z"] = "y",
+    upAxis: Literal["x", "y", "z", "-x", "-y", "-z"] = "z",
+    worldUpVector: tuple[float, float, float] = (1, 0, 0),
+    t: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0),
+) -> list[float]:
+    v_m = om.MVector(utils.getVectorFromAxis(normalAxis))
+    v_r = om.MVector(utils.getVectorFromAxis(upAxis))
+    v_c = v_m ^ v_r
+
+    V_m = om.MVector(normal)
+    V_c = V_m ^ om.MVector(worldUpVector)
+    V_r = V_c ^ V_m
+
+    matrix = []
+    for m, r, c in zip(v_m, v_r, v_c):
+        if m:
+            matrix.extend(list(V_m * m) + [0.0])
+        elif r:
+            matrix.extend(list(V_r * r) + [0.0])
+        else:
+            matrix.extend(list(V_c * c) + [0.0])
+    matrix.extend(t)
+    return matrix
