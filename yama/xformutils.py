@@ -1,9 +1,11 @@
 # encoding: utf8
 
+import math
+
 from maya import cmds
 import maya.api.OpenMaya as om
 
-from . import nodes, components, decorators, utils, checks
+from . import nodes, components, decorators, utils, checks, mayautils
 
 
 def align(objs=None, t=True, r=True):
@@ -19,6 +21,7 @@ def align(objs=None, t=True, r=True):
         raise ValueError("Not enough object selected.")
     objs = nodes.yams(objs)
     poses = [x.getPosition(ws=True) for x in objs]
+    new_poses = {obj: {} for obj in objs}
 
     t_step, t_start, r_step, r_start = None, None, None, None
     if t:
@@ -30,15 +33,15 @@ def align(objs=None, t=True, r=True):
 
     for i, obj in enumerate(objs):
         if t:
-            pos = [t_step[x] * i + t_start[x] for x in range(3)]
-            obj.setPosition(pos, ws=True)
+            new_poses[obj]["t"] = [t_step[x] * i + t_start[x] for x in range(3)]
         if r:
-            rot = [r_step[x] * i + r_start[x] for x in range(3)]
-            obj.setXform(ro=rot, ws=True)
+            new_poses[obj]["r"] = [r_step[x] * i + r_start[x] for x in range(3)]
 
-    if r and not t:
-        for obj, pos in zip(objs, poses):
-            obj.setPosition(pos, ws=True)
+    for obj in mayautils.hierarchize(objs):
+        if t:
+            obj.setPosition(new_poses[obj]["t"], ws=True)
+        if r:
+            obj.setXform(ro=new_poses[obj]["r"], ws=True)
 
 
 @decorators.mayaundo
@@ -399,7 +402,12 @@ def extractXYZ(neutral, pose, axis=("y", "xz"), ws=False):
 
 @decorators.keepsel
 def makePlanar(
-    objs, firstPointIndex=0, secondPointIndex=-1, thirdPointIndex=1, aimObjsChain=True, **aimKwargs
+    objs,
+    firstPointIndex=0,
+    secondPointIndex=-1,
+    thirdPointIndex=1,
+    aimObjsChain=True,
+    **aimKwargs,
 ):
     """
     Aligns the given objects on a three point plane defined by the first, last and objs[midIndex] given objects.
@@ -474,7 +482,7 @@ def makePlanar(
             # Matching the aimNull to defined up object
             aimNull.setXform(ro=nulls[firstPointIndex].getXform(ro=True, ws=True), ws=True)
             # Moving the aimNull up by same amount as distance between first and last object
-            dist = utils.distance(objs[0].getPosition(ws=True), objs[-1].getPosition(ws=True)) * 10
+            dist = math.dist(objs[0].getPosition(ws=True), objs[-1].getPosition(ws=True)) * 10
             cmds.move(dist, aimNull.name, objectSpace=True, relative=True, moveY=True)
 
             aimKwargs.setdefault("worldUpType", "object")
@@ -487,3 +495,107 @@ def makePlanar(
             cmds.delete(aimNull.name)
         except NameError:
             pass
+
+
+def snapPointsToClosest(
+    sourceGeo: str | nodes.Yam, targetCps: list[str | components.Component], ws=True
+) -> None:
+    source_pos = {cp: cp.getPosition(ws=ws) for cp in nodes.yam(sourceGeo).cp}
+    target_pos = {cp: cp.getPosition(ws=ws) for cp in nodes.yams(targetCps)}
+
+    distances = {
+        target: sorted(
+            [math.dist(t_pos, s_pos), source] for source, s_pos in source_pos.items()
+        )
+        for target, t_pos in target_pos.items()
+    }
+
+    targets = set(target_pos)
+    matches = {}
+
+    while targets:
+        target = targets.pop()
+        dist, source = distances[target].pop(0)
+        if source not in matches:
+            matches[source] = dist, target
+        elif dist < matches[source][0]:
+            targets.add(matches[source][1])
+            matches[source] = dist, target
+        else:
+            targets.add(target)
+
+    for source, (_, target) in matches.items():
+        target.setPosition(source_pos[source], ws=ws)
+
+
+def alignToClosestMeshNormal(
+    objs=None,
+    mesh=None,
+    /,
+    normalAxis="y",
+    upAxis="x",
+    worldUpVector=(1, 0, 0),
+    apply=True,
+    snapToClosestPoint=True,
+):
+    if not objs or not mesh:
+        sel = nodes.selected()
+        if len(sel) < 2:
+            raise RuntimeError("No object or mesh given and not enough objects selected.")
+        *objs, mesh = sel
+    else:
+        if not isinstance(objs, (list, tuple, set)):
+            objs = [objs]
+        objs = nodes.yams(objs)
+        mesh = nodes.yam(mesh)
+
+    if mesh.isa("transform"):
+        shapes = mesh.shapes(type="mesh")
+        if not shapes:
+            raise ValueError(f"Given mesh {repr(mesh)} is not a mesh or a mesh transform.")
+        mesh = shapes[0]
+    elif not mesh.isa("mesh"):
+        raise ValueError(f"Given mesh {repr(mesh)} is not a mesh or a mesh transform.")
+
+    failed = nodes.YamList()
+    for obj in objs:
+        if not obj.isa("transform"):
+            failed.append(obj)
+    if failed:
+        raise ValueError(f"The given objs {failed} are not transforms.")
+
+    valid_axis = {x + y for x in ["", "-"] for y in "xyz"}
+    normal_axis = normalAxis.lower()
+    if normal_axis not in valid_axis:
+        raise ValueError(
+            f"Given normal axis {normalAxis} is invalid, must be in {sorted(valid_axis)}."
+        )
+    up_axis = upAxis.lower()
+    if up_axis not in valid_axis:
+        raise ValueError(
+            f"Given up axis {upAxis} is invalid, must be in {sorted(valid_axis)}."
+        )
+    if normal_axis[-1] == up_axis[-1]:
+        raise RuntimeError(
+            f"Given normal axis {normal_axis} and up axis {up_axis} are the same."
+        )
+
+    matrices = []
+    for obj in objs:
+        point = om.MPoint(*obj.getXform(t=True, ws=True))
+        closest_point, faceId = mesh.MFn.getClosestPoint(point, space=om.MSpace.kWorld)
+        normal, faceId = mesh.MFn.getClosestNormal(closest_point, space=om.MSpace.kWorld)
+
+        matrix = mayautils.getMatrixFromNormal(
+            normal,
+            normalAxis=normalAxis,
+            upAxis=upAxis,
+            worldUpVector=worldUpVector,
+            t=closest_point if snapToClosestPoint else point,
+        )
+        matrices.append(matrix)
+
+        if apply:
+            obj.setXform(m=matrix, ws=True)
+
+    return matrices
