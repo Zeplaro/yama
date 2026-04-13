@@ -9,7 +9,7 @@ from maya import cmds, mel
 import maya.api.OpenMaya as om
 import maya.OpenMaya as om1
 
-from . import config, nodes, weightlist, checks, mayautils, decorators
+from . import config, nodes, weightlist, checks, mayautils
 
 
 def getAttribute(node, attr):
@@ -249,7 +249,13 @@ class Attribute(nodes.Yam):
         """
         return not self.MPlug.isFreeToChange()
 
-    connectTo = decorators.string_args(cmds.connectAttr)
+    def connectTo(self, attr, /, **kwargs):
+        """
+        Connect this attribute to the given attr.
+        kwargs are passed on to cmds.connectAttr
+        """
+        cmds.connectAttr(self.name, str(attr), **kwargs)
+
     __rshift__ = connectTo
 
     def connectFrom(self, attr, /, **kwargs):
@@ -260,7 +266,14 @@ class Attribute(nodes.Yam):
         cmds.connectAttr(str(attr), self.name, **kwargs)
 
     __lshift__ = connectFrom
-    disconnect = decorators.string_args(cmds.disconnectAttr)
+
+    def disconnect(self, attr, /):
+        """
+        Disconnect the connection between self (source) and attr (destination)
+        :param attr: str or Attribute
+        """
+        cmds.disconnectAttr(self.name, str(attr))
+
     __floordiv__ = disconnect
 
     def listConnections(self, **kwargs):
@@ -293,7 +306,7 @@ class Attribute(nodes.Yam):
         except AssertionError:
             raise RuntimeError(f"Attribute {self} does not have a source connection")
 
-    outputs = functools.partial(listConnections, source=False)
+    outputs = functools.partialmethod(listConnections, source=False)
 
     def breakConnection(self):
         connection = self.input()
@@ -595,7 +608,7 @@ class BlendShapeTarget(Attribute):
             shape_value = float(shape_value)
             self.setDelta(shape_value, data, inputTargetItem)
 
-    def getDelta(self, target_value, item_index=None):
+    def getDelta(self, target_value, item_index=None, getFullArray=False):
         """
         Gets the delta data for one specific in-between value of the target; same value you would set on the attribute
         of the blendShape node corresponding to this target, to "activate" the target or its in-between.
@@ -605,6 +618,8 @@ class BlendShapeTarget(Attribute):
         Args:
             target_value: float, value at which the full or in-between shape gets activated. If None, expects item_index
             item_index: int, if provided and target_value is None, uses this index for inputTargetItem plug.
+            getFullArray (bool): If True, returns the full array for each points of the geometry even when they have a
+                                 delta of [0.0, 0.0, 0.0].
 
         Returns:
             delta: dict of {influenced component: [vector list x, y, z for the component delta]}
@@ -622,12 +637,25 @@ class BlendShapeTarget(Attribute):
             item_index
         ].inputComponentsTarget.value
         if component_indices and isinstance(component_indices[0], str):
-            component_indices = mayautils.componentListToIndices(component_indices)
+            component_indices = mayautils.unpackMayaSlices(component_indices)
         if len(delta_values) != len(component_indices):
             raise RuntimeError(
                 f"BlendShape '{self.node}' inputPointsTarget values "
                 "and inputComponentsTarget not in sync"
             )
+
+        if getFullArray:
+            full_component_indices = []
+            full_deltas_values = []
+            for i in range(len(self.geometry)):
+                full_component_indices.append(i)
+                if i in component_indices:
+                    full_deltas_values.append(delta_values[component_indices.index(i)])
+                else:
+                    full_deltas_values.append([0.0, 0.0, 0.0])
+            component_indices = full_component_indices
+            delta_values = full_deltas_values
+
         return component_indices, weightlist.VectorList(delta_values)
 
     def setDelta(self, value, delta, inputTargetItem=None):
