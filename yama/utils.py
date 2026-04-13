@@ -8,6 +8,7 @@ from string import ascii_lowercase
 import math
 from functools import reduce
 from operator import mul
+from typing import Literal
 
 
 def mulLists(lists):
@@ -189,7 +190,8 @@ def getRegularPolygonCoordinates(sides=3, radius=0.5, reverse=False):
     return points
 
 
-def recursive_map(func, iterable, *, recursiontypes=(tuple, list), forcerecursiontypes=False):
+def recursive_map(func, iterable, *, recursiontypes=(tuple, list, set), forcerecursiontypes=False):
+
     """
     Recursive equivalent of map if an element of the iterable is an instance of given recursiontypes.
 
@@ -211,3 +213,12 @@ def recursive_map(func, iterable, *, recursiontypes=(tuple, list), forcerecursio
                 yield type(item)(recursive_map(func, item))
         else:
             yield func(item)
+
+
+def getVectorFromAxis(axis: Literal["x", "y", "z", "-x", "-y", "-z"], /):
+    mapping = {
+        "x": [1.0, 0.0, 0.0], "-x": [-1.0, 0.0, 0.0],
+        "y": [0.0, 1.0, 0.0], "-y": [0.0, -1.0, 0.0],
+        "z": [0.0, 0.0, 1.0], "-z": [0.0, 0.0, -1.0],
+    }
+    return mapping[axis]
