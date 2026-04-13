@@ -1,5 +1,5 @@
 # encoding: utf8
-
+import inspect
 import uuid
 from functools import wraps
 
@@ -32,29 +32,41 @@ def keepsel(func):
 
 
 def verbose(func):
+    signature = inspect.signature(func)
+
     @wraps(func)
     def wrapper(*args, **kwargs):
-        print(f"---- Calling {func.__name__}; -args: {args}; --kwargs: {kwargs}")
+        bound_args = signature.bind(*args, **kwargs)
+        bound_args.apply_defaults()
+        arg_strings = [f"{name}={repr(value)}" for name, value in bound_args.arguments.items()]
+        print(f"---- Calling {func.__module__}.{func.__qualname__} with arguments:\n-------- {', '.join(arg_strings)}")
         result = func(*args, **kwargs)
-        print(f"---- Result of {func.__name__} is : {result}; of type : {type(result).__name__}")
+        print(f"---- Result of {func.__name__} is :\n-------- {repr(result)}")
         return result
 
     return wrapper
 
 
-def string_args(func):
+def stringify_args(str_kwargs: list | tuple = (), /):
     """
     Converts all args to string, and YamList to list (by using recursive_map), before passing them to the given func.
     Doing this allows to convert the args to str and still have the same behavior as the equivalent cmds function would
     with the same arguments.
     """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            new_args = tuple(utils.recursive_map(str, args, forcerecursiontypes=True))
+            new_values = utils.recursive_map(str, (kwargs[key] for key in str_kwargs if key in kwargs))
+            new_kwargs = kwargs | dict(((key, value) for key, value in zip(str_kwargs, new_values) if key in kwargs))
+            return func(*new_args, **new_kwargs)
+        return wrapper
 
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        args = tuple(utils.recursive_map(str, args, forcerecursiontypes=True))
-        return func(*args, **kwargs)
+    if callable(str_kwargs):
+        _func, str_kwargs = str_kwargs, ()
+        return decorator(_func)
 
-    return wrapper
+    return decorator
 
 
 def yammds(wrapped_module, /):
