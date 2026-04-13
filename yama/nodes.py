@@ -156,14 +156,14 @@ def spaceLocator(name: str = "locator", pos: list[float, float, float] = (0, 0, 
     return loc
 
 
-@decorators.string_args
+@decorators.stringify_args
 def duplicate(*objs, **kwargs) -> "YamList[DependNode]":
     """Wrapper for cmds.duplicate"""
     kwargs["fullPath"] = True
     return yams(cmds.duplicate(objs, **kwargs))
 
 
-@decorators.string_args
+@decorators.stringify_args
 def ls(*args, **kwargs) -> "YamList[DependNode | attributes.Attribute]":
     """Wrapper for 'maya.cmds.ls' but returning yam objects."""
     if "fl" not in kwargs and "flatten" not in kwargs:
@@ -183,63 +183,29 @@ def selected(**kwargs) -> "YamList[DependNode]":
     return ls(**kwargs)
 
 
-@decorators.string_args
+@decorators.stringify_args
 def select(*args, **kwargs) -> None:
     """Set current scene selection with given args and kwargs. Allows to pass yam object into the select function."""
     cmds.select(*args, **kwargs)
 
 
-@decorators.string_args
+@decorators.stringify_args
 def listAttr(*args, **kwargs) -> "YamList[attributes.Attribute]":
     """
     Wrapper for cmds.listAttr returning Component objects.
-
-    Notes:
-        There is no way to get the nodes from which the attributes were queried in the results of cmds.listAttr, which
-        is why this is so convoluted.
-        The node name is extracted and stored before querying the attributes, then plugged back with the attribute
-        before being converted to a Component object with ym.yam.
 
     Args:
         args (DependNode | Attribute | str): The object, node or attribute to query the attributes from.
         kwargs: kwargs passed on to cmds.listAttr
     Returns:
-        list[Attribute, ...]
+        list[Attribute]
     """
-    kwargs["leaf"] = False
-
-    if not args:  # Working with selection if no args to match cmds.listAttr behaviour.
-        args = cmds.ls(orderedSelection=True)
-
-    node_args = []
-    for arg in args:
-        node, *attrs = arg.split(".")
-
-        # Listing all corresponding nodes in case a wildcard '*' or '?' symbol was used in the node name.
-        if "*" in node or "?" in node:
-            nodes = cmds.ls(node)
-            node_args += [[node, ".".join([node, *attrs])] for node in nodes]
-
-        else:
-            node_args.append([node, arg])
-
-    results = []
-    for node, arg in node_args:
-        attrs = cmds.listAttr(arg, **kwargs) or []
-        result = [f"{node}.{attr}" for attr in attrs]
-
-        # If querying sub-attributes of an attribute the original attribute is also returned and needs to be removed
-        # from the results.
-        if "." in arg and result:
-            if result[0] == arg:
-                result.pop(0)
-
-        results += result
-
-    return yams(results)
+    kwargs["lf"] = False  # 'leaf', returns full attribute name
+    kwargs["fnn"] = True  # 'fullNodeName', returns node name in the result
+    return yams(cmds.listAttr(*args, **kwargs) or [])
 
 
-@decorators.string_args
+@decorators.stringify_args
 def listHistory(*args, type: "str | list[str]" = None, **kwargs) -> "YamList[DependNode]":
     """
     Wrapper for cmds.listHistory returning Yam objects.
@@ -262,7 +228,7 @@ def listHistory(*args, type: "str | list[str]" = None, **kwargs) -> "YamList[Dep
     return yams(history)
 
 
-@decorators.string_args
+@decorators.stringify_args
 def listRelatives(*args, **kwargs) -> "YamList[DependNode]":
     """
     Wrapper for cmds.listRelatives returning Yam objects.
@@ -276,7 +242,7 @@ def listRelatives(*args, **kwargs) -> "YamList[DependNode]":
     kwargs["fullPath"] = True  # Needed in case of multiple obj with same name
     return yams(cmds.listRelatives(*args, **kwargs) or [])
 
-@decorators.string_args
+@decorators.stringify_args
 def listConnections(*args, **kwargs):
     """
     Wrapper for cmds.listConnections returning Yam objects.
@@ -292,7 +258,7 @@ def listConnections(*args, **kwargs):
     return yams(cmds.listConnections(*args, **kwargs) or [])
 
 
-@decorators.string_args
+@decorators.stringify_args
 def findDeformers(objs, type: str | list[str] = None) -> "YamList[DependNode]":
     """
     Wrapper for cmds.findDeformers returning Component objects.
@@ -386,7 +352,7 @@ def isa(
     )
 
 
-@decorators.string_args
+@decorators.stringify_args
 def constraint(*args, type, **kwargs):
     func = getattr(cmds, type)
 
@@ -533,7 +499,7 @@ class Yam(abc.ABC, metaclass=YamMeta):
         else:
             raise AttributeError(
                 f"Cannot set new attributes outside __init__; "
-                f"To set a Maya attribute value, use: {self}.{key}.value = {value}"
+                f"To set the Maya attribute value for '{self}.{key}', use : >>> {self}.{key}.value = {value}"
             )
 
     def setattr(self, key, value):
@@ -582,7 +548,7 @@ class DependNode(Yam):
     """
 
     _MFN_FUNC = om.MFnDependencyNode
-    _MFN_OBJECT = "MObject"
+    _MFN_INIT_OBJECT = "MObject"
 
     def __init__(self, MObject):
         """
@@ -602,15 +568,10 @@ class DependNode(Yam):
         :return: api 2.0 MFn Object
         """
         if self._MFn is None:
-            self._MFn = self._MFN_FUNC(getattr(self, self._MFN_OBJECT))
+            self._MFn = self._MFN_FUNC(getattr(self, self._MFN_INIT_OBJECT))
         return self._MFn
 
     def __getattr__(self, attr):
-        """
-        Returns an Attribute linked to self.
-        :param attr: str
-        :return: Attribute object
-        """
         return self.attr(attr)
 
     def __add__(self, other):
@@ -930,7 +891,9 @@ class Transform(DagNode):
         """
         return YamList(x for x in self.shapes(type=type, noIntermediate=False) if x.isIntermediateObject())
 
-    allDescendents = functools.partial(listRelatives, allDescendents=True)
+    def allDescendents(self, **kwargs):
+        kwargs["ad"] = True
+        return listRelatives(self, **kwargs)
 
     def getXform(self, **kwargs):
         """
@@ -1000,8 +963,9 @@ class Constraint(Transform):
     Should not be instanced on its own and only used as inherited class for actual
     constraint type nodes, e.g.: 'parentConstraint', 'orientConstraint', etc...
     """
-
-    _CMDS_FUNC = None
+    def __init__(self, MObject):
+        super().__init__(MObject)
+        self._CMDS_FUNC = getattr(cmds, self.type())
 
     def _raise_no_func(self):
         raise RuntimeError(
@@ -1029,26 +993,6 @@ class Constraint(Transform):
         if not self._CMDS_FUNC:
             self._raise_no_func()
         return yams(self._CMDS_FUNC(self.name, q=True, targetList=True))
-
-
-class ParentConstraint(Constraint):
-    _CMDS_FUNC = cmds.parentConstraint
-
-
-class OrientConstraint(Constraint):
-    _CMDS_FUNC = cmds.orientConstraint
-
-
-class PointConstraint(Constraint):
-    _CMDS_FUNC = cmds.pointConstraint
-
-
-class ScaleConstraint(Constraint):
-    _CMDS_FUNC = cmds.scaleConstraint
-
-
-class AimConstraint(Constraint):
-    _CMDS_FUNC = cmds.aimConstraint
 
 
 class Shape(DagNode):
@@ -1131,7 +1075,7 @@ class SurfaceShape(ControlPoint):
 
 class Mesh(SurfaceShape):
     _MFN_FUNC = om.MFnMesh
-    _MFN_OBJECT = "MDagPath"
+    _MFN_INIT_OBJECT = "MDagPath"
     # The following saves a cmds call when getting shape input and outputs.
     _LOCALSHAPEINATTR = "inMesh"
     _LOCALSHAPEOUTATTR = "outMesh"
@@ -1194,7 +1138,7 @@ _NURBS_FORM_API_TO_SCENEATTR = {
 
 class NurbsCurve(ControlPoint):
     _MFN_FUNC = om.MFnNurbsCurve
-    _MFN_OBJECT = "MDagPath"
+    _MFN_INIT_OBJECT = "MDagPath"
 
     def __len__(self):
         """
@@ -1251,7 +1195,7 @@ class NurbsCurve(ControlPoint):
 
 class NurbsSurface(SurfaceShape):
     _MFN_FUNC = om.MFnNurbsSurface
-    _MFN_OBJECT = "MDagPath"
+    _MFN_INIT_OBJECT = "MDagPath"
     # The following saves a cmds call when getting shape input and outputs.
     _LOCALSHAPEINATTR = "create"
     _LOCALSHAPEOUTATTR = "local"
@@ -2126,13 +2070,7 @@ class SupportedTypes:
             (DagNode, om.MFn.kDagNode): {
                 (Transform, om.MFn.kTransform): {
                     (Joint, om.MFn.kJoint): {},
-                    (Constraint, om.MFn.kConstraint): {
-                        (ParentConstraint, om.MFn.kParentConstraint): {},
-                        (OrientConstraint, om.MFn.kOrientConstraint): {},
-                        (PointConstraint, om.MFn.kPointConstraint): {},
-                        (ScaleConstraint, om.MFn.kScaleConstraint): {},
-                        (AimConstraint, om.MFn.kAimConstraint): {},
-                    },
+                    (Constraint, om.MFn.kConstraint): {},
                 },
                 (Shape, om.MFn.kShape): {
                     (SurfaceShape, om.MFn.kSurface): {
@@ -2162,11 +2100,6 @@ class SupportedTypes:
         om.MFn.kTransform: Transform,  # 110
         om.MFn.kJoint: Joint,  # 121
         om.MFn.kConstraint: Constraint,  # 932; 928 in Maya 2020 ?! ¯\_(ツ)_/¯
-        om.MFn.kParentConstraint: ParentConstraint,  # 242
-        om.MFn.kPointConstraint: PointConstraint,  # 240
-        om.MFn.kOrientConstraint: OrientConstraint,  # 239
-        om.MFn.kScaleConstraint: ScaleConstraint,  # 244
-        om.MFn.kAimConstraint: AimConstraint,  # 111
         om.MFn.kShape: Shape,  # 248
         om.MFn.kCluster: Shape,  # 251
         om.MFn.kSurface: SurfaceShape,  # 293
@@ -2213,11 +2146,6 @@ class SupportedTypes:
         "transform": Transform,
         "joint": Joint,
         "constraint": Constraint,
-        "parentConstraint": ParentConstraint,
-        "pointConstraint": PointConstraint,
-        "orientConstraint": OrientConstraint,
-        "scaleConstraint": ScaleConstraint,
-        "aimConstraint": AimConstraint,
         "shape": Shape,
         "surfaceShape": SurfaceShape,
         "controlPoint": ControlPoint,
