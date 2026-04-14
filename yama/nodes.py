@@ -36,13 +36,13 @@ __all__ = [
 
 import abc
 import functools
-import math
 from typing import Iterable
+import math
 
-from maya import cmds
+import maya.OpenMaya as om1
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
-import maya.OpenMaya as om1
+from maya import cmds
 
 from . import weightlist, config, checks, utils, decorators
 

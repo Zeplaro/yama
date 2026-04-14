@@ -4,8 +4,8 @@ import inspect
 import uuid
 from functools import wraps, update_wrapper
 
-from maya import cmds
 import maya.api.OpenMaya as om
+from maya import cmds
 
 
 def mayaundo(func):

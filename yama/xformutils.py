@@ -2,8 +2,8 @@
 
 import math
 
-from maya import cmds
 import maya.api.OpenMaya as om
+from maya import cmds
 
 from . import nodes, components, decorators, utils, checks, mayautils
 

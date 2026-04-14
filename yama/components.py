@@ -8,8 +8,8 @@ Contains all the class and functions for maya components.
 # TODO : fix setPositionsOM on cvs ?
 from abc import abstractmethod
 
-from maya import cmds
 import maya.api.OpenMaya as om
+from maya import cmds
 
 from . import config, nodes, checks
 

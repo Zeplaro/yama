@@ -1,6 +1,7 @@
 # encoding: utf8
 
 from copy import copy
+
 from maya import cmds, mel
 
 from . import nodes, decorators, components, config, weightlist, checks

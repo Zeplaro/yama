@@ -1,10 +1,11 @@
 # encoding: utf8
 
-import itertools
 from typing import Literal
+import itertools
 
-from maya import cmds, mel
 import maya.api.OpenMaya as om
+from maya import cmds, mel
+
 from . import nodes, xformutils, decorators, config, utils
 
 

@@ -5,8 +5,8 @@ Contains non maya specific utils.
 """
 
 from string import ascii_lowercase
-import math
 from typing import Literal
+import math
 
 
 def mulLists(lists):

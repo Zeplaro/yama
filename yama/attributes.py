@@ -6,9 +6,9 @@ Contains all the class and functions for maya attributes.
 
 import functools
 
-from maya import cmds, mel
-import maya.api.OpenMaya as om
 import maya.OpenMaya as om1
+import maya.api.OpenMaya as om
+from maya import cmds, mel
 
 from . import config, nodes, weightlist, checks, mayautils
 
