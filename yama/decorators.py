@@ -1,10 +1,10 @@
 # encoding: utf8
 import inspect
 import uuid
-from functools import wraps
+from functools import wraps, update_wrapper
 
 from maya import cmds
-from . import utils, nodes
+import maya.api.OpenMaya as om
 
 
 def mayaundo(func):
@@ -23,9 +23,11 @@ def mayaundo(func):
 def keepsel(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        sel = cmds.ls(sl=True, fl=True)
-        result = func(*args, **kwargs)
-        cmds.select(sel)
+        sl = om.MGlobal.getActiveSelectionList()
+        try:
+            result = func(*args, **kwargs)
+        finally:
+            om.MGlobal.setActiveSelectionList(sl)
         return result
 
     return wrapper
@@ -39,7 +41,9 @@ def verbose(func):
         bound_args = signature.bind(*args, **kwargs)
         bound_args.apply_defaults()
         arg_strings = [f"{name}={repr(value)}" for name, value in bound_args.arguments.items()]
-        print(f"---- Calling {func.__module__}.{func.__qualname__} with arguments:\n-------- {', '.join(arg_strings)}")
+        print(
+            f"---- Calling {func.__module__}.{func.__qualname__} with arguments:\n-------- {', '.join(arg_strings)}"
+        )
         result = func(*args, **kwargs)
         print(f"---- Result of {func.__name__} is :\n-------- {repr(result)}")
         return result
@@ -47,26 +51,67 @@ def verbose(func):
     return wrapper
 
 
-def stringify_args(str_kwargs: list | tuple = (), /):
+class stringify_args:
     """
     Converts all args to string, and YamList to list (by using recursive_map), before passing them to the given func.
     Doing this allows to convert the args to str and still have the same behavior as the equivalent cmds function would
     with the same arguments.
+    Option to give a list of kwarg keys whose values will also be converted to str.
     """
-    def decorator(func):
-        @wraps(func)
+
+    def __init__(self, func, /, *args):
+        if callable(func):
+            self.func = func
+            self.str_kwargs = ()
+            update_wrapper(self, func)
+        else:
+            self.func = None
+            if not isinstance(func, (tuple, list, set)) and not args:
+                self.str_kwargs = func
+            else:
+                self.str_kwargs = (func, *args)
+
+    def __repr__(self):
+        return repr(self.func) if self.func is not None else super().__repr__()
+
+    def __call__(self, *args, **kwargs):
+        if self.func is None:
+            if not args:
+                raise RuntimeError(
+                    "stringifyargs initialized with string kwargs now called with no args."
+                )
+            if not callable(func := args[0]):
+                raise ValueError(
+                    "stringifyargs initialized with string kwargs now called with a none callable first arg."
+                )
+            self.func = func
+            update_wrapper(self, self.func)
+            return self
+
+        return self.getWrapper()(*args, **kwargs)
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+        return self.getWrapper(instance)
+
+    def getWrapper(self, instance=None):
+        from . import utils
+
+        @wraps(self.func)
         def wrapper(*args, **kwargs):
-            new_args = tuple(utils.recursive_map(str, args, forcerecursiontypes=True))
-            new_values = utils.recursive_map(str, (kwargs[key] for key in str_kwargs if key in kwargs))
-            new_kwargs = kwargs | dict(((key, value) for key, value in zip(str_kwargs, new_values) if key in kwargs))
-            return func(*new_args, **new_kwargs)
+            str_args = utils.recursive_map(str, args, forcerecursiontypes=True)
+            str_kwarg_keys = [x for x in self.str_kwargs if x in kwargs]
+            str_kwarg_values = utils.recursive_map(
+                str, (kwargs[key] for key in str_kwarg_keys), forcerecursiontypes=True
+            )
+            new_kwargs = kwargs | dict(zip(str_kwarg_keys, str_kwarg_values))
+
+            if instance is not None:
+                str_args = instance, *str_args
+            return self.func(*str_args, **new_kwargs)
+
         return wrapper
-
-    if callable(str_kwargs):
-        _func, str_kwargs = str_kwargs, ()
-        return decorator(_func)
-
-    return decorator
 
 
 def yammds(wrapped_module, /):
@@ -77,6 +122,7 @@ def yammds(wrapped_module, /):
         ymds = yammds(cmds)
         ymds.ls() # returns a list of Yam objects instead of strings
     """
+    from . import nodes
 
     def cook(func):
         """Wraps a function to yamify its results."""
@@ -98,8 +144,10 @@ def yammds(wrapped_module, /):
 
     class ModuleWrapper:
         """Wraps a module to yamify its callable attributes' results."""
+
         module = wrapped_module
         __doc__ = wrapped_module.__doc__
+
         def __getattr__(self, item):
             attr = getattr(wrapped_module, item)
             return cook(attr) if callable(attr) else attr
