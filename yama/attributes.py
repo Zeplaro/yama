@@ -3,6 +3,7 @@
 """
 Contains all the class and functions for maya attributes.
 """
+
 import functools
 
 from maya import cmds, mel
@@ -329,6 +330,7 @@ class Attribute(nodes.Yam):
         Returns the type of data currently in the attribute.
         :return: str
         """
+
         def get_type_with_api(attr):
             attribute = attr.MObject
             api_type = attribute.apiType()
@@ -824,7 +826,7 @@ def getMPlugValue(MPlug):
             return MPlug.asString()
         elif attr_type == om.MFnData.kMatrix:
             try:
-                mfn =  om.MFnMatrixData(MPlug.asMObject())
+                mfn = om.MFnMatrixData(MPlug.asMObject())
             except RuntimeError:
                 return ([1.0] + [0.0] * 4) * 3 + [1.0]  # Zero matrix (I swear...)
             return list(mfn.matrix())
@@ -982,5 +984,5 @@ MFN_TO_CMDS_ATTR_TYPES = {
     om.MFn.kAttribute2Double: "double2",
     om.MFn.kAttribute3Double: "double3",
     om.MFn.kCompoundAttribute: "TdataCompound",
-    om.MFn.kNumericAttribute: "TdataCompound"
+    om.MFn.kNumericAttribute: "TdataCompound",
 }

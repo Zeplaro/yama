@@ -84,7 +84,9 @@ def isAlive(MObject: om.MObject, /) -> bool:
     return True
 
 
-def yam(node: "Yam | str | om.MObject | om.MDagPath | om.MPlug") -> "DependNode | attributes.Attribute":
+def yam(
+    node: "Yam | str | om.MObject | om.MDagPath | om.MPlug",
+) -> "DependNode | attributes.Attribute":
     """
     Handles all node class assignment to assign the proper class depending on the node type.
     Also works with passing a 'node.attribute'.
@@ -154,7 +156,13 @@ def createNode(*args, **kwargs) -> "DependNode":
     return yam(cmds.createNode(*args, **kwargs))
 
 
-def spaceLocator(name: str = "locator", pos: list[float, float, float] = (0, 0, 0), rot: list[float, float, float] =(0, 0, 0), parent: "str | DependNode" = None, ws: bool = False) -> "Transform":
+def spaceLocator(
+    name: str = "locator",
+    pos: list[float, float, float] = (0, 0, 0),
+    rot: list[float, float, float] = (0, 0, 0),
+    parent: "str | DependNode" = None,
+    ws: bool = False,
+) -> "Transform":
     """
     Creates a locator.
     :param name: str, the locator name
@@ -255,6 +263,7 @@ def listRelatives(*args, **kwargs) -> "YamList[DependNode]":
     """
     kwargs["fullPath"] = True  # Needed in case of multiple obj with same name
     return yams(cmds.listRelatives(*args, **kwargs) or [])
+
 
 @decorators.stringify_args
 def listConnections(*args, **kwargs):
@@ -397,6 +406,7 @@ class ClassAssignor:
     """
     Class used to assign the proper class to a node depending on its maya type.
     """
+
     @classmethod
     def initialize_node(cls, MObject: om.MObject) -> "DependNode":
         """
@@ -903,7 +913,9 @@ class Transform(DagNode):
         :param type: Only returns nodes of the given type·s.
         :return: list of Shape object
         """
-        return YamList(x for x in self.shapes(type=type, noIntermediate=False) if x.isIntermediateObject())
+        return YamList(
+            x for x in self.shapes(type=type, noIntermediate=False) if x.isIntermediateObject()
+        )
 
     def allDescendents(self, **kwargs):
         kwargs["ad"] = True
@@ -977,6 +989,7 @@ class Constraint(Transform):
     Should not be instanced on its own and only used as inherited class for actual
     constraint type nodes, e.g.: 'parentConstraint', 'orientConstraint', etc...
     """
+
     def __init__(self, MObject):
         super().__init__(MObject)
         self._CMDS_FUNC = getattr(cmds, self.type())
@@ -1029,6 +1042,7 @@ class ControlPoint(Shape):
     """
     Handles shape that have control point; e.g.: Mesh, NurbsCurve, NurbsSurface, Lattice
     """
+
     # The following saves a cmds call when getting shape input and outputs.
     _LOCALSHAPEINATTR = None
     _LOCALSHAPEOUTATTR = None
@@ -1725,7 +1739,9 @@ class SkinCluster(GeometryFilter):
         else:
             influence = influences[influence]
 
-        vtx_list = yams(self.MFn.getPointsAffectedByInfluence(influence.MDagPath)[0].getSelectionStrings())
+        vtx_list = yams(
+            self.MFn.getPointsAffectedByInfluence(influence.MDagPath)[0].getSelectionStrings()
+        )
         vtxs = YamList()
         for vtx in vtx_list:
             if isinstance(vtx, components.Component):

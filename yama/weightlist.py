@@ -138,7 +138,9 @@ class WeightList(list):
         if min_value is None and max_value is None:
             return
         elif min_value is not None and max_value is not None and min_value >= max_value:
-            raise ValueError(f"min_value must be less than max_value; got : {min_value} >= {max_value}")
+            raise ValueError(
+                f"min_value must be less than max_value; got : {min_value} >= {max_value}"
+            )
 
         if min_value is None:
             for i, value in enumerate(self):
@@ -182,7 +184,10 @@ class WeightList(list):
 class VectorList(WeightList):
     def __init__(self, data=None, /, *, min_value=None, max_value=None, decimals=None):
         if data:
-            super().__init__(WeightList(x, min_value=min_value, max_value=max_value, decimals=decimals) for x in data)
+            super().__init__(
+                WeightList(x, min_value=min_value, max_value=max_value, decimals=decimals)
+                for x in data
+            )
 
     def __str__(self):
         return f"{self.__class__.__name__}{[list(x) for x in self]}"
@@ -208,13 +213,17 @@ class VectorList(WeightList):
         return cls(WeightList(value) for _ in range(length))
 
     def copy(self, *, min_value=None, max_value=None, decimals=None):
-        return self.__class__((x.copy() for x in self), min_value=min_value, max_value=max_value, decimals=decimals)
+        return self.__class__(
+            (x.copy() for x in self), min_value=min_value, max_value=max_value, decimals=decimals
+        )
 
     def clamp(self, min_value=None, max_value=None):
         if min_value is None and max_value is None:
             return
         elif min_value is not None and max_value is not None and min_value >= max_value:
-            raise ValueError(f"min_value must be less than max_value; got : {min_value} >= {max_value}")
+            raise ValueError(
+                f"min_value must be less than max_value; got : {min_value} >= {max_value}"
+            )
         for vector in self:
             vector.clamp(min_value, max_value)
 

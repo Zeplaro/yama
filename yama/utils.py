@@ -187,8 +187,9 @@ def getRegularPolygonCoordinates(sides=3, radius=0.5, reverse=False):
     return points
 
 
-def recursive_map(func, iterable, /, *, recursiontypes=(tuple, list, set), forcerecursiontypes=False):
-
+def recursive_map(
+    func, iterable, /, *, recursiontypes=(tuple, list, set), forcerecursiontypes=False
+):
     """
     Recursive equivalent of map if an element of the iterable is an instance of given recursiontypes.
 
@@ -203,11 +204,25 @@ def recursive_map(func, iterable, /, *, recursiontypes=(tuple, list, set), force
             if forcerecursiontypes:
                 for type_ in recursiontypes:
                     if isinstance(item, type_):
-                        yield type_(recursive_map(func, item, recursiontypes=recursiontypes, forcerecursiontypes=forcerecursiontypes))
+                        yield type_(
+                            recursive_map(
+                                func,
+                                item,
+                                recursiontypes=recursiontypes,
+                                forcerecursiontypes=forcerecursiontypes,
+                            )
+                        )
                         break
 
             else:
-                yield type(item)(recursive_map(func, item, recursiontypes=recursiontypes, forcerecursiontypes=forcerecursiontypes))
+                yield type(item)(
+                    recursive_map(
+                        func,
+                        item,
+                        recursiontypes=recursiontypes,
+                        forcerecursiontypes=forcerecursiontypes,
+                    )
+                )
         else:
             yield func(item)
 
