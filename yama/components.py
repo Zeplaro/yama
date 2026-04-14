@@ -121,6 +121,10 @@ class Components(nodes.Yam):
     def name(self):
         return f"{self.node}.{self.component_name}[:]"
 
+    @property
+    def longName(self):
+        return f"{self.node.longName}.{self.component_name}[:]"
+
     def index(self, index, secondIndex=None, thirdIndex=None):
         return self.component_class(self.node, self, index, secondIndex, thirdIndex)
 
@@ -297,6 +301,10 @@ class Component(nodes.Yam):
     @property
     def name(self):
         return f"{self.node}.{self.attribute}"
+
+    @property
+    def longName(self):
+        return f"{self.node.longName}.{self.attribute}"
 
     @property
     def attribute(self):
