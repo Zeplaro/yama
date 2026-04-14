@@ -404,8 +404,8 @@ def extractXYZ(neutral, pose, axis=("y", "xz"), ws=False):
 def makePlanar(
     objs,
     firstPointIndex=0,
-    secondPointIndex=-1,
-    thirdPointIndex=1,
+    secondPointIndex=1,
+    thirdPointIndex=-1,
     aimObjsChain=True,
     **aimKwargs,
 ):
