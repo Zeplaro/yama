@@ -1,4 +1,5 @@
 # encoding: utf8
+
 import inspect
 import uuid
 from functools import wraps, update_wrapper
@@ -153,3 +154,34 @@ def yammds(wrapped_module, /):
             return cook(attr) if callable(attr) else attr
 
     return ModuleWrapper()
+
+
+def return_yam(func=None, /, *, passNone=False):
+    from . import nodes
+
+    if func is not None and not callable(func):
+        raise TypeError(f"Given func: {func} should be a callable not a {type(func).__name__}.")
+
+    def decorator(func_):
+        @wraps(func_)
+        def wrapper(*args, **kwargs):
+            result = func_(*args, **kwargs)
+            if passNone and result is None:
+                return None
+            return nodes.yam(result)
+
+        return wrapper
+
+    if func is None:
+        return decorator
+    return decorator(func)
+
+
+def return_yams(func):
+    from . import nodes
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return nodes.yams(func(*args, **kwargs))
+
+    return wrapper
