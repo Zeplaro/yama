@@ -9,7 +9,7 @@ from typing import Literal
 import math
 
 
-def mulLists(lists):
+def mulLists(lists, /):
     """
     Zips given lists items and multiplies them together.
     :param lists: lists of list of multipliable items
@@ -18,7 +18,7 @@ def mulLists(lists):
     return [math.prod(x) for x in zip(*lists)]
 
 
-def addLists(lists):
+def addLists(lists, /):
     """
     Zips given lists items and adds them together.
     :param lists: lists of list of addable items
@@ -27,7 +27,7 @@ def addLists(lists):
     return [sum(x) for x in zip(*lists)]
 
 
-def decimalToAlphabetical(decimal):
+def decimalToAlphabetical(decimal, /):
     """
     Converts int to an alphabetical decimal.
 
@@ -59,7 +59,7 @@ def decimalToAlphabetical(decimal):
     return alphanum
 
 
-def alphabeticalToDecimal(alpha):
+def alphabeticalToDecimal(alpha, /):
     """
     Converts str to an int index.
     Converts all letter to lowercase. All letters must be from ascii_lowercase, no other character or number.
@@ -98,7 +98,7 @@ def generateAlphabeticalList(count):
     ...
 
 
-def decimalToRoman(decimal):
+def decimalToRoman(decimal, /):
     """
     Converts int to roman numeral.
     Given decimal must be an integer superior to 0.
@@ -109,18 +109,12 @@ def decimalToRoman(decimal):
         raise ValueError(f"Given index must be superior to 0; got : {decimal}.")
 
     roman = [
-        (1000, "M"),
-        (900, "CM"),
-        (500, "D"),
-        (400, "CD"),
-        (100, "C"),
-        (90, "XC"),
-        (50, "L"),
-        (40, "XL"),
-        (10, "X"),
-        (9, "IX"),
-        (5, "V"),
-        (4, "IV"),
+        (1000, "M"), (900, "CM"),
+        (500, "D"), (400, "CD"),
+        (100, "C"), (90, "XC"),
+        (50, "L"), (40, "XL"),
+        (10, "X"), (9, "IX"),
+        (5, "V"), (4, "IV"),
         (1, "I"),
     ]
     roman_num = ""
@@ -133,7 +127,7 @@ def decimalToRoman(decimal):
     return roman_num
 
 
-def romanToDecimal(roman):
+def romanToDecimal(roman, /):
     """
     Converts roman numeral to int.
     Given roman numeral must be only contain valid roman letters : 'M', 'D', 'C', 'L', 'X', 'V', and 'I'.
@@ -149,18 +143,12 @@ def romanToDecimal(roman):
         raise ValueError("Cannot convert given empty string to roman numeral.")
 
     values = [
-        ("M", 1000),
-        ("CM", 900),
-        ("D", 500),
-        ("CD", 400),
-        ("C", 100),
-        ("XC", 90),
-        ("L", 50),
-        ("XL", 40),
-        ("X", 10),
-        ("IX", 9),
-        ("V", 5),
-        ("IV", 4),
+        ("M", 1000), ("CM", 900),
+        ("D", 500), ("CD", 400),
+        ("C", 100), ("XC", 90),
+        ("L", 50), ("XL", 40),
+        ("X", 10), ("IX", 9),
+        ("V", 5), ("IV", 4),
         ("I", 1),
     ]
     roman = roman.upper()
