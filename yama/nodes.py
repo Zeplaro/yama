@@ -70,6 +70,20 @@ def getMObject(node: str) -> om.MObject:
 gmo = getMObject
 
 
+def isAlive(MObject: om.MObject, /) -> bool:
+    if not isinstance(MObject, om.MObject):
+        raise TypeError("Given arg is not an MObject.")
+
+    # Empty MObject
+    if MObject.isNull():
+        return False
+
+    handle = om.MObjectHandle(MObject)
+    if not handle.isValid():  # In the scene not just the undo queue
+        return False
+    return True
+
+
 def yam(node: "Yam | str | om.MObject | om.MDagPath | om.MPlug") -> "DependNode | attributes.Attribute":
     """
     Handles all node class assignment to assign the proper class depending on the node type.
@@ -2226,7 +2240,7 @@ class YamList(list):
         return str(list(self)) == str(other)
 
     def __getitem__(self, item):
-        if  isinstance(item, slice):
+        if isinstance(item, slice):
             return YamList(super().__getitem__(item), no_init_check=True)
         return super().__getitem__(item)
 
@@ -2248,8 +2262,7 @@ class YamList(list):
             for item in self:
                 if not isinstance(item, Yam):
                     raise TypeError(
-                        f"YamList can only contain Yam objects. '{item}' is"
-                        f" '{repr(item)}'."
+                        f"YamList can only contain Yam objects. '{item}' is {type(item).__name__}."
                     )
 
     def append(self, item):
