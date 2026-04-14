@@ -6,8 +6,6 @@ Contains non maya specific utils.
 
 from string import ascii_lowercase
 import math
-from functools import reduce
-from operator import mul
 from typing import Literal
 
 
@@ -17,8 +15,7 @@ def mulLists(lists):
     :param lists: lists of list of multipliable items
     :return: list of multiplied items
     """
-    # TODO: replace reduce(mul, ...) with python 3.8 math.prod when dropping python 2 support
-    return [reduce(mul, x, 1) for x in zip(*lists)]
+    return [math.prod(x) for x in zip(*lists)]
 
 
 def addLists(lists):
@@ -190,7 +187,7 @@ def getRegularPolygonCoordinates(sides=3, radius=0.5, reverse=False):
     return points
 
 
-def recursive_map(func, iterable, *, recursiontypes=(tuple, list, set), forcerecursiontypes=False):
+def recursive_map(func, iterable, /, *, recursiontypes=(tuple, list, set), forcerecursiontypes=False):
 
     """
     Recursive equivalent of map if an element of the iterable is an instance of given recursiontypes.
@@ -206,11 +203,11 @@ def recursive_map(func, iterable, *, recursiontypes=(tuple, list, set), forcerec
             if forcerecursiontypes:
                 for type_ in recursiontypes:
                     if isinstance(item, type_):
-                        yield type_(recursive_map(func, item))
+                        yield type_(recursive_map(func, item, recursiontypes=recursiontypes, forcerecursiontypes=forcerecursiontypes))
                         break
 
             else:
-                yield type(item)(recursive_map(func, item))
+                yield type(item)(recursive_map(func, item, recursiontypes=recursiontypes, forcerecursiontypes=forcerecursiontypes))
         else:
             yield func(item)
 
