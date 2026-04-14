@@ -297,9 +297,7 @@ def snapAlongSurface(
 
     normalAxis = str(normalAxis).lower()
     if normalAxis not in ("x", "y", "z"):
-        raise ValueError(
-            f"Expected normal axis to be 'x', 'y', or 'z'; got : {normalAxis}"
-        )
+        raise ValueError(f"Expected normal axis to be 'x', 'y', or 'z'; got : {normalAxis}")
     tangentAxis = str(tangentAxis[0]).lower(), str(tangentAxis[1]).lower()
     if tangentAxis[0] not in ("x", "y", "z") or tangentAxis[1] not in ("x", "y", "z"):
         raise ValueError(
@@ -314,9 +312,7 @@ def snapAlongSurface(
     uv = [uValue]
     uv.insert(swapDirections, None)
     normal_index = "xyz".index(normalAxis.lower())
-    tangents_indices = "xyz".index(tangentAxis[0].lower()), "xyz".index(
-        tangentAxis[1].lower()
-    )
+    tangents_indices = "xyz".index(tangentAxis[0].lower()), "xyz".index(tangentAxis[1].lower())
     for i, obj in enumerate(objs):
         uv[swapDirections] = step * i
         matrices = [None, None, None]
@@ -324,9 +320,7 @@ def snapAlongSurface(
         normal = surface.MFn.normal(step * i, 0.5, om.MSpace.kWorld)
         matrices[normal_index] = [normal.x, normal.y, normal.z, 0.0]
 
-        for i, tangent in enumerate(
-            surface.MFn.tangents(step * i, 0.5, om.MSpace.kWorld)
-        ):
+        for i, tangent in enumerate(surface.MFn.tangents(step * i, 0.5, om.MSpace.kWorld)):
             matrices[tangents_indices[i]] = [tangent.x, tangent.y, tangent.z, 0.0]
 
         point = surface.MFn.getPointAtParam(step * i, 0.5, om.MSpace.kWorld)
@@ -504,9 +498,7 @@ def snapPointsToClosest(
     target_pos = {cp: cp.getPosition(ws=ws) for cp in nodes.yams(targetCps)}
 
     distances = {
-        target: sorted(
-            [math.dist(t_pos, s_pos), source] for source, s_pos in source_pos.items()
-        )
+        target: sorted([math.dist(t_pos, s_pos), source] for source, s_pos in source_pos.items())
         for target, t_pos in target_pos.items()
     }
 
@@ -528,7 +520,7 @@ def snapPointsToClosest(
         target.setPosition(source_pos[source], ws=ws)
 
 
-def alignToClosestMeshNormal(
+def orientToClosestMeshNormal(
     objs=None,
     mesh=None,
     /,
@@ -572,13 +564,9 @@ def alignToClosestMeshNormal(
         )
     up_axis = upAxis.lower()
     if up_axis not in valid_axis:
-        raise ValueError(
-            f"Given up axis {upAxis} is invalid, must be in {sorted(valid_axis)}."
-        )
+        raise ValueError(f"Given up axis {upAxis} is invalid, must be in {sorted(valid_axis)}.")
     if normal_axis[-1] == up_axis[-1]:
-        raise RuntimeError(
-            f"Given normal axis {normal_axis} and up axis {up_axis} are the same."
-        )
+        raise RuntimeError(f"Given normal axis {normal_axis} and up axis {up_axis} are the same.")
 
     matrices = []
     for obj in objs:
