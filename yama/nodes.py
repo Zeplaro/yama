@@ -1844,7 +1844,7 @@ class SkinCluster(GeometryFilter):
             self.addInfluence(inf)
 
 
-class BlendShape(WeightGeometryFilter):
+class BlendShape(GeometryFilter):
     """
     Class to wrap cmds and OpenMaya functions to easily interact with a blendShape node.
 
@@ -1863,6 +1863,11 @@ class BlendShape(WeightGeometryFilter):
       the target attribute goes below -5.0. It is recommended to lock the target attribute lower range if negative
       in-between values are used.
     """
+
+    # blendShape node does not inherit from weightGeometryFilter despite the similarities.
+    getWeights = WeightGeometryFilter.getWeights
+    setWeights = WeightGeometryFilter.setWeights
+    weights = WeightGeometryFilter.weights
 
     def __contains__(self, item):
         """
