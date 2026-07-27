@@ -360,11 +360,18 @@ class Attribute(nodes.Yam):
 
     @property
     def defaultValue(self):
-        return cmds.addAttr(self.name, q=True, defaultValue=True)
+        if self.isArray():
+            return [x.defaultValue for x in self]
+        else:
+            return cmds.addAttr(self.name, q=True, defaultValue=True)
 
     @defaultValue.setter
     def defaultValue(self, value):
-        cmds.addAttr(self.name, e=True, defaultValue=value)
+        if self.isArray():
+            for attr, val in zip(self, value):
+                cmds.addAttr(attr.name, e=True, defaultValue=val)
+        else:
+            cmds.addAttr(self.name, e=True, defaultValue=value)
 
     @property
     def hasMinValue(self):
