@@ -28,7 +28,7 @@ def getSkinClusters(objs, firstOnly=True):
 
 def skinAs(
     source: "str | nodes.Transform | nodes.Shape " = None,
-    targets: "[str | nodes.Transform | nodes.Shape, ...]" = None,
+    targets: "list[str | nodes.Transform | nodes.Shape]" = None,
     sourceNamespace: str = None,
     targetNamespace: str = None,
     useObjectNamespace: bool = False,
@@ -78,7 +78,7 @@ def skinAs(
         if not targets:
             raise ValueError("Please select at least two skinnable objects")
 
-    if not isinstance(targets, (list, tuple)):
+    if not isinstance(targets, (list, tuple, set)):
         targets = [targets]
 
     targets = mut.hierarchize(targets, reverse=True)
@@ -101,7 +101,7 @@ def skinAs(
                         f"Target '{target}' already has a skinCluster attached : '{skn}'\n"
                         "Do you want to continue ?"
                     ),
-                    button=["Yes", "Cancel"],
+                    button=["Yes", "Cancel", "Skip"],
                     defaultButton="Yes",
                     cancelButton="Cancel",
                     dismissString="Cancel",
@@ -109,6 +109,8 @@ def skinAs(
                 if result == "Cancel":
                     cmds.warning("SkinAs operation cancelled")
                     return
+                elif result == "Skip":
+                    continue
                 free_targets.append(target)
                 continue
         else:
@@ -148,7 +150,7 @@ def skinAs(
     target_influences = source_influences
 
     if useObjectNamespace:
-        sourceNamespace = ":".join(source.name.split(":")[:-1])
+        sourceNamespace = ":".join(str(source).split(":")[:-1])
         if not sourceNamespace and config.verbose:
             cmds.warning("useObjectNamespace is True but no namespace was found on source object")
     elif sourceNamespace or targetNamespace:
@@ -221,7 +223,7 @@ def skinAs(
             ia=("oneToOne", "label", "closestJoint"),
         )
         if config.verbose:
-            print(f"{target} skinned -> {target_skinCluster}")
+            print(f"Skinned: {target} ({target_skinCluster})")
         skinClusters.append(target_skinCluster)
     return skinClusters
 
@@ -648,17 +650,21 @@ def skinAsMulti(sources=None, targets=None, **skinaskwargs):
         raise RuntimeError(f"Sources '{no_skn_sources}' do not have skinClusters.")
 
     temp_sources = nodes.duplicate(*sources)
+    namespace = None
     for temp, source in zip(temp_sources, sources):
         if ":" in source.name and ":" not in temp.name:
-            temp.name = f"{str(source).split(':')[0]:{temp}}"
+            namespace = str(source).split(':')[0]
+            temp.name = f"{namespace}:{temp}"
     cmds.delete([x for temp in temp_sources for x in temp.intermediateShapes()])
     verbose = config.verbose
     config.verbose = False
     for t_source, source in zip(temp_sources, sources):
         skinAs(source, [t_source])
     config.verbose = verbose
-    source, _ = cmds.polyUniteSkinned(*temp_sources, constructionHistory=False)
-    result = skinAs(source, targets, **skinaskwargs)
-    cmds.delete(source)
+    temp_source, _ = cmds.polyUniteSkinned(*temp_sources, constructionHistory=False)
+    if namespace and ":" not in temp_source:
+        temp_source = cmds.rename(temp_source, f"{namespace}:{temp_source}")
+    result = skinAs(temp_source, targets, **skinaskwargs)
+    cmds.delete(temp_source)
 
     return result
