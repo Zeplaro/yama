@@ -3,9 +3,10 @@
 import inspect
 import uuid
 from functools import wraps, update_wrapper
+from collections.abc import Callable
 
 import maya.api.OpenMaya as om
-from maya import cmds
+from maya import cmds, mel
 
 
 def mayaundo(func):
@@ -43,7 +44,8 @@ def verbose(func):
         bound_args.apply_defaults()
         arg_strings = [f"{name}={repr(value)}" for name, value in bound_args.arguments.items()]
         print(
-            f"---- Calling {func.__module__}.{func.__qualname__} with arguments:\n-------- {', '.join(arg_strings)}"
+            f"---- Calling {func.__module__}.{func.__qualname__} with arguments:\n--------"
+            f" {', '.join(arg_strings)}"
         )
         result = func(*args, **kwargs)
         print(f"---- Result of {func.__name__} is :\n-------- {repr(result)}")
@@ -83,7 +85,8 @@ class stringify_args:
                 )
             if not callable(func := args[0]):
                 raise ValueError(
-                    "stringifyargs initialized with string kwargs now called with a none callable first arg."
+                    "stringifyargs initialized with string kwargs now called with a none callable"
+                    " first arg."
                 )
             self.func = func
             update_wrapper(self, self.func)
@@ -113,6 +116,33 @@ class stringify_args:
             return self.func(*str_args, **new_kwargs)
 
         return wrapper
+
+
+def mode_checker(func: Callable) -> Callable:
+    """
+    Decorator for functions that wrap a cmds function. This will raise an error when the function is called in
+    query or edit mode and fails if the returned object is not a valid node or attribute.
+    """
+    mode_args = {"q", "query", "e", "edit"}
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+
+        except (ValueError, TypeError, AttributeError) as e:
+            # Checking if a mode is given in kwargs and if any given mode is set to True
+            if modes := [mode for mode in kwargs.keys() & mode_args if kwargs[mode]]:
+                # Getting the mode long name to make the error message prettier.
+                mode = {"q": "query", "e": "edit"}.get(modes[0], modes[0])
+                raise RuntimeError(
+                    f"The function ym.{func.__name__} in {mode} mode with the given kwargs did not"
+                    f" return a valid node or attribute. Use cmds.{func.__name__} instead."
+                )
+            else:
+                raise e
+
+    return wrapper
 
 
 def yammds(wrapped_module, /):
@@ -185,3 +215,73 @@ def return_yams(func):
         return nodes.yams(func(*args, **kwargs))
 
     return wrapper
+
+
+def closeNodeEditors(func: Callable = None, /, *, reopen: bool = False) -> Callable:
+    """
+    Decorator that safely closes all opened nodeEditor panels when calling the function it decorates nad reopens them
+    after.
+    Used to avoid the maya freezing when creating multiple nodes which get added to the node editor in real time.
+
+    Can be used directly: @closeNodeEditors; or with reopen kwarg: @closeNodeEditors(reopen=False)
+
+    Args:
+        func: The decorated function if used without calling the decorator.
+        reopen: If True, will reopen the primary node editor panel after calling the decorated function.
+    """
+
+    if func is not None and not callable(func):
+        raise TypeError(f"Given func: {func} should be a callable not a {type(func).__name__}.")
+
+    def closeNodeEditors_decorator(func_: Callable):
+        if cmds.about(batch=True, q=True):
+            return func_
+
+        @wraps(func_)
+        def closeNodeEditors_wrapper(*args, **kwargs):
+            current_focus = cmds.getPanel(withFocus=True)
+            panels = cmds.getPanel(scriptType="nodeEditorPanel") or []
+            for panel in panels:
+                if not cmds.panel(panel, exists=True):
+                    continue
+                panel_wrapper = f"{panel}Window"
+
+                # Close Workspace Control (docked and modern floating panels)
+                if cmds.workspaceControl(panel_wrapper, exists=True):
+                    cmds.workspaceControl(panel_wrapper, edit=True, close=True)
+                # Close Standard Window (legacy floating panels)
+                if cmds.window(panel_wrapper, exists=True):
+                    cmds.deleteUI(panel_wrapper, window=True)
+                # Unparent the panel (panels manually shoved into a viewport pane)
+                # safely detaches the UI without deleting the panel from memory.
+                try:
+                    cmds.scriptedPanel(panel, edit=True, unParent=True)
+                except RuntimeError:
+                    pass  # already unparented
+                # Closes panels that are not the primary panel
+                if panel != "nodeEditorPanel1":
+                    cmds.deleteUI(panel, panel=True)
+
+            try:
+                result = func_(*args, **kwargs)
+
+            finally:
+                if panels and reopen:
+                    mel.eval("nodeEditorWindow();")
+                    if current_focus and (
+                        cmds.control(current_focus, exists=True)
+                        or cmds.panel(current_focus, exists=True)
+                    ):
+
+                        def _restoreFocus():
+                            cmds.setFocus(current_focus)
+
+                        cmds.evalDeferred(_restoreFocus)
+
+            return result
+
+        return closeNodeEditors_wrapper
+
+    if func is None:
+        return closeNodeEditors_decorator
+    return closeNodeEditors_decorator(func)
