@@ -120,9 +120,16 @@ def resetAttrs(objs=None, t=True, r=True, s=True, v=True, user=False, raiseError
                 if not attr.isSettable():
                     continue
                 try:
-                    attr.value = attr.defaultValue
+                    default_value = attr.defaultValue
+                    # The default value can be outside the range of the min and max values
+                    if attr.hasMinValue:
+                        default_value = max(attr.minValue, default_value)
+                    if attr.hasMaxValue:
+                        default_value = min(attr.maxValue, default_value)
+                    attr.value = default_value
                 except Exception as e:
                     if raiseErrors:
+                        cmds.warning(f"Failed on trying to set default value on {attr}.")
                         raise e
                     cmds.warning(f"Failed to set defaultValue on {attr} : {e}")
 
