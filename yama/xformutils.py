@@ -58,12 +58,12 @@ def aimChain(
     Aims the given or selected objects to each other in order. Last object gets the same orientation as the previous
     one.
     Args:
-        objs: [str, ...]
-        aimVector: [float, float, float]
-        upVector: [float, float, float]
+        objs: list[str]
+        aimVector: list[float, float, float]
+        upVector: list[float, float, float]
         worldUpType: str, One of 5 values : "scene", "object", "objectrotation", "vector", or "none"
         worldUpObject: str, Use for worldUpType "object" and "objectrotation"
-        worldUpVector: [float, float, float], Use for worldUpType "scene" and "objectrotation"
+        worldUpVector: list[float, float, float], Use for worldUpType "scene" and "objectrotation"
 
     e.g.:
     >>> aimChain(objs='locator1', aimVector=(1, 0, 0), upVector=(0, 1, 0), worldUpType='scene', worldUpObject=None,
@@ -143,7 +143,7 @@ def match(source=None, targets=None, t=True, r=True, s=False, m=False, ws=True):
     """
     Match the position, rotation and scale of the first object to the following objects.
     :param source: str or None to get first selected object.
-    :param targets: [str, ...] or None to get selected objects.
+    :param targets: list[str] or None to get selected objects.
     :param t: bool, True to match translation.
     :param r: bool, True to match rotation.
     :param s: bool, True to match scale.
@@ -203,7 +203,7 @@ def match(source=None, targets=None, t=True, r=True, s=False, m=False, ws=True):
 def matchComponents(components=None, target=None, ws=False):
     """
     Match the position of the given/selected components to the target object.
-    :param components: [str, ...] or None to get selected components.
+    :param components: list[str] or None to get selected components.
     :param target: str, Name of the target object or None to get last selected object.
     :param ws: bool, True to match in world space.
     """
@@ -408,7 +408,7 @@ def makePlanar(
     All objects must be in a parented hierarchy and given in hierarchical order.
     Minimum three objects must be given.
 
-    :param objs: list [str, ...] Objects to align on a plane.
+    :param objs: list[str] Objects to align on a plane.
     :param firstPointIndex: int, the index in the given object list for the first point of the plane.
     :param secondPointIndex: int, the index in the given object list for the second point of the plane.
     :param thirdPointIndex: int, the index in the given object list for the third point of the plane.
@@ -538,7 +538,7 @@ def orientToClosestMeshNormal(
     else:
         if not isinstance(objs, (list, tuple, set)):
             objs = [objs]
-        objs = nodes.yams(objs)
+        objs = mayautils.hierarchize(objs)
         mesh = nodes.yam(mesh)
 
     if mesh.isa("transform"):
