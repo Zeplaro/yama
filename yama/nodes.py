@@ -185,6 +185,80 @@ def duplicate(*objs, **kwargs) -> "YamList[DependNode]":
     return yams(cmds.duplicate(objs, **kwargs))
 
 
+@decorators.return_yams
+def duplicateShapes(
+    *shapes: "str | Shape | list | tuple | set",
+    instance: bool = False,
+    parent: "str | Yam" = None,
+    sameParent: bool = True,
+    applyShaders: bool = True,
+    asIntermediateObjects: bool = False,
+) -> "list[Shape]":
+    """
+    Duplicates the given shapes. Unlike `duplicate` it does not duplicate the other shapes under the given shapes'
+    transforms.
+
+    Warning:
+        This function is not undoable.
+
+    Args:
+        *shapes (str): The shapes to duplicate.
+        instance (bool): If True, creates an instance of the shape rather than a new copy.
+        parent (str): The transform node to parent the duplicated shapes under.
+        sameParent (bool): If True and no parent is given, will parent the new duplicated shapes under the parent of
+                           corresponding original shape. Ignored if a parent is given.
+        applyShaders (bool): If True, will apply the material assigned to the corresponding original shapes on to the
+                             new duplicated shapes.
+        asIntermediateObjects (bool): If True, sets the new duplicated shapes as intermediate objects.
+
+    Returns:
+
+    """
+    shapes_flat = []
+    for og_shape in shapes:
+        if isinstance(og_shape, (list, tuple, set)):
+            shapes_flat.extend(og_shape)
+        else:
+            shapes_flat.append(og_shape)
+
+    if parent and not isa(parent, "transform"):
+        raise TypeError(f"Given parent {parent} is not a transform.")
+
+    new_shapes = []
+    shaders = {}
+    for og_shape in yams(shapes_flat):
+        if not og_shape.isa("shape"):
+            raise ValueError(f"Given {og_shape} is not a shape.")
+        new_parent_mo = og_shape.MFn.duplicate(instance=instance)
+        new_shape_mo = om.MFnDagNode(new_parent_mo).child(0)
+        new_shapes.append(new_shape_mo)
+
+        if applyShaders and og_shape.isa("surfaceShape"):
+            shading_engines = cmds.listConnections(og_shape, type="shadingEngine")
+            if shading_engines:
+                shaders.setdefault(shading_engines[0], []).append(new_shape_mo)
+
+        if not parent and sameParent:
+            parent = og_shape.parent
+        if parent:
+            if isinstance(parent, Yam):
+                parent_mfn = parent.MFn
+            else:
+                parent_mfn = om.MFnDagNode(getMObject(str(parent)))
+            parent_mfn.addChild(new_shape_mo)
+            om.MGlobal.deleteNode(new_parent_mo)
+
+        if asIntermediateObjects and og_shape.isa("deformableShape"):
+            mplug = om.MFnDependencyNode(new_shape_mo).findPlug("intermediateObject", False)
+            mplug.setBool(True)
+
+    for shader, shapes in shaders.items():
+        shapes = {om.MFnDagNode(shader_shape).partialPathName() for shader_shape in shapes}
+        cmds.sets(shapes, edit=True, forceElement=shader)
+
+    return new_shapes
+
+
 @decorators.stringify_args
 def ls(*args, **kwargs) -> "YamList[DependNode | attributes.Attribute]":
     """Wrapper for 'maya.cmds.ls' but returning yam objects."""
@@ -240,7 +314,7 @@ def listHistory(*args, type: "str | list[str]" = None, **kwargs) -> "YamList[Dep
         type (str): Filters only the nodes of this type.
         kwargs: kwargs passed on to cmds.listHistory .
     Returns:
-        list[DependNode, ...]
+        list[DependNode]
     """
     history = cmds.listHistory(*args, **kwargs) or []
 
@@ -259,7 +333,7 @@ def listRelatives(*args, **kwargs) -> "YamList[DependNode]":
         args (DependNode | str): The node to query the relatives from.
         kwargs: kwargs passed on to cmds.listRelatives .
     Returns:
-        list[DependNode, ...]
+        list[DependNode]
     """
     kwargs["fullPath"] = True  # Needed in case of multiple obj with same name
     return yams(cmds.listRelatives(*args, **kwargs) or [])
@@ -274,7 +348,7 @@ def listConnections(*args, **kwargs):
         args (DependNode | str): The node to query the connections from.
         kwargs: kwargs passed on to cmds.listConnections .
     Returns:
-        list[DependNode, ...]
+        list[DependNode]
     """
     if "scn" not in kwargs and "skipConversionNodes" not in kwargs:
         kwargs["scn"] = True
@@ -282,7 +356,7 @@ def listConnections(*args, **kwargs):
 
 
 @decorators.stringify_args
-def findDeformers(objs, type: str | list[str] = None) -> "YamList[DependNode]":
+def findDeformers(objs, type: str | list[str] = None) -> "YamList":
     """
     Wrapper for cmds.findDeformers returning Component objects.
 
@@ -298,7 +372,7 @@ def findDeformers(objs, type: str | list[str] = None) -> "YamList[DependNode]":
         objs (DependNode | str | list): The node or nodes to query the deformers from.
         type (str | list): Filters only the nodes of this type.
     Returns:
-        list[DependNode, ...]
+        list[DependNode]
     """
     deformers = cmds.findDeformers(objs) or []
     if type:
@@ -400,6 +474,21 @@ def scaleConstraint(*args, **kwargs):
 
 def aimConstraint(*args, **kwargs):
     return constraint(*args, type="aimConstraint", **kwargs)
+
+
+@decorators.stringify_args
+@decorators.mode_checker
+@decorators.return_yam
+def deformer(*args, **kwargs) -> "GeometryFilter":
+    """Wrapper for all cmds.deformer function returning Component object."""
+    return cmds.deformer(*args, **kwargs)[0]
+
+
+@decorators.stringify_args
+@decorators.return_yam
+def shadingNode(*args, **kwargs) -> "DependNode":
+    """Wrapper for all cmds.shadingNode function returning Component object."""
+    return cmds.shadingNode(*args, **kwargs)
 
 
 class ClassAssignor:
@@ -809,10 +898,10 @@ class DagNode(DependNode):
     def fullPath(self):
         return self.longName
 
-    def allParents(self, reverse: bool = False) -> ["Transform", ...]:
+    def parents(self, reverse: bool = False) -> list["Transform"]:
         """
         Returns a list of all the nodes parent up to world.
-        Order if not reversed is from closest to the world to closest to the node.
+        Order if not reversed is from closest to the node to closest to the world.
 
         Args:
             reverse (bool): If True: returns the list in reverse order.
@@ -821,17 +910,14 @@ class DagNode(DependNode):
             (list): List of the node's parents.
         """
 
-        def getParents(node):
-            """Gets the parents of the node recursively."""
-            parent = node.parent
-            if parent:
-                return getParents(parent) + [parent]
-            return []
-
-        parents = getParents(self)
+        parent_nodes = []
+        current = self.parent
+        while current:
+            parent_nodes.append(current)
+            current = current.parent
         if reverse:
-            parents.reverse()
-        return parents
+            parent_nodes.reverse()
+        return parent_nodes
 
 
 class Transform(DagNode):
@@ -899,13 +985,19 @@ class Transform(DagNode):
         return children
 
     @property
+    @decorators.return_yam(passNone=True)
     def shape(self):
         """
         Returns the first shape if it exists.
         :return: Shape object
         """
-        shapes = self.shapes()
-        return shapes[0] if shapes else None
+        mfn = self.MFn
+        for i in range(mfn.childCount()):
+            child = mfn.child(i)
+            if child.hasFn(om.MFn.kShape):
+                if not om.MFnDagNode(child).isIntermediateObject:
+                    return child
+        return None
 
     def intermediateShapes(self, type=None):
         """
@@ -974,9 +1066,14 @@ class Transform(DagNode):
 
         return utils.distance(self.getPosition(ws=True), obj.getPosition(ws=True))
 
-    def createIntermediateShape(self):
-        """Creates an intermediate shape for the transform and returns it as a Shape object."""
-        return yam(cmds.deformableShape(self.name, createOriginalGeometry=True)[-1]).node
+    def createIntermediateShapes(self) -> "list[ControlPoint]":
+        """
+        Creates a new intermediate shape (shapeOrig) per shape under the transform.
+
+        Returns:
+            (list): A list of the newly created intermediate shapes.
+        """
+        return [shape_.createIntermediateShape() for shape_ in self.shapes(type="controlPoint")]
 
 
 class Joint(Transform):
@@ -1092,6 +1189,150 @@ class ControlPoint(Shape):
         if not self._WORLDSHAPEOUTATTR:
             return self.attr(cmds.deformableShape(self.name, worldShapeOutAttr=True)[0])
         return self.attr(self._WORLDSHAPEOUTATTR)
+
+    def createIntermediateShape(self) -> "ControlPoint":
+        """
+        Creates an intermediate shape of the current shape.
+        If an intermediate shape already exists a new one will be created by duplicating the last one.
+
+        Returns:
+            (ControlPoint): Created intermediate shape.
+        """
+        existing_shapes = self.originalGeometries()
+        new_shape = cmds.deformableShape(self.name, createOriginalGeometry=True)[-1]
+        new_shape = yam(new_shape.split(".", 1)[0])
+        if new_shape in existing_shapes:
+            dup_shape = duplicateShapes(
+                new_shape,
+                applyShaders=False,
+                asIntermediateObjects=True,
+            )[0]
+            dup_shape.name = f"{self}{'Orig' * (len(existing_shapes) + 1)}"
+            shape_input = new_shape.shapeInputAttr.input()
+            if shape_input:
+                shape_input.connectTo(dup_shape.shapeInputAttr)
+            dup_shape.shapeWorldOutputAttr.connectTo(new_shape.shapeInputAttr, force=True)
+            new_shape = dup_shape
+
+        return new_shape
+
+    def originalGeometries(self, create: bool = False) -> "list[ControlPoint]":
+        """
+        Gets the original geometries of the shape.
+
+        Notes:
+            Not using cmds.deformableShape(self, originalGeometry=True) because it only returns the last original
+            geometry and not the whole history.
+
+        Args:
+            create (bool): If True, creates a new original geometry if no original geometry exist already.
+
+        Returns:
+            (list): List of original geometries.
+        """
+        geometries = cmds.deformableShape(self, nodeChain=True)[-2::-1]
+        if geometries:
+            geometries = ls(geometries, type="controlPoint")
+
+        if not geometries and create:
+            geometries = [self.createIntermediateShape()]
+
+        return geometries
+
+    @decorators.return_yams
+    def originalGeometries(
+        self, /, intermediateObjects: bool = True, sameParent: bool = True
+    ) -> "list[ControlPoint]":
+        """
+        Gets the nodes or plugs in the deformation chain at the front end that are the best candidate to be used as
+        originalGeometries.
+
+        Args:
+            intermediateObjects (bool): If True, only gets shapes or plugs that are set as intermediate objects.
+            sameParent (bool): If True only gets intermediate shapes that are under the same parent as the shape.
+
+        Returns:
+            (list): List of upstream nodes or plugs.
+        """
+        mobject = self.MObject
+        parent_mobject = self.parent.MObject
+
+        it_dg = om.MItDependencyGraph(
+            mobject,
+            om.MFn.kShape,
+            om.MItDependencyGraph.kUpstream,
+            om.MItDependencyGraph.kDepthFirst,
+            om.MItDependencyGraph.kNodeLevel,
+        )
+        results = []
+        while not it_dg.isDone():
+            current_obj = it_dg.currentNode()
+            if current_obj != mobject:
+                current_fn = om.MFnDagNode(current_obj)
+                if not intermediateObjects or current_fn.isIntermediateObject:
+                    if not sameParent or current_fn.hasParent(parent_mobject):
+                        results.append(current_obj)
+            it_dg.next()
+
+        return results
+
+    @decorators.return_yams
+    def originalGeometries(self):
+        import attributes
+
+        plugs_to_eval = [self.shapeInputAttr.MPlug]
+        results = []
+        while plugs_to_eval:
+            not_found = False
+
+            current_plug = plugs_to_eval.pop()
+            source_plug = current_plug.source()
+            source_node = source_plug.node()
+
+            if source_node.hasFn(om.MFn.kGeometryFilt):  # deformer
+                if source_plug.isArray:
+                    logical_index = source_plug.logicalIndex()
+                    fn_deformer = om.MFnDependencyNode(source_node)
+                    plug_path = f"{fn_deformer.name()}.input[{logical_index}].inputGeometry"
+                    plugs_to_eval.append(attributes.getMPlug(plug_path))
+                else:
+                    not_found = True
+
+            elif source_node.hasFn(om.MFn.kGroupParts):  # groupPart
+                fn_parts = om.MFnDependencyNode(source_node)
+                plug_path = f"{fn_parts.name()}.inputGeometry"
+                plugs_to_eval.append(attributes.getMPlug(plug_path))
+
+            elif source_node.hasFn(om.MFn.kShape):  # shape
+                result = source_node
+                if result not in results:
+                    results.append(result)
+
+                attr_name = None
+                if source_node.hasFn(om.MFn.kMesh):
+                    attr_name = "inMesh"
+                elif source_node.hasFn(om.MFn.kNurbsCurve) or source_node.hasFn(om.MFn.kNurbsSurface) or source_node.hasFn(om.MFn.kSubdiv):
+                    attr_name = "create"
+                elif source_node.hasFn(om.MFn.kLattice):
+                    attr_name = "latticeInput"
+                else:
+                    not_found = True
+
+                if attr_name:
+                    shape_name = om.MDagPath.getAPathTo(source_node).partialPathName()
+                    input_plug = attributes.getMPlug(f"{shape_name}.{attr_name}")
+                    if input_plug.isDestination:
+                        plugs_to_eval.append(input_plug)
+            else:
+                not_found = True
+
+            if not_found:
+                fn_node = om.MFnDependencyNode(source_node)
+                for plug in fn_node.getConnections():
+                    if plug.isDestination:
+                        plugs_to_eval.append(plug)
+
+        return results
 
 
 class SurfaceShape(ControlPoint):
@@ -1372,6 +1613,37 @@ class WeightGeometryFilter(GeometryFilter):
         """
         return self.weightList[0].weights
 
+    def addDriven(
+        self, driven: str | Transform | ControlPoint | list | tuple | set
+    ) -> None:
+        """
+        Adds the given driven shape·s to the deformer.
+
+        Args:
+            driven (str): The driven shape·s to drive with the deformer.
+        """
+        if not isinstance(driven, (list, tuple, set)):
+            driven = [driven]
+
+        for node in yams(driven):
+            if node.isa("controlPoint"):
+                shapes = [node]
+            elif node.isa("transform"):
+                shapes = node.shapes(type="controlPoint")
+                if not shapes:
+                    raise ValueError(f"Driven {node} has no controlPoint shapes.")
+            else:
+                raise ValueError(f"Given driven {node} is not a controlPoint shape.")
+
+            for driven_shape in shapes:
+                shape_orig = driven_shape.originalGeometries(create=True)[-1]
+                shape_input = driven_shape.shapeInputAttr.input()
+
+                index = self.input.nextAvailableElement().index()
+                shape_input.connectTo(self.input[index].inputGeometry)
+                shape_orig.shapeWorldOutputAttr.connectTo(self.originalGeometry[index])
+                self.outputGeometry[index].connectTo(driven_shape.shapeInputAttr, force=True)
+
 
 class Cluster(WeightGeometryFilter):
     def localize(self):
@@ -1451,9 +1723,9 @@ class SkinCluster(GeometryFilter):
     def create(
         cls,
         geometry: "str | DagNode",
-        influences: "[str | Joint, ...]",
+        influences: "list[str | Joint]",
         createBindPose: bool = True,
-        weights: "[[float, ...], int] | None" = None,
+        weights: "list[list[float], int] | None" = None,
         setDefaultWeights: bool = True,
         lockGeometryTRS: bool = True,
         **kwargs,
@@ -1534,7 +1806,7 @@ class SkinCluster(GeometryFilter):
             # function would have connected them.
             members = {}
             for inf in influences:
-                for node in inf.allParents() + [inf]:
+                for node in inf.parents(reverse=True) + [inf]:
                     if node in members:
                         continue
 
@@ -1844,7 +2116,7 @@ class SkinCluster(GeometryFilter):
             self.addInfluence(inf)
 
 
-class BlendShape(GeometryFilter):
+class BlendShape(WeightGeometryFilter):
     """
     Class to wrap cmds and OpenMaya functions to easily interact with a blendShape node.
 
@@ -1863,11 +2135,6 @@ class BlendShape(GeometryFilter):
       the target attribute goes below -5.0. It is recommended to lock the target attribute lower range if negative
       in-between values are used.
     """
-
-    # blendShape node does not inherit from weightGeometryFilter despite the similarities.
-    getWeights = WeightGeometryFilter.getWeights
-    setWeights = WeightGeometryFilter.setWeights
-    weights = WeightGeometryFilter.weights
 
     def __contains__(self, item):
         """
@@ -2076,6 +2343,93 @@ class UVPin(DependNode):
             )
         self.normalizedIsoParms.value = False
         self.connectTransform(target, [u, v])
+
+
+class ProximityWrap(WeightGeometryFilter):
+    @staticmethod
+    def create(
+        driven: str | list | Transform | ControlPoint,
+        drivers: list[str | Transform | ControlPoint] = None,
+        **kwargs,
+    ) -> "ProximityWrap":
+        """
+        Creates a proximityWrap node and connects it to the given driven and driver shapes.
+        Any added kwargs will be passed on to the cmds.deformer call, like "name" for example.
+
+        Args:
+            driven (str): Object deformed by the proximityWrap.
+            drivers (list): Objects driving the deformation of the proximityWrap.
+            kwargs: kwargs passed on to the cmds.deformer call when creating the proximityWrap.
+
+        Returns:
+            (ProximityWrap): ProximityWrap object for the created node.
+        """
+        """Removing ignoreSelected kwarg because it also ignores any given args."""
+        kwargs.pop("ignoreSelected", None)
+
+        proximityWrap = deformer(driven, type="proximityWrap", **kwargs)
+        if drivers:
+            proximityWrap.addDrivers(drivers)
+        return proximityWrap
+
+    def addDrivers(self, drivers: str | Transform | ControlPoint | list | tuple | set) -> None:
+        """
+        Adds the given driver·s to the proximityWrap node.
+        Automatically increments the maxDrivers attribute value by the number of given drivers.
+
+        Args:
+            drivers (list): Shape·s driving the deformation.
+        """
+        if not isinstance(drivers, (list, tuple, set)):
+            drivers = [drivers]
+
+        max_drivers = self.maxDrivers.get()
+        for driver in yams(drivers):
+            if driver.isa("controlPoint"):
+                shapes = [driver]
+            elif driver.isa("transform"):
+                shapes = driver.shapes(type="controlPoint")
+                if not shapes:
+                    raise ValueError(f"Driver {driver} has no controlPoint shapes.")
+            else:
+                raise ValueError(f"Given driver {driver} is not a controlPoint shape.")
+            max_drivers += len(shapes)
+
+            for driver_shape in shapes:
+                drivers_attr = self.drivers.nextAvailableElement()
+                driver_shape.shapeWorldOutputAttr.connectTo(drivers_attr.driverGeometry)
+                shape_orig = driver_shape.originalGeometries(create=True)[-1]
+                shape_orig.shapeWorldOutputAttr.connectTo(drivers_attr.driverBindGeometry)
+        self.maxDrivers.set(min(max_drivers, 20))
+
+    def addDriven(self, driven: str | Transform | ControlPoint | list | tuple | set) -> None:
+        """
+        Adds the given driven shape·s to the proximityWrap node.
+
+        Args:
+            driven (str): The driven shape·s to drive with the proximityWrap node.
+        """
+        if not isinstance(driven, (list, tuple, set)):
+            driven = [driven]
+
+        for node in yams(driven):
+            if node.isa("controlPoint"):
+                shapes = [node]
+            elif node.isa("transform"):
+                shapes = node.shapes(type="controlPoint")
+                if not shapes:
+                    raise ValueError(f"Driven {node} has no controlPoint shapes.")
+            else:
+                raise ValueError(f"Given driver {node} is not a controlPoint shape.")
+
+            for driven_shape in shapes:
+                shape_orig = driven_shape.originalGeometries(create=True)[-1]
+                shape_input = driven_shape.shapeInputAttr.input()
+
+                index = self.input.nextAvailableElement().index()
+                shape_input.connectTo(self.input[index].inputGeometry)
+                shape_orig.shapeWorldOutputAttr.connectTo(self.originalGeometry[index])
+                self.outputGeometry[index].connectTo(driven_shape.shapeInputAttr, force=True)
 
 
 # These contain MFn and MFnData type names per {id#: name, ...}, to be able to get the type name from its id#.
