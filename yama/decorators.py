@@ -12,12 +12,12 @@ from maya import cmds, mel
 def mayaundo(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        chunk_id = uuid.uuid4()
+        chunk_name = f"{func.__module__}.{func.__qualname__} undoChunk: {uuid.uuid4()}"
         try:
-            cmds.undoInfo(openChunk=True, chunkName=chunk_id)
+            cmds.undoInfo(openChunk=True, chunkName=chunk_name)
             return func(*args, **kwargs)
         finally:
-            cmds.undoInfo(closeChunk=True, chunkName=chunk_id)
+            cmds.undoInfo(closeChunk=True, chunkName=chunk_name)
 
     return wrapper
 
